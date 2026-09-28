@@ -17,11 +17,11 @@ export function Breadcrumbs({ items }: { items: Crumb[] }) {
   };
   return <>
     <JsonLd data={schema} />
-    <nav aria-label="Breadcrumb" className="mb-8 text-sm text-[#8A8298]">
+    <nav aria-label="Breadcrumb" className="mb-8 text-sm text-[#3D3650]">
       <ol className="flex flex-wrap gap-2">
         {items.map((item, index) => <li key={item.label} className="flex gap-2">
           {index > 0 && <span aria-hidden="true">/</span>}
-          {item.href && index < items.length - 1 ? <Link href={item.href} className="hover:text-[#170B2E]">{item.label}</Link> : <span className="text-[#4B4560]">{item.label}</span>}
+          {item.href && index < items.length - 1 ? <Link href={item.href} className="hover:text-[#170B2E]">{item.label}</Link> : <span className="text-[#3D3650]">{item.label}</span>}
         </li>)}
       </ol>
     </nav>

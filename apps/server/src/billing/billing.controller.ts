@@ -202,6 +202,17 @@ export class BillingController {
     return this.usageBilling.getCurrentUsage(req.user.userId);
   }
 
+  // Live preview of the current (still-open) cycle's invoice, including any
+  // active customer discount and tax — the same calculation
+  // generateInvoiceForCycle will persist once the cycle closes. Nothing is
+  // written; the frontend must render these numbers rather than compute
+  // its own.
+  @Get('invoice-preview')
+  @UseGuards(JwtGuard)
+  async invoicePreview(@Req() req: any) {
+    return this.invoiceBilling.previewCurrentCycle(req.user.userId);
+  }
+
 @Get('call-usage')
   @UseGuards(JwtGuard)
   async callUsage(
@@ -219,7 +230,20 @@ export class BillingController {
     await this.ensureCallOwnedByUser(callId, req.user.userId);
     const segments = await this.segmentService.getSegmentsForCall(callId);
     const rated = await this.ratingEngine.rateCall(callId);
-    return { callId, segments, totals: rated.totals };
+    // rateCall reads the same segments in the same order, so attach each
+    // segment's per-participant rated participant-minutes for display. The
+    // frontend shows these rather than re-deriving duration × participants.
+    return {
+      callId,
+      segments: segments.map((seg, i) => ({
+        ...seg,
+        audioMinutes: rated.segments[i]?.audioMins ?? seg.audioMinutes,
+        videoMinutes: rated.segments[i]?.videoMins ?? seg.videoMinutes,
+        screenShareMinutes:
+          rated.segments[i]?.screenShareMins ?? seg.screenShareMinutes,
+      })),
+      totals: rated.totals,
+    };
   }
 
   // ── Admin: segment analytics ─────────────────────────

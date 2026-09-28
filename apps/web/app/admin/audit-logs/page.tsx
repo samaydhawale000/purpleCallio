@@ -15,8 +15,8 @@ type AuditLog = {
 const ACTION_COLORS: Record<string, string> = {
   USER_REGISTERED: 'bg-[#7F40E8]/10 text-[#7F40E8] border-[#7F40E8]/30',
   PROJECT_CREATED: 'bg-[#7F40E8]/10 text-[#7F40E8] border-[#7F40E8]/30',
-  API_KEY_GENERATED: 'bg-sky-500/10 text-sky-400 border-sky-500/30',
-  PLAN_CHANGED: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+  API_KEY_GENERATED: 'bg-sky-500/10 text-sky-700 border-sky-500/30',
+  PLAN_CHANGED: 'bg-amber-500/10 text-amber-700 border-amber-500/30',
   ACCOUNT_SUSPENDED: 'bg-red-500/10 text-red-600 border-red-500/30',
   ACCOUNT_RESUMED: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30',
 };
@@ -44,7 +44,7 @@ export default function AdminAuditLogsPage() {
   }, [page]);
 
   if (loading) {
-    return <div className="text-[#6B6478] text-sm py-20 text-center">Loading audit logs…</div>;
+    return <div className="text-[#3D3650] text-sm py-20 text-center">Loading audit logs…</div>;
   }
 
   if (error) {
@@ -59,7 +59,7 @@ export default function AdminAuditLogsPage() {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-bold text-[#170B2E]">Audit Logs</h1>
-        <p className="text-[#6B6478] text-sm mt-1">Recent platform activity</p>
+        <p className="text-[#3D3650] text-sm mt-1">Recent platform activity</p>
       </header>
 
       <div className="rounded-xl border border-[#E7DFF5] overflow-hidden" style={{ background: '#FFFFFF' }}>
@@ -67,10 +67,10 @@ export default function AdminAuditLogsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#E7DFF5] text-left">
-                <th className="px-4 py-3 text-xs font-mono uppercase tracking-widest text-[#8A8298]">Action</th>
-                <th className="px-4 py-3 text-xs font-mono uppercase tracking-widest text-[#8A8298]">Actor</th>
-                <th className="px-4 py-3 text-xs font-mono uppercase tracking-widest text-[#8A8298]">Details</th>
-                <th className="px-4 py-3 text-xs font-mono uppercase tracking-widest text-[#8A8298]">Timestamp</th>
+                <th className="px-4 py-3 text-xs font-mono uppercase tracking-widest text-[#3D3650]">Action</th>
+                <th className="px-4 py-3 text-xs font-mono uppercase tracking-widest text-[#3D3650]">Actor</th>
+                <th className="px-4 py-3 text-xs font-mono uppercase tracking-widest text-[#3D3650]">Details</th>
+                <th className="px-4 py-3 text-xs font-mono uppercase tracking-widest text-[#3D3650]">Timestamp</th>
               </tr>
             </thead>
             <tbody>
@@ -79,24 +79,24 @@ export default function AdminAuditLogsPage() {
                   <td className="px-4 py-3">
                     <span
                       className={`px-2 py-0.5 rounded-full text-[11px] font-mono border ${
-                        ACTION_COLORS[l.action] || 'bg-slate-500/10 text-[#6B6478] border-slate-500/30'
+                        ACTION_COLORS[l.action] || 'bg-slate-500/10 text-[#3D3650] border-slate-500/30'
                       }`}
                     >
                       {l.action.replace(/_/g, ' ')}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-[#4B4560]">{l.actor}</td>
-                  <td className="px-4 py-3 text-[#6B6478] font-mono text-xs">
+                  <td className="px-4 py-3 text-[#3D3650]">{l.actor}</td>
+                  <td className="px-4 py-3 text-[#3D3650] font-mono text-xs">
                     {l.metadata ? JSON.stringify(l.metadata) : '—'}
                   </td>
-                  <td className="px-4 py-3 text-[#6B6478]">
+                  <td className="px-4 py-3 text-[#3D3650]">
                     {new Date(l.createdAt).toLocaleString()}
                   </td>
                 </tr>
               ))}
               {logs.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-[#8A8298]">
+                  <td colSpan={4} className="px-4 py-10 text-center text-[#3D3650]">
                     No audit logs yet.
                   </td>
                 </tr>

@@ -25,10 +25,10 @@ export default function LegalLayout({
           {title}
         </h1>
         {lastUpdated && (
-          <p className="text-[#8A8298] text-sm mb-3">Last Updated: {lastUpdated}</p>
+          <p className="text-[#3D3650] text-sm mb-3">Last Updated: {lastUpdated}</p>
         )}
         {intro && (
-          <p className="text-[#6B6478] text-base leading-relaxed max-w-2xl">{intro}</p>
+          <p className="text-[#3D3650] text-base leading-relaxed max-w-2xl">{intro}</p>
         )}
       </div>
 
@@ -44,7 +44,7 @@ export default function LegalLayout({
         {/* Contact CTA */}
         <div className="mt-12 rounded-xl p-8 text-center border border-[#D6C4EE]" style={{ background: 'linear-gradient(135deg, rgba(127,64,232,0.06), rgba(65,6,134,0.04))' }}>
           <p className="font-bold text-[#170B2E] mb-2 text-lg">Questions about this policy?</p>
-          <p className="text-[#6B6478] text-sm mb-6">
+          <p className="text-[#3D3650] text-sm mb-6">
             Our engineers are one email away.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
@@ -70,7 +70,7 @@ export function LegalSection({ num, title, children }: { num?: string; title: st
         )}
         {title}
       </h2>
-      <div className="text-[#6B6478] text-sm leading-relaxed space-y-3">{children}</div>
+      <div className="text-[#3D3650] text-sm leading-relaxed space-y-3">{children}</div>
     </section>
   );
 }

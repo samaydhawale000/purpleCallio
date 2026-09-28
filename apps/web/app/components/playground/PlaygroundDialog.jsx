@@ -205,7 +205,7 @@ const connected = callStatus === "ACCEPTED";
                                   border: active && !done
                                     ? "1px solid #7F40E8"
                                     : "1px solid #E7DFF5",
-                                  color: done ? "#fff" : active ? "#6425C4" : "#9C93AC",
+                                  color: done ? "#fff" : active ? "#6425C4" : "#3D3650",
                                 }}
                               >
                                 {done ? <Check size={15} /> : stepNum}
@@ -214,7 +214,7 @@ const connected = callStatus === "ACCEPTED";
                                 className="text-[10px] mt-1.5 text-center leading-tight max-w-[70px]"
                                 style={{
                                   color:
-                                    done || active ? "#3D3650" : "#9C93AC",
+                                    done || active ? "#3D3650" : "#3D3650",
                                 }}
                               >
                                 {s.label}
@@ -249,7 +249,7 @@ const connected = callStatus === "ACCEPTED";
                         <h3 className="text-2xl font-bold text-[#170B2E]">
                           <span className="inline-flex items-center gap-2">You're connected <PartyPopper size={22} /></span>
                         </h3>
-                        <p className="text-[#6B6478] mt-1.5">
+                        <p className="text-[#3D3650] mt-1.5">
                           Two devices are now on the same call.
                         </p>
                       </div>
@@ -286,10 +286,10 @@ const connected = callStatus === "ACCEPTED";
                       </div>
 
                       <div className="rounded-2xl p-5 mb-6">
-                        <p className="text-[#4B4560] font-medium mb-3 text-sm">
+                        <p className="text-[#3D3650] font-medium mb-3 text-sm">
                           Try these features
                         </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-[#6B6478]">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-[#3D3650]">
                           {isAudio ? (
                             <>
                               <div className="flex items-center gap-2">
@@ -354,7 +354,7 @@ const connected = callStatus === "ACCEPTED";
                         </div>
 
                         <div className="flex-1 w-full">
-                          <p className="text-[#6B6478] text-sm mb-4 leading-relaxed">
+                          <p className="text-[#3D3650] text-sm mb-4 leading-relaxed">
                             Scan this QR code with your phone or another
                             device to join this call.
                           </p>
@@ -384,7 +384,7 @@ const connected = callStatus === "ACCEPTED";
                           {/* Show/hide raw link */}
                           <button
                             onClick={() => setShowLink((s) => !s)}
-                            className="mt-3 text-xs text-[#8A8298] hover:text-[#4B4560] flex items-center gap-1 transition-colors"
+                            className="mt-3 text-xs text-[#3D3650] hover:text-[#3D3650] flex items-center gap-1 transition-colors"
                           >
                             {showLink ? (
                               <ChevronUp size={14} />
@@ -395,7 +395,7 @@ const connected = callStatus === "ACCEPTED";
                           </button>
                           {showLink && (
                             <div
-                              className="mt-2 break-all text-[11px] text-[#8A8298] rounded-lg px-3 py-2"
+                              className="mt-2 break-all text-[11px] text-[#3D3650] rounded-lg px-3 py-2"
                               style={{
                                 background: "#F8F4FD",
                                 border: "1px solid #E7DFF5",
@@ -434,7 +434,7 @@ const connected = callStatus === "ACCEPTED";
                             />
                             1 participant connected
                           </p>
-                          <p className="text-[#6B6478] text-xs mt-0.5">
+                          <p className="text-[#3D3650] text-xs mt-0.5">
                             Open the call on another device to test the
                             connection.
                           </p>
@@ -462,13 +462,13 @@ const connected = callStatus === "ACCEPTED";
                         </div>
 
                         <div className="flex-1 w-full">
-                          <p className="text-[#6B6478] text-sm mb-2 leading-relaxed">
+                          <p className="text-[#3D3650] text-sm mb-2 leading-relaxed">
                             Scan this QR code with your phone, or open the
                             call right here on this device.
                           </p>
-                          <p className="text-[#8A8298] text-xs mb-4 leading-relaxed">
+                          <p className="text-[#3D3650] text-xs mb-4 leading-relaxed">
                             That opens a new tab with a green{" "}
-                            <span className="text-[#4B4560] font-medium">
+                            <span className="text-[#3D3650] font-medium">
                               Call
                             </span>{" "}
                             button — tap it there to start ringing. This
@@ -503,7 +503,7 @@ const connected = callStatus === "ACCEPTED";
                           {/* Show/hide raw link */}
                           <button
                             onClick={() => setShowCallerLink((s) => !s)}
-                            className="mt-3 text-xs text-[#8A8298] hover:text-[#4B4560] flex items-center gap-1 transition-colors"
+                            className="mt-3 text-xs text-[#3D3650] hover:text-[#3D3650] flex items-center gap-1 transition-colors"
                           >
                             {showCallerLink ? (
                               <ChevronUp size={14} />
@@ -514,7 +514,7 @@ const connected = callStatus === "ACCEPTED";
                           </button>
                           {showCallerLink && (
                             <div
-                              className="mt-2 break-all text-[11px] text-[#8A8298] rounded-lg px-3 py-2"
+                              className="mt-2 break-all text-[11px] text-[#3D3650] rounded-lg px-3 py-2"
                               style={{
                                 background: "#F8F4FD",
                                 border: "1px solid #E7DFF5",
@@ -562,7 +562,7 @@ const connected = callStatus === "ACCEPTED";
                               ? "Waiting for you to tap Call..."
                               : "Waiting for another device..."}
                           </p>
-                          <p className="text-[#6B6478] text-xs mt-0.5">
+                          <p className="text-[#3D3650] text-xs mt-0.5">
                             {callWindowOpened
                               ? "Go back to the tab you just opened and tap the green Call button — this page updates automatically once the call starts."
                               : "Open the first device to get started."}

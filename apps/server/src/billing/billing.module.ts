@@ -9,6 +9,7 @@ import { InvoiceBillingService } from './invoice-billing.service';
 import { UsageSegmentService } from './usage-segment.service';
 import { RatingEngineService } from './rating-engine.service';
 import { InvoicePdfService } from './invoice-pdf.service';
+import { CustomerDiscountService } from './customer-discount.service';
 import { BillingGuard } from '../common/guards/billing.guard';
 import { PaymentModule } from '../payment/payment.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -29,6 +30,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     UsageSegmentService,
     RatingEngineService,
     InvoicePdfService,
+    CustomerDiscountService,
     BillingGuard,
   ],
   exports: [
@@ -37,6 +39,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     InvoiceBillingService,
     UsageSegmentService,
     RatingEngineService,
+    CustomerDiscountService,
     BillingGuard,
   ],
 })

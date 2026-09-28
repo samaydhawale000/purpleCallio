@@ -52,7 +52,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  *     card token (token_xxx) is saved against the customer and can be
  *     resolved server-side afterwards. The contact number Razorpay requires
  *     for this comes from the user's profile (collected once at login by
- *     DashboardLayout's PhoneGate) — not re-asked here.
+ *     the profile-completion step on /login) — not re-asked here.
  *  3. POST /billing/payment-method/attach with the token + card details so
  *     the server persists them for auto-charge at month end (this becomes
  *     the new default card).
@@ -277,7 +277,7 @@ export default function PaymentMethodCard({ paymentMethods, onChanged, showToast
           </div>
           <div>
             <p className="text-sm font-semibold text-[#170B2E]">Payment Method</p>
-            <p className="text-xs text-[#8A8298] mt-0.5">
+            <p className="text-xs text-[#3D3650] mt-0.5">
               Save a card to enable automatic monthly billing. You&apos;ll only be charged
               for usage beyond your free allowance.
             </p>
@@ -286,23 +286,23 @@ export default function PaymentMethodCard({ paymentMethods, onChanged, showToast
 
         <div className="h-px my-4" style={{ background: '#E7DFF5' }} />
 
-        <p className="text-xs text-[#8A8298] text-center mb-4">No payment method added yet</p>
+        <p className="text-xs text-[#3D3650] text-center mb-4">No payment method added yet</p>
 
         <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mb-5">
           {['No charge today', 'Auto billing every month', 'Cancel anytime'].map((item) => (
-            <span key={item} className="inline-flex items-center gap-1.5 text-xs text-[#6B6478]">
+            <span key={item} className="inline-flex items-center gap-1.5 text-xs text-[#3D3650]">
               <CheckCircle2 size={13} style={{ color: '#34D399' }} /> {item}
             </span>
           ))}
         </div>
 
         <div className="flex flex-col items-center gap-2 mb-5">
-          <p className="text-[10px] uppercase tracking-wide text-[#9C93AC]">Accepted cards</p>
+          <p className="text-[10px] uppercase tracking-wide text-[#3D3650]">Accepted cards</p>
           <div className="flex items-center gap-2">
             {['Visa', 'Mastercard', 'Amex'].map((brand) => (
               <span
                 key={brand}
-                className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-[#E7DFF5] text-[#6B6478]"
+                className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-[#E7DFF5] text-[#3D3650]"
                 style={{ background: '#F8F4FD' }}
               >
                 {brand}
@@ -348,7 +348,7 @@ export default function PaymentMethodCard({ paymentMethods, onChanged, showToast
                 {(pm.brand || 'Card').toUpperCase()} •••• {pm.last4 ?? '••••'}
               </p>
               {pm.expMonth && pm.expYear && (
-                <p className="text-[11px] text-[#8A8298]">
+                <p className="text-[11px] text-[#3D3650]">
                   Expires {String(pm.expMonth).padStart(2, '0')}/{String(pm.expYear).slice(-2)}
                 </p>
               )}
@@ -422,7 +422,7 @@ function StatusPanel({ text, success }: { text: string; success?: boolean }) {
           )}
         </motion.div>
       </AnimatePresence>
-      <p className="text-sm text-[#4B4560]">{text}</p>
+      <p className="text-sm text-[#3D3650]">{text}</p>
     </div>
   );
 }

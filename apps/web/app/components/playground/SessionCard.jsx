@@ -35,7 +35,7 @@ export default function SessionCard({
           Demo Session Ready
         </h2>
 
-        <p className="text-[#6B6478] mt-2">
+        <p className="text-[#3D3650] mt-2">
           Scan the QR code using your phone or open the receiver in another
           browser.
         </p>
@@ -60,7 +60,7 @@ export default function SessionCard({
 
           </div>
 
-          <p className="text-[#6B6478] text-sm mt-6 text-center">
+          <p className="text-[#3D3650] text-sm mt-6 text-center">
             Scan to join as Receiver
           </p>
 
@@ -116,7 +116,7 @@ export default function SessionCard({
                   background: "#F8F4FD",
                 }}
               >
-                <span className="text-[#6B6478] truncate mr-4">
+                <span className="text-[#3D3650] truncate mr-4">
                   {session.callerUrl}
                 </span>
 
@@ -125,7 +125,7 @@ export default function SessionCard({
                 >
                   <Copy
                     size={18}
-                    color="#8A8298"
+                    color="#3D3650"
                   />
                 </button>
 
@@ -156,7 +156,7 @@ export default function SessionCard({
                   background: "#F8F4FD",
                 }}
               >
-                <span className="text-[#6B6478] truncate mr-4">
+                <span className="text-[#3D3650] truncate mr-4">
                   {session.receiverUrl}
                 </span>
 
@@ -165,7 +165,7 @@ export default function SessionCard({
                 >
                   <Copy
                     size={18}
-                    color="#8A8298"
+                    color="#3D3650"
                   />
                 </button>
 
@@ -194,7 +194,7 @@ export default function SessionCard({
                     Session Created Successfully
                   </p>
 
-                  <p className="text-[#6B6478] text-sm">
+                  <p className="text-[#3D3650] text-sm">
                     Waiting for participants to join...
                   </p>
 

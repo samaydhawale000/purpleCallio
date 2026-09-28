@@ -47,8 +47,8 @@ export default function NavLinks({
 
             ${
               mobile
-                ? "block py-3 text-lg text-[#4B4560]"
-                : "text-sm text-[#6B6478] after:absolute after:left-0 after:-bottom-1 after:h-[2px] after:w-0 after:bg-[#7F40E8] after:transition-all hover:after:w-full"
+                ? "block py-3 text-lg text-[#3D3650]"
+                : "text-sm text-[#3D3650] after:absolute after:left-0 after:-bottom-1 after:h-[2px] after:w-0 after:bg-[#7F40E8] after:transition-all hover:after:w-full"
             }
           `}
         >

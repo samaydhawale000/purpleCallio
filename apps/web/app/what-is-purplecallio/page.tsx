@@ -72,7 +72,7 @@ export default function WhatIsPurpleCallioPage() {
          <ContentSection title="Who is PurpleCallio for?">
             <ul className="grid gap-3 sm:grid-cols-2">
                {["SaaS products", "Marketplaces", "Education platforms", "Healthcare applications", "Customer support applications", "Internal business applications", "Developer products"].map((item) => (
-                  <li key={item} className="rounded-xl border border-[#E7DFF5] bg-white p-4 text-[#4B4560]">{item}</li>
+                  <li key={item} className="rounded-xl border border-[#E7DFF5] bg-white p-4 text-[#3D3650]">{item}</li>
                ))}
             </ul>
          </ContentSection>
@@ -90,13 +90,13 @@ export default function WhatIsPurpleCallioPage() {
                {integrationPaths.map(([name, description]) => (
                   <article key={name} className="rounded-xl border border-[#E7DFF5] bg-white p-5">
                      <h3 className="font-semibold text-[#170B2E]">{name}</h3>
-                     <p className="mt-2 text-sm leading-6 text-[#6B6478]">{description}</p>
+                     <p className="mt-2 text-sm leading-6 text-[#3D3650]">{description}</p>
                   </article>
                ))}
             </div>
          </ContentSection>
          <ContentSection title="How PurpleCallio works">
-            <div className="overflow-x-auto rounded-xl border border-[#E7DFF5] bg-white p-6 font-mono text-sm leading-7 text-[#4B4560]">
+            <div className="overflow-x-auto rounded-xl border border-[#E7DFF5] bg-white p-6 font-mono text-sm leading-7 text-[#3D3650]">
                <pre>{`Your Application
        |
        +------------------+
@@ -126,7 +126,7 @@ Participants`}</pre>
          <ContentSection title="Security">
             <div className="grid gap-4 sm:grid-cols-2">
                <article className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-amber-900"><h3 className="font-semibold">Project API key: server only</h3><p className="mt-2 text-sm">Never expose the project API key in frontend or browser code.</p></article>
-               <article className="rounded-xl border border-[#E7DFF5] bg-white p-5"><h3 className="font-semibold text-[#170B2E]">Browser: session information only</h3><p className="mt-2 text-sm text-[#6B6478]">Your backend authorizes application users and returns the participant-specific information needed to join.</p></article>
+               <article className="rounded-xl border border-[#E7DFF5] bg-white p-5"><h3 className="font-semibold text-[#170B2E]">Browser: session information only</h3><p className="mt-2 text-sm text-[#3D3650]">Your backend authorizes application users and returns the participant-specific information needed to join.</p></article>
             </div>
          </ContentSection>
          <ContentSection title="Pricing">
@@ -140,7 +140,7 @@ Participants`}</pre>
          </ContentSection>
          <ContentSection title="Frequently asked questions">
             <div className="space-y-4">
-               {faqs.map(([question, answer]) => <article key={question} className="rounded-xl border border-[#E7DFF5] bg-white p-5"><h3 className="font-semibold text-[#170B2E]">{question}</h3><p className="mt-2 text-sm leading-6 text-[#6B6478]">{answer}</p></article>)}
+               {faqs.map(([question, answer]) => <article key={question} className="rounded-xl border border-[#E7DFF5] bg-white p-5"><h3 className="font-semibold text-[#170B2E]">{question}</h3><p className="mt-2 text-sm leading-6 text-[#3D3650]">{answer}</p></article>)}
             </div>
          </ContentSection>
       </PublicPage>

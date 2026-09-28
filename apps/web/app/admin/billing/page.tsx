@@ -146,7 +146,7 @@ const [summary, setSummary] = useState<UsageSummary | null>(null);
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold text-[#170B2E]">Billing &amp; Revenue</h1>
-        <p className="text-sm text-[#8A8298] mt-1">
+        <p className="text-sm text-[#3D3650] mt-1">
           Usage-based revenue, platform usage, and edit your billing rates.
         </p>
       </div>
@@ -157,7 +157,7 @@ const [summary, setSummary] = useState<UsageSummary | null>(null);
           <div key={s.label} className="rounded-2xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
             <div className="flex items-center gap-2 mb-2">
               <s.icon size={16} style={{ color: s.color }} />
-              <p className="text-xs text-[#8A8298]">{s.label}</p>
+              <p className="text-xs text-[#3D3650]">{s.label}</p>
             </div>
             <p className="text-2xl font-bold text-[#170B2E]">{s.value}</p>
           </div>
@@ -168,14 +168,14 @@ const [summary, setSummary] = useState<UsageSummary | null>(null);
       <div className="rounded-2xl border border-[#E7DFF5] p-6" style={{ background: '#FFFFFF' }}>
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm font-semibold text-[#170B2E]">Usage breakdown (current cycle)</p>
-          <span className="text-xs text-[#8A8298]">Since {summary ? new Date(summary.since).toLocaleDateString('en-IN') : '—'}</span>
+          <span className="text-xs text-[#3D3650]">Since {summary ? new Date(summary.since).toLocaleDateString('en-IN') : '—'}</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-[#8A8298] border-b border-[#E7DFF5]">
+              <tr className="text-left text-xs text-[#3D3650] border-b border-[#E7DFF5]">
                 <th className="py-2 pr-4 font-medium">Media</th>
-                <th className="py-2 pr-4 font-medium">Minutes</th>
+                <th className="py-2 pr-4 font-medium">Participant-min</th>
                 <th className="py-2 font-medium">Line items</th>
               </tr>
             </thead>
@@ -187,8 +187,8 @@ const [summary, setSummary] = useState<UsageSummary | null>(null);
               ].map((row) => (
                 <tr key={row.name} className="border-b border-[#E7DFF5]/60 last:border-0">
                   <td className="py-3 pr-4 font-medium text-[#170B2E]">{row.name}</td>
-                  <td className="py-3 pr-4 text-[#4B4560]">{Math.round(row.minutes).toLocaleString('en-IN')} min</td>
-                  <td className="py-3 text-[#6B6478]">{Math.round(row.items).toLocaleString('en-IN')} min</td>
+                  <td className="py-3 pr-4 text-[#3D3650]">{Math.round(row.minutes).toLocaleString('en-IN')} participant-min</td>
+                  <td className="py-3 text-[#3D3650]">{Math.round(row.items).toLocaleString('en-IN')} participant-min</td>
                 </tr>
               ))}
             </tbody>
@@ -201,11 +201,11 @@ const [summary, setSummary] = useState<UsageSummary | null>(null);
         <div className="flex items-center justify-between mb-4">
           <div>
             <p className="text-sm font-semibold text-[#170B2E]">Segment analytics</p>
-            <p className="text-xs text-[#8A8298] mt-0.5">
+            <p className="text-xs text-[#3D3650] mt-0.5">
               Per-participant-minute media segments rated this cycle.
             </p>
           </div>
-          <span className="text-xs text-[#8A8298]">
+          <span className="text-xs text-[#3D3650]">
             {segAnalytics?.segmentCount ?? 0} segments
           </span>
         </div>
@@ -215,7 +215,7 @@ const [summary, setSummary] = useState<UsageSummary | null>(null);
           <SegStat label="Screen-share min" value={`${Math.round(segAnalytics?.totals.screenShareMins ?? 0)} min`} color="#34D399" />
           <SegStat label="Rated revenue" value={paiseToINR(segAnalytics?.totals.costPaise ?? 0)} color="#FBBF24" />
         </div>
-        <p className="text-xs text-[#9C93AC] mt-3">
+        <p className="text-xs text-[#3D3650] mt-3">
           Across {segAnalytics?.totals.calls ?? 0} calls since{' '}
           {segAnalytics?.since ? new Date(segAnalytics.since).toLocaleDateString('en-IN') : '—'}.
           Segment-based rating reflects actual media state (audio / video / screen) per
@@ -227,7 +227,7 @@ const [summary, setSummary] = useState<UsageSummary | null>(null);
       <div className="rounded-2xl border border-[#E7DFF5] p-6" style={{ background: '#FFFFFF' }}>
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm font-semibold text-[#170B2E]">Billing rates</p>
-          <span className="text-xs text-[#8A8298]">Applied to new usage immediately</span>
+          <span className="text-xs text-[#3D3650]">Applied to new usage immediately</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <RateField label="Audio (paise/min)" value={rates?.audioPaise ?? 0} onChange={(v) => updateRate('audioPaise', v)} suffix="paise" />
@@ -253,7 +253,7 @@ const [summary, setSummary] = useState<UsageSummary | null>(null);
           <Receipt size={16} className="text-[#7F40E8]" />
           <p className="text-sm font-semibold text-[#170B2E]">Invoicing</p>
         </div>
-        <p className="text-xs text-[#8A8298] leading-relaxed">
+        <p className="text-xs text-[#3D3650] leading-relaxed">
           Invoices are generated automatically on the 1st of each month for the
           previous cycle's billable usage, then charged to the customer's saved
           card. Failed payments enter a 7-day grace period before new-call
@@ -277,7 +277,7 @@ function RateField({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-[#8A8298]">{label}</span>
+      <span className="text-xs text-[#3D3650]">{label}</span>
       <div className="flex items-center gap-2 mt-1">
         <input
           type="number"
@@ -286,7 +286,7 @@ function RateField({
           onChange={(e) => onChange(Number(e.target.value) || 0)}
           className="w-full rounded-lg border border-[#E7DFF5] bg-[#FFFFFF] px-3 py-2 text-sm text-[#170B2E] focus:border-[#7F40E8] outline-none"
         />
-<span className="text-xs text-[#9C93AC] whitespace-nowrap">{suffix}</span>
+<span className="text-xs text-[#3D3650] whitespace-nowrap">{suffix}</span>
       </div>
     </label>
   );
@@ -303,7 +303,7 @@ function SegStat({
 }) {
   return (
     <div className="rounded-xl border border-[#E7DFF5] p-4" style={{ background: '#F8F4FD' }}>
-      <p className="text-[11px] text-[#8A8298] mb-1" style={{ borderLeft: `2px solid ${color}`, paddingLeft: 8 }}>
+      <p className="text-[11px] text-[#3D3650] mb-1" style={{ borderLeft: `2px solid ${color}`, paddingLeft: 8 }}>
         {label}
       </p>
       <p className="text-lg font-bold text-[#170B2E]">{value}</p>

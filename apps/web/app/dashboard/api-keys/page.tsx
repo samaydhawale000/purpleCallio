@@ -123,7 +123,7 @@ export default function ApiKeysPage() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <span className="text-sm text-[#8A8298]">Loading API keys…</span>
+          <span className="text-sm text-[#3D3650]">Loading API keys…</span>
         </div>
       </div>
     );
@@ -134,7 +134,7 @@ export default function ApiKeysPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#170B2E]">API Keys</h1>
-          <p className="text-sm text-[#8A8298] mt-1">
+          <p className="text-sm text-[#3D3650] mt-1">
             Create and manage keys for all your projects.
           </p>
         </div>
@@ -159,7 +159,7 @@ export default function ApiKeysPage() {
               autoFocus
             />
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-[#4B4560]">Project</label>
+              <label className="text-sm font-medium text-[#3D3650]">Project</label>
               <select
                 value={newKeyProject}
                 onChange={(e) => setNewKeyProject(e.target.value)}
@@ -184,7 +184,7 @@ export default function ApiKeysPage() {
           style={{ borderColor: 'rgba(52,211,153,0.35)', background: 'rgba(16,185,129,0.06)' }}
         >
           <p className="text-sm font-semibold text-[#170B2E] mb-1">Your new API key</p>
-          <p className="text-xs text-amber-400 mb-3">
+          <p className="text-xs text-amber-700 mb-3">
             Copy it now — you won&apos;t be able to view it again after leaving this page.
           </p>
           <div className="flex items-center gap-2 flex-wrap">
@@ -193,7 +193,7 @@ export default function ApiKeysPage() {
             </code>
             <button
               onClick={copyRevealedKey}
-              className="p-2.5 rounded-lg text-[#4B4560] hover:text-[#170B2E] hover:bg-[#7F40E8]/5 transition-colors border border-[#E7DFF5]"
+              className="p-2.5 rounded-lg text-[#3D3650] hover:text-[#170B2E] hover:bg-[#7F40E8]/5 transition-colors border border-[#E7DFF5]"
               title="Copy"
             >
               {copied === revealedKey.id
@@ -219,11 +219,11 @@ export default function ApiKeysPage() {
             <KeyRound size={24} style={{ color: '#A05DF9' }} />
           </div>
           <p className="text-base font-semibold text-[#170B2E] mb-1">No API keys yet</p>
-          <p className="text-sm text-[#8A8298] mb-6 max-w-sm mx-auto">
+          <p className="text-sm text-[#3D3650] mb-6 max-w-sm mx-auto">
             Create a key to authenticate calls to the PurpleCallio API.
           </p>
           {projects.length === 0 ? (
-            <p className="text-xs text-amber-400 mb-4">
+            <p className="text-xs text-amber-700 mb-4">
               You need a project first. Create one in the Projects page.
             </p>
           ) : (
@@ -250,11 +250,11 @@ export default function ApiKeysPage() {
                   </Badge>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
-                  <p className="text-xs font-mono text-[#8A8298] truncate max-w-[220px] sm:max-w-xs">
+                  <p className="text-xs font-mono text-[#3D3650] truncate max-w-[220px] sm:max-w-xs">
                     {key.keyPrefix}••••••••••••••••••••
                   </p>
                   {key.project?.name && (
-                    <span className="text-xs text-[#9C93AC]">· {key.project.name}</span>
+                    <span className="text-xs text-[#3D3650]">· {key.project.name}</span>
                   )}
                 </div>
               </div>
@@ -262,7 +262,7 @@ export default function ApiKeysPage() {
                 <button
                   onClick={() => toggleKey(key)}
                   disabled={busy === key.id}
-                  className="p-2 rounded-lg text-[#6B6478] hover:text-[#170B2E] hover:bg-[#7F40E8]/5 transition-colors disabled:opacity-50"
+                  className="p-2 rounded-lg text-[#3D3650] hover:text-[#170B2E] hover:bg-[#7F40E8]/5 transition-colors disabled:opacity-50"
                   title={key.isActive ? 'Deactivate' : 'Activate'}
                 >
                   <Power size={16} style={{ color: key.isActive ? '#34D399' : '#F87171' }} />
@@ -270,7 +270,7 @@ export default function ApiKeysPage() {
                 <button
                   onClick={() => revokeKey(key)}
                   disabled={busy === key.id}
-                  className="p-2 rounded-lg text-[#6B6478] hover:text-red-600 hover:bg-red-500/5 transition-colors disabled:opacity-50"
+                  className="p-2 rounded-lg text-[#3D3650] hover:text-red-600 hover:bg-red-500/5 transition-colors disabled:opacity-50"
                   title="Revoke"
                 >
                   <Trash2 size={16} />
@@ -290,7 +290,7 @@ export default function ApiKeysPage() {
         </div>
         <div>
           <p className="text-sm font-medium text-[#170B2E]">Security best practice</p>
-          <p className="text-xs text-[#8A8298] mt-0.5">
+          <p className="text-xs text-[#3D3650] mt-0.5">
             Treat API keys like passwords. Rotate them regularly and never expose them
             in client-side code. Use separate keys per environment.
           </p>

@@ -19,7 +19,7 @@ export default function DemoCard({
         {title}
       </h2>
 
-      <p className="text-[#6B6478] mt-3 flex-1">
+      <p className="text-[#3D3650] mt-3 flex-1">
         {description}
       </p>
 

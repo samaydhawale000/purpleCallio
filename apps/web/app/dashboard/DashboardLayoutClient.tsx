@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -20,74 +20,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 import { useRequireAuth } from '../hooks/useRequireAuth';
-import { api } from '../lib/api';
-import { Button } from '../components/ui/Button';
 import logo from '../assets/images/logo.webp';
-
-/** Loose E.164 check (+ up to 15 digits) — what Razorpay requires for a contact number. */
-const isValidPhone = (value: string) => /^\+[1-9]\d{7,14}$/.test(value.trim());
-
-/**
- * Blocks the dashboard until the user has a contact phone number on file.
- * Collected once here (not re-asked when adding a card) because Razorpay
- * requires a contact number on the payment-provider customer before it will
- * authorise a recurring card mandate for auto-billing.
- */
-function PhoneGate() {
-  const setUser = useAuthStore((s) => s.setUser);
-  const user = useAuthStore((s) => s.user);
-  const [phone, setPhone] = useState('+91');
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!isValidPhone(phone)) {
-      setError('Enter a valid phone number with country code, e.g. +919876543210.');
-      return;
-    }
-    setError(null);
-    setSaving(true);
-    try {
-      await api.post('/auth/phone', { phone: phone.trim() });
-      if (user) setUser({ ...user, phone: phone.trim() });
-    } catch (e: any) {
-      setError(e?.response?.data?.message || 'Could not save your phone number.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center px-6" style={{ background: '#FFFFFF' }}>
-      <div
-        className="w-full max-w-sm rounded-2xl border border-[#E7DFF5] p-8"
-        style={{ background: '#FFFFFF', boxShadow: '0 24px 60px rgba(127,64,232,0.1)' }}
-      >
-        <p className="text-lg font-bold text-[#170B2E] mb-1">One more thing</p>
-        <p className="text-sm text-[#6B6478] mb-6">
-          Add a contact number to your account. It&apos;s required to authorise cards for
-          automatic monthly billing later on.
-        </p>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+919876543210"
-            className="w-full rounded-lg border border-[#D6C4EE] px-3 py-2.5 text-sm text-[#170B2E]"
-            style={{ background: '#F8F4FD' }}
-            autoFocus
-          />
-          {error && <p className="text-xs" style={{ color: '#DC2626' }}>{error}</p>}
-          <Button type="submit" loading={saving} className="w-full justify-center">
-            Continue
-          </Button>
-        </form>
-      </div>
-    </div>
-  );
-}
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -122,8 +55,16 @@ const logout = useAuthStore((s) => s.logout);
     setSidebarOpen(false);
   }, [pathname]);
 
-  if (isReady && user && !user.phone) {
-    return <PhoneGate />;
+  // Profile completion (including the contact phone Razorpay needs) happens
+  // on /login right after Google sign-in. A session whose profile is still
+  // incomplete is sent back there instead of into the dashboard.
+  const needsOnboarding = isReady && user?.profileCompleted === false;
+  useEffect(() => {
+    if (needsOnboarding) router.replace('/login');
+  }, [needsOnboarding, router]);
+
+  if (needsOnboarding) {
+    return null;
   }
 
   return (
@@ -138,7 +79,7 @@ const logout = useAuthStore((s) => s.logout);
         </Link>
         <button
           onClick={() => setSidebarOpen(true)}
-          className="w-10 h-10 flex items-center justify-center rounded-lg border border-[#E7DFF5] text-[#6B6478]"
+          className="w-10 h-10 flex items-center justify-center rounded-lg border border-[#E7DFF5] text-[#3D3650]"
           aria-label="Open menu"
         >
           <Menu size={20} />
@@ -170,7 +111,7 @@ const logout = useAuthStore((s) => s.logout);
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden w-8 h-8 flex items-center justify-center text-[#6B6478]"
+            className="lg:hidden w-8 h-8 flex items-center justify-center text-[#3D3650]"
             aria-label="Close menu"
           >
             <X size={18} />
@@ -179,7 +120,7 @@ const logout = useAuthStore((s) => s.logout);
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 overflow-y-auto">
-          <p className="px-3 pb-2 text-[11px] font-mono uppercase tracking-widest text-[#9C93AC]">
+          <p className="px-3 pb-2 text-[11px] font-mono uppercase tracking-widest text-[#3D3650]">
             Workspace
           </p>
           <div className="flex flex-col gap-0.5">
@@ -198,7 +139,7 @@ const logout = useAuthStore((s) => s.logout);
                     ${
                       active
                         ? 'text-[#170B2E] font-medium'
-                        : 'text-[#6B6478] hover:text-[#170B2E]'
+                        : 'text-[#3D3650] hover:text-[#170B2E]'
                     }
                   `}
                   style={
@@ -239,14 +180,14 @@ const logout = useAuthStore((s) => s.logout);
             )}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-[#170B2E] truncate">{displayName}</p>
-              <p className="text-xs text-[#8A8298] truncate">{user?.email ?? 'Starter Plan'}</p>
+              <p className="text-xs text-[#3D3650] truncate">{user?.email ?? 'Starter Plan'}</p>
             </div>
             <button
               onClick={() => {
                 logout();
                 router.push('/');
               }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-[#6B6478] hover:text-red-600 hover:bg-[#7F40E8]/5 transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-[#3D3650] hover:text-red-600 hover:bg-[#7F40E8]/5 transition-colors"
               aria-label="Logout"
               title="Logout"
             >

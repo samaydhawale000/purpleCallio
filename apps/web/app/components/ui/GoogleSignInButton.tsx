@@ -17,7 +17,7 @@ export function GoogleSignInButton() {
     <div className="flex flex-col items-center gap-3">
       <div ref={ref} className="flex justify-center min-h-[40px]" />
       {loading && (
-        <p className="text-sm text-[#8A8298]">Signing you in…</p>
+        <p className="text-sm text-[#3D3650]">Signing you in…</p>
       )}
       {error && (
         <div
@@ -28,7 +28,7 @@ export function GoogleSignInButton() {
         </div>
       )}
       {!clientId && (
-        <p className="text-xs text-[#9C93AC] text-center">
+        <p className="text-xs text-[#3D3650] text-center">
           Google sign-in is not configured. Add{' '}
           <code className="text-[#7F40E8]">NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> to continue.
         </p>

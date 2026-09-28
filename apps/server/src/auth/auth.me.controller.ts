@@ -7,6 +7,7 @@ import {
 
 import { JwtGuard } from './guards/jwt.guard';
 import { PrismaService } from '../prisma/prisma.service';
+import { PROFILE_SELECT, toUserProfile } from './user-profile';
 
 @Controller('auth')
 export class AuthMeController {
@@ -17,25 +18,18 @@ export class AuthMeController {
   async me(@Req() req: any) {
     const user = await this.prisma.user.findUnique({
       where: { id: req.user.userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        avatarUrl: true,
-        phone: true,
-      },
+      select: PROFILE_SELECT,
     });
 
     if (!user) {
       return { userId: req.user.userId };
     }
 
+    const { id, ...profile } = toUserProfile(user);
     return {
-      userId: user.id,
-      email: user.email,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      phone: user.phone,
+      userId: id,
+      ...profile,
+      onboardingRequired: !profile.profileCompleted,
     };
   }
 }

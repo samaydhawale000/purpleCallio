@@ -2,7 +2,9 @@ import { Injectable, Logger, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PAYMENT_SERVICE } from '../payment/payment.service';
 import type { PaymentService } from '../payment/payment.service';
-import { UsageBillingService } from './usage-billing.service';
+import { UsageBillingService, BillingRates } from './usage-billing.service';
+import { CustomerDiscountService } from './customer-discount.service';
+import { calculateInvoiceAmounts } from './discount.util';
 
 /** Fixed dunning retry schedule: days after dunningStartedAt to retry. */
 const DUNNING_RETRY_SCHEDULE_DAYS = [1, 3, 7];
@@ -28,7 +30,37 @@ export class InvoiceBillingService {
     private prisma: PrismaService,
     @Inject(PAYMENT_SERVICE) private payments: PaymentService,
     private usageBilling: UsageBillingService,
+    private customerDiscounts: CustomerDiscountService,
   ) {}
+
+  /**
+   * Billable minutes + per-media-type paise for a usage snapshot at the
+   * given rates (free allowance already applied; screen-share always
+   * billable). Shared by generateInvoiceForCycle (closed cycle) and
+   * previewCurrentCycle (still-open cycle) so the two can never diverge.
+   */
+  private billableAmounts(
+    usage: { audioMinutes: number; videoMinutes: number; screenShareMinutes: number } | null,
+    rates: BillingRates,
+  ) {
+    const billableAudio = Math.max(0, (usage?.audioMinutes ?? 0) - rates.freeAudioMins);
+    const billableVideo = Math.max(0, (usage?.videoMinutes ?? 0) - rates.freeVideoMins);
+    const billableScreenShare = usage?.screenShareMinutes ?? 0;
+
+    const audioPaise = billableAudio * rates.audioPaise;
+    const videoPaise = billableVideo * rates.videoPaise;
+    const screenSharePaise = billableScreenShare * rates.screenSharePaise;
+
+    return {
+      billableAudio,
+      billableVideo,
+      billableScreenShare,
+      audioPaise,
+      videoPaise,
+      screenSharePaise,
+      subtotalPaise: audioPaise + videoPaise + screenSharePaise,
+    };
+  }
 
   /**
    * Generate (or return existing) the invoice for a given cycle for a user.
@@ -56,15 +88,30 @@ export class InvoiceBillingService {
     const rates = await this.usageBilling.getRates();
 
     // Billable minutes = usage beyond free allowance (screen-share always paid).
-    const billableAudio = Math.max(0, (usage?.audioMinutes ?? 0) - rates.freeAudioMins);
-    const billableVideo = Math.max(0, (usage?.videoMinutes ?? 0) - rates.freeVideoMins);
-    const billableScreenShare = usage?.screenShareMinutes ?? 0;
+    const {
+      billableAudio,
+      billableVideo,
+      billableScreenShare,
+      audioPaise,
+      videoPaise,
+      screenSharePaise,
+      subtotalPaise,
+    } = this.billableAmounts(usage, rates);
 
-    const audioPaise = billableAudio * rates.audioPaise;
-    const videoPaise = billableVideo * rates.videoPaise;
-    const screenSharePaise = billableScreenShare * rates.screenSharePaise;
-    const subtotalPaise = audioPaise + videoPaise + screenSharePaise;
-    const taxPaise = Math.round(subtotalPaise * (rates.taxPercent / 100));
+    // Resolve the discount active FOR THIS CUSTOMER AS OF THIS CYCLE'S START
+    // — not "now". This is what makes recurring billing automatic (the same
+    // active discount is picked up every cycle with no admin action) while
+    // also keeping past invoices immutable (a discount changed after this
+    // cycle closed can never retroactively affect it, since a closed cycle's
+    // generateInvoiceForCycle call always passes that cycle's own
+    // cycleStart).
+    const discount = await this.customerDiscounts.getActiveDiscount(userId, cycleStart);
+    const amounts = calculateInvoiceAmounts({
+      subtotalPaise,
+      discountPercent: discount?.percentage ?? null,
+      taxPercent: rates.taxPercent,
+    });
+    const { discountPercent, discountPaise, taxPaise } = amounts;
 
     // Anchored cycle end comes from the Usage row itself (the true end of
     // this subscription's anchored cycle) — falling back to a calendar-month
@@ -80,7 +127,10 @@ export class InvoiceBillingService {
       where: { userId, consumedAt: null },
     });
     const adjustmentPaise = pendingAdjustments.reduce((s, a) => s + a.amountPaise, 0);
-    const totalPaise = subtotalPaise + taxPaise + adjustmentPaise;
+    // amounts.totalPaise is taxableAmountPaise (post-discount) + taxPaise;
+    // proration adjustments fold in on top exactly as before discounts
+    // existed — discounts only ever apply to the usage subtotal.
+    const totalPaise = amounts.totalPaise + adjustmentPaise;
 
     const invoiceNumber = await this.nextInvoiceNumber(cycleStart);
 
@@ -102,6 +152,9 @@ export class InvoiceBillingService {
           videoPaise,
           screenSharePaise,
           subtotalPaise,
+          discountPercent,
+          discountPaise,
+          discountReason: discount?.reason ?? null,
           taxPaise,
           totalPaise,
           currency: 'INR',
@@ -155,6 +208,45 @@ export class InvoiceBillingService {
       where: { id: invoice.id },
       include: { lineItems: true },
     });
+  }
+
+  /**
+   * Live, non-persisting preview of what the invoice for the customer's
+   * CURRENT (still-open) cycle would look like right now — same math as
+   * generateInvoiceForCycle (via the shared billableAmounts/
+   * calculateInvoiceAmounts helpers), resolving the discount as of "now"
+   * rather than a cycle-start date. Nothing is written to the database.
+   * This is the single source of truth the frontend renders for "Usage
+   * subtotal / Discount / Tax / Total" — it must never compute these
+   * numbers itself (see task requirement: backend is authoritative).
+   */
+  async previewCurrentCycle(userId: string) {
+    const usage = await this.usageBilling.getOrCreateUsage(userId);
+    const rates = await this.usageBilling.getRates();
+    const billable = this.billableAmounts(usage, rates);
+    const discount = await this.customerDiscounts.getActiveDiscount(userId, new Date());
+    const amounts = calculateInvoiceAmounts({
+      subtotalPaise: billable.subtotalPaise,
+      discountPercent: discount?.percentage ?? null,
+      taxPercent: rates.taxPercent,
+    });
+
+    return {
+      cycle: { start: usage.billingCycleStart, end: usage.billingCycleEnd },
+      usage: {
+        audioMinutes: billable.billableAudio,
+        videoMinutes: billable.billableVideo,
+        screenShareMinutes: billable.billableScreenShare,
+      },
+      breakdown: {
+        audioPaise: billable.audioPaise,
+        videoPaise: billable.videoPaise,
+        screenSharePaise: billable.screenSharePaise,
+      },
+      ...amounts,
+      discountReason: discount?.reason ?? null,
+      currency: 'INR',
+    };
   }
 
   /** `BJ-{year}-{sequence}`, sequential within the invoice's cycle year. */

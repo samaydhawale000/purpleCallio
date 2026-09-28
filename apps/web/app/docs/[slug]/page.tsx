@@ -603,7 +603,7 @@ export default async function DocPage({
                            .toLowerCase()
                            .replace(/[^a-z0-9]+/g, "-")
                            .replace(/(^-|-$)/g, "")}`}
-                        className="text-[#6B6478] hover:text-[#170B2E]"
+                        className="text-[#3D3650] hover:text-[#170B2E]"
                      >
                         {title}
                      </a>
@@ -612,7 +612,7 @@ export default async function DocPage({
                {examples[slug as DocSlug] && (
                   <a
                      href="#example"
-                     className="text-[#6B6478] hover:text-[#170B2E]"
+                     className="text-[#3D3650] hover:text-[#170B2E]"
                   >
                      Example
                   </a>
@@ -660,7 +660,7 @@ export default async function DocPage({
                         <p className="mt-2 text-sm text-[#6425C4]">
                            {location}
                         </p>
-                        <p className="mt-2 text-sm text-[#6B6478]">{detail}</p>
+                        <p className="mt-2 text-sm text-[#3D3650]">{detail}</p>
                      </article>
                   ))}
                </div>

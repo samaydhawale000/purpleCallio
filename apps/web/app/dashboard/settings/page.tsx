@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   User,
@@ -12,12 +12,21 @@ import {
   Phone,
   Laptop,
 } from 'lucide-react';
-import { useAuthStore } from '../../store/auth.store';
+import { useAuthStore, toAuthUser } from '../../store/auth.store';
 import { useRequireAuth } from '../../hooks/useRequireAuth';
 import { api } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
+import {
+  AboutFields,
+  CompanyFields,
+  FormError,
+  SECTION_FIELDS,
+  UsageFields,
+  useProfileForm,
+} from '../../components/auth/profileForm';
+import { countryByCode } from '../../lib/onboarding';
+import type { AuthUser } from '../../store/auth.store';
 
 interface Me {
   userId: string;
@@ -27,17 +36,6 @@ interface Me {
   phone?: string | null;
 }
 
-const COUNTRIES = [
-  'India',
-  'United States',
-  'United Kingdom',
-  'Canada',
-  'Australia',
-  'Germany',
-  'Singapore',
-  'United Arab Emirates',
-];
-
 export default function SettingsPage() {
   const { token, user, logout, setUser } = useAuthStore();
   const router = useRouter();
@@ -45,34 +43,22 @@ export default function SettingsPage() {
 
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saved, setSaved] = useState<string | null>(null);
-
-  // Profile prefilled from the persisted store user (if available) so the
-  // name/email show immediately, even before /auth/me responds.
-  const [name, setName] = useState(user?.name ?? '');
-  const [company, setCompany] = useState('');
-  const [jobTitle, setJobTitle] = useState('');
-  const [country, setCountry] = useState('India');
 
   const fetchMe = useCallback(async () => {
     try {
       const res = await api.get('/auth/me');
       const data = res.data as Me;
       setMe(data);
-      if (data.name) setName(data.name);
       // Keep the global store in sync so the avatar/name show everywhere.
-      setUser({
-        userId: data.userId,
-        email: data.email ?? null,
-        name: data.name ?? null,
-        avatarUrl: data.avatarUrl ?? null,
-        phone: data.phone ?? null,
-      });
+      setUser(toAuthUser(data));
     } catch (e: any) {
       if (e?.response?.status === 401) {
         logout();
         router.replace('/login');
       } else {
+        // Read the store directly so `user` isn't a dependency — setUser()
+        // above would otherwise re-trigger this fetch on every response.
+        const user = useAuthStore.getState().user;
         setMe(user ? {
           userId: user.userId,
           email: user.email ?? undefined,
@@ -83,18 +69,13 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [logout, router, setUser, user]);
+  }, [logout, router, setUser]);
 
   useEffect(() => {
     if (!isReady) return;
     if (!token) { router.push('/login'); return; }
     fetchMe();
   }, [isReady, token, fetchMe, router]);
-
-  function saveProfile() {
-    setSaved('profile');
-    setTimeout(() => setSaved(null), 2200);
-  }
 
   if (loading) {
     return (
@@ -104,19 +85,20 @@ export default function SettingsPage() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <span className="text-sm text-[#8A8298]">Loading settings…</span>
+          <span className="text-sm text-[#3D3650]">Loading settings…</span>
         </div>
       </div>
     );
   }
 
-const avatar = me?.avatarUrl || user?.avatarUrl || '';
+  const avatar = me?.avatarUrl || user?.avatarUrl || '';
+  const name = user?.name || me?.name || '';
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold text-[#170B2E]">Settings</h1>
-        <p className="text-sm text-[#8A8298] mt-1">
+        <p className="text-sm text-[#3D3650] mt-1">
           Manage your account and preferences.
         </p>
       </div>
@@ -127,7 +109,7 @@ const avatar = me?.avatarUrl || user?.avatarUrl || '';
           <User size={16} style={{ color: '#7F40E8' }} />
           <p className="text-base font-semibold text-[#170B2E]">Profile</p>
         </div>
-        <p className="text-sm text-[#8A8298] mb-6">Basic account information.</p>
+        <p className="text-sm text-[#3D3650] mb-6">Your account, company and usage details.</p>
 
         <div className="flex flex-wrap items-center gap-4 mb-6">
           {avatar ? (
@@ -147,58 +129,14 @@ const avatar = me?.avatarUrl || user?.avatarUrl || '';
           )}
 <div>
             <p className="text-sm font-medium text-[#170B2E]">{name || 'Your Account'}</p>
-            <p className="text-xs text-[#8A8298]">{me?.email ?? user?.email ?? me?.userId}</p>
+            <p className="text-xs text-[#3D3650]">{me?.email ?? user?.email ?? me?.userId}</p>
           </div>
           <Badge variant="success" className="ml-auto">
             <Mail size={12} /> Google Verified
           </Badge>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-<Input
-            label="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your name"
-          />
-<Input
-            label="Email Address"
-            type="email"
-            value={me?.email ?? user?.email ?? ''}
-            disabled
-            helper="Email is managed by your Google account."
-          />
-          <Input
-            label="Company"
-            value={company}
-            onChange={(e) => setCompany(e.target.value)}
-            placeholder="Your company"
-          />
-          <Input
-            label="Job Title"
-            value={jobTitle}
-            onChange={(e) => setJobTitle(e.target.value)}
-            placeholder="Your role"
-          />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[#4B4560]">Country</label>
-            <select
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-lg text-sm text-[#170B2E] bg-[#FFFFFF] border border-[#E7DFF5] outline-none focus:border-[#7F40E8]/60"
-            >
-              {COUNTRIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 mt-6">
-          <Button onClick={saveProfile}>
-            {saved === 'profile' ? <><Check size={15} /> Saved</> : 'Save changes'}
-          </Button>
-        </div>
+        {user && <ProfileSettingsForm key={user.userId} user={user} onSaved={setUser} />}
       </section>
 
       {/* ── Security ── */}
@@ -207,7 +145,7 @@ const avatar = me?.avatarUrl || user?.avatarUrl || '';
           <Shield size={16} style={{ color: '#34D399' }} />
           <p className="text-base font-semibold text-[#170B2E]">Security</p>
         </div>
-        <p className="text-sm text-[#8A8298] mb-6">Authentication &amp; account security.</p>
+        <p className="text-sm text-[#3D3650] mb-6">Authentication &amp; account security.</p>
 
         <div className="divide-y divide-[#E7DFF5] rounded-xl border border-[#E7DFF5]">
           <SettingRow
@@ -229,7 +167,7 @@ const avatar = me?.avatarUrl || user?.avatarUrl || '';
           <SessionRow
             icon={Laptop}
             device="Chrome · macOS"
-            location={country}
+            location={countryByCode(user?.country)?.name ?? '—'}
             time="Current session"
             active
           />
@@ -247,6 +185,77 @@ const avatar = me?.avatarUrl || user?.avatarUrl || '';
           </Button>
         </div>
       </section>
+    </div>
+  );
+}
+
+/**
+ * Every profile field collected during onboarding, editable in one place.
+ * Uses the same fields, validation and PATCH /auth/profile call as the
+ * onboarding steps on /login.
+ */
+function ProfileSettingsForm({
+  user,
+  onSaved,
+}: {
+  user: AuthUser;
+  onSaved: (user: AuthUser) => void;
+}) {
+  const form = useProfileForm(user);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (saving) return;
+    const ok = form.validate([...SECTION_FIELDS.about, ...SECTION_FIELDS.company]);
+    if (!ok) return;
+    setError('');
+    setSaving(true);
+    try {
+      onSaved(await form.save());
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2200);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} noValidate>
+      <fieldset disabled={saving} className="flex flex-col gap-6 min-w-0">
+        <SettingsGroup title="Personal information">
+          <AboutFields form={form} />
+        </SettingsGroup>
+        <SettingsGroup title="Company">
+          <CompanyFields form={form} />
+        </SettingsGroup>
+        <SettingsGroup title="Usage">
+          <UsageFields form={form} />
+        </SettingsGroup>
+
+        <FormError message={error} />
+
+        <div className="flex items-center gap-3">
+          <Button type="submit" loading={saving}>
+            {saving ? 'Saving...' : saved ? <><Check size={15} /> Saved</> : 'Save changes'}
+          </Button>
+        </div>
+      </fieldset>
+    </form>
+  );
+}
+
+function SettingsGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-[11px] font-mono uppercase tracking-widest text-[#3D3650] border-b border-[#E7DFF5] pb-2">
+        {title}
+      </p>
+      {children}
     </div>
   );
 }
@@ -273,7 +282,7 @@ function SettingRow({
         </div>
         <div>
           <p className="text-sm font-medium text-[#170B2E]">{title}</p>
-          <p className="text-xs text-[#8A8298] mt-0.5">{desc}</p>
+          <p className="text-xs text-[#3D3650] mt-0.5">{desc}</p>
         </div>
       </div>
       {right}
@@ -308,7 +317,7 @@ function SessionRow({
             <p className="text-sm font-medium text-[#170B2E]">{device}</p>
             {active && <Badge variant="success">Active</Badge>}
           </div>
-          <p className="text-xs text-[#8A8298] mt-0.5">{location} · {time}</p>
+          <p className="text-xs text-[#3D3650] mt-0.5">{location} · {time}</p>
         </div>
       </div>
     </div>

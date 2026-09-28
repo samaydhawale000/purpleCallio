@@ -102,7 +102,7 @@ export default function CallsPage() {
                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                   />
                </svg>
-               <span className="text-sm text-[#8A8298]">Loading calls…</span>
+               <span className="text-sm text-[#3D3650]">Loading calls…</span>
             </div>
          </div>
       );
@@ -112,7 +112,7 @@ export default function CallsPage() {
       <div className="flex flex-col gap-6">
          <div>
             <h1 className="text-2xl font-bold text-[#170B2E]">Calls</h1>
-            <p className="text-sm text-[#8A8298] mt-1">
+            <p className="text-sm text-[#3D3650] mt-1">
                Full call history across all your projects.
             </p>
          </div>
@@ -122,7 +122,7 @@ export default function CallsPage() {
             <div className="relative flex-1">
                <Search
                   size={15}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9C93AC]"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3D3650]"
                />
                <Input
                   placeholder="Search by call ID, caller, receiver, or project…"
@@ -135,7 +135,7 @@ export default function CallsPage() {
                />
             </div>
             <div className="flex items-center gap-2 overflow-x-auto">
-               <Filter size={15} className="text-[#9C93AC] shrink-0" />
+               <Filter size={15} className="text-[#3D3650] shrink-0" />
                {(
                   [
                      "ALL",
@@ -156,7 +156,7 @@ export default function CallsPage() {
                      className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border ${
                         status === s
                            ? "text-[#170B2E] border-[#7F40E8]/50"
-                           : "text-[#6B6478] border-[#E7DFF5] hover:border-[#D6C4EE] hover:text-[#170B2E]"
+                           : "text-[#3D3650] border-[#E7DFF5] hover:border-[#D6C4EE] hover:text-[#170B2E]"
                      }`}
                      style={
                         status === s
@@ -187,7 +187,7 @@ export default function CallsPage() {
                <p className="text-base font-semibold text-[#170B2E] mb-1">
                   {totalCalls === 0 ? "No calls yet" : "No matching calls"}
                </p>
-               <p className="text-sm text-[#8A8298]">
+               <p className="text-sm text-[#3D3650]">
                   {totalCalls === 0
                      ? "Your call history will appear here once you make your first call."
                      : "Try adjusting your search or filters."}
@@ -232,7 +232,7 @@ export default function CallsPage() {
                                  {statusLabel(call.status)}
                               </Badge>
                            </div>
-                           <p className="text-xs text-[#8A8298] mt-0.5">
+                           <p className="text-xs text-[#3D3650] mt-0.5">
                               {new Date(call.createdAt).toLocaleString("en-US")}
                               {call.project?.name
                                  ? ` · ${call.project.name}`
@@ -240,10 +240,10 @@ export default function CallsPage() {
                            </p>
                         </div>
                         <div className="text-right shrink-0">
-                           <p className="text-sm font-mono text-[#6B6478]">
+                           <p className="text-sm font-mono text-[#3D3650]">
                               {callDuration(call)}
                            </p>
-                           <p className="text-[10px] font-mono text-[#9C93AC] mt-0.5">
+                           <p className="text-[10px] font-mono text-[#3D3650] mt-0.5">
                               {call.id.slice(0, 8)}
                            </p>
                         </div>
@@ -278,7 +278,7 @@ export default function CallsPage() {
                      <p className="font-bold text-[#170B2E]">Call Details</p>
                      <button
                         onClick={() => setSelected(null)}
-                        className="text-[#8A8298] hover:text-[#170B2E] transition-colors text-sm"
+                        className="text-[#3D3650] hover:text-[#170B2E] transition-colors text-sm"
                         aria-label="Close"
                      >
                         ✕
@@ -338,10 +338,10 @@ export default function CallsPage() {
                                     style={{ background: "#7F40E8" }}
                                  />
                                  <div>
-                                    <p className="text-xs text-[#4B4560]">
+                                    <p className="text-xs text-[#3D3650]">
                                        {ev.event}
                                     </p>
-                                    <p className="text-[10px] text-[#9C93AC]">
+                                    <p className="text-[10px] text-[#3D3650]">
                                        {new Date(ev.createdAt).toLocaleString(
                                           "en-US",
                                        )}
@@ -370,9 +370,9 @@ function Row({
 }) {
    return (
       <div className="flex items-start justify-between gap-4">
-         <span className="text-[#8A8298] shrink-0">{label}</span>
+         <span className="text-[#3D3650] shrink-0">{label}</span>
          <span
-            className={`text-[#4B4560] text-right break-all ${mono ? "font-mono text-xs" : ""}`}
+            className={`text-[#3D3650] text-right break-all ${mono ? "font-mono text-xs" : ""}`}
          >
             {value}
          </span>

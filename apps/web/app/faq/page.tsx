@@ -120,15 +120,15 @@ function FaqItem({ q, a }: { q: string; a: string }) {
       >
         <span className="text-sm font-semibold text-[#170B2E]">{q}</span>
         <span
-          className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-xs text-[#6B6478] transition-all"
-          style={{ background: open ? 'rgba(127,64,232,0.12)' : '#F3ECFB', color: open ? '#6425C4' : '#8A8298' }}
+          className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-xs text-[#3D3650] transition-all"
+          style={{ background: open ? 'rgba(127,64,232,0.12)' : '#F3ECFB', color: open ? '#6425C4' : '#3D3650' }}
         >
           {open ? '−' : '+'}
         </span>
       </button>
       {open && (
         <div className="px-5 pb-5 border-t border-[#E7DFF5]">
-          <p className="text-sm text-[#6B6478] leading-relaxed pt-4">{a}</p>
+          <p className="text-sm text-[#3D3650] leading-relaxed pt-4">{a}</p>
         </div>
       )}
     </div>
@@ -186,7 +186,7 @@ export default function FaqPage() {
         <h1 className="font-bold text-[#170B2E] mb-3" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', letterSpacing: '-0.03em' }}>
           Everything you need to know
         </h1>
-        <p className="text-[#6B6478] text-base leading-relaxed max-w-2xl">
+        <p className="text-[#3D3650] text-base leading-relaxed max-w-2xl">
           Can't find what you're looking for? Email{' '}
           <a href="mailto:purplecallio@gmail.com" className="text-[#6425C4] hover:underline">purplecallio@gmail.com</a>{' '}
           and an engineer will get back to you.
@@ -226,12 +226,12 @@ export default function FaqPage() {
         {/* CTA */}
         <div className="mt-16 rounded-xl p-8 text-center border border-[#D6C4EE]" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.05))' }}>
           <p className="font-bold text-[#170B2E] mb-2 text-lg">Still have questions?</p>
-          <p className="text-[#6B6478] text-sm mb-6">Try the playground or read the docs — or talk to the engineers who built it.</p>
+          <p className="text-[#3D3650] text-sm mb-6">Try the playground or read the docs — or talk to the engineers who built it.</p>
           <div className="flex flex-wrap justify-center gap-3">
             <Link href="/dashboard/playground" className="inline-flex items-center gap-2 text-white font-medium text-sm px-6 py-2.5 rounded-lg transition-all hover:opacity-90" style={{ background: 'linear-gradient(135deg, #7F40E8, #410686)' }}>
               Open playground →
             </Link>
-            <Link href="/signup" className="inline-flex items-center gap-2 text-[#4B4560] font-medium text-sm px-6 py-2.5 rounded-lg border border-[#E7DFF5] hover:border-[#D6C4EE] transition-all">
+            <Link href="/signup" className="inline-flex items-center gap-2 text-[#3D3650] font-medium text-sm px-6 py-2.5 rounded-lg border border-[#E7DFF5] hover:border-[#D6C4EE] transition-all">
               Get API key
             </Link>
           </div>

@@ -14,7 +14,7 @@ export default function Hero() {
         before integrating it.
       </h1>
 
-      <p className="mt-5 text-[#6B6478] max-w-2xl text-lg leading-8">
+      <p className="mt-5 text-[#3D3650] max-w-2xl text-lg leading-8">
         Test real video calls, audio calls and screen sharing without
         writing a single line of code.
       </p>

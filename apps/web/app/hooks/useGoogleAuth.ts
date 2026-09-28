@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '../lib/api';
-import { useAuthStore } from '../store/auth.store';
+import { useAuthStore, toAuthUser } from '../store/auth.store';
 
 // Declare the Google Identity Services global type.
 declare global {
@@ -49,19 +49,17 @@ const handleCredential = useCallback(
         const res = await api.post('/auth/google', {
           idToken: credential,
         });
-setTokens(res.data.accessToken, res.data.refreshToken);
+        setTokens(res.data.accessToken, res.data.refreshToken);
         if (res.data.user) {
-          // Normalize the Prisma user ({ id, ... }) to the store shape ({ userId, ... }).
-          const u = res.data.user;
-          setUser({
-            userId: u.userId ?? u.id,
-            email: u.email ?? null,
-            name: u.name ?? null,
-            avatarUrl: u.avatarUrl ?? null,
-            phone: u.phone ?? null,
-          });
+          setUser(toAuthUser(res.data.user));
         }
-        router.push('/dashboard');
+        // Incomplete profiles stay on this page — AuthCard swaps the Google
+        // button for the profile-completion step. Only an explicit
+        // onboardingRequired === false goes straight to the dashboard, so a
+        // response without the flag never skips onboarding.
+        if (res.data.onboardingRequired === false) {
+          router.push('/dashboard');
+        }
       } catch {
         setError('Google sign-in failed. Please try again.');
       } finally {

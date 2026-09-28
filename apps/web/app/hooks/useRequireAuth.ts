@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '../store/auth.store';
+import { useAuthStore, toAuthUser } from '../store/auth.store';
 import { api } from '../lib/api';
 
 /**
@@ -32,13 +32,7 @@ useEffect(() => {
       .get('/auth/me')
       .then((res) => {
         if (res.data) {
-          setUser({
-            userId: res.data.userId,
-            email: res.data.email ?? null,
-            name: res.data.name ?? null,
-            avatarUrl: res.data.avatarUrl ?? null,
-            phone: res.data.phone ?? null,
-          });
+          setUser(toAuthUser(res.data));
         }
       })
       .catch(() => {
