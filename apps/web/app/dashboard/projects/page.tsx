@@ -150,7 +150,7 @@ export default function ProjectsPage() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <span className="text-sm text-[#8A8298]">Loading projects…</span>
+          <span className="text-sm text-[#3D3650]">Loading projects…</span>
         </div>
       </div>
     );
@@ -161,7 +161,7 @@ export default function ProjectsPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#170B2E]">Projects</h1>
-          <p className="text-sm text-[#8A8298] mt-1">
+          <p className="text-sm text-[#3D3650] mt-1">
             Manage your projects, API keys, and webhooks.
           </p>
         </div>
@@ -212,7 +212,7 @@ export default function ProjectsPage() {
             <FolderKanban size={24} style={{ color: '#7F40E8' }} />
           </div>
           <p className="text-base font-semibold text-[#170B2E] mb-1">No projects yet</p>
-          <p className="text-sm text-[#8A8298] mb-6 max-w-sm mx-auto">
+          <p className="text-sm text-[#3D3650] mb-6 max-w-sm mx-auto">
             Create a project to get your first API key and start building.
           </p>
           <Button onClick={() => { setShowNewProject(true); setNewProjectName(''); setNewProjectDesc(''); }}>
@@ -240,13 +240,13 @@ export default function ProjectsPage() {
                       <p className="font-semibold text-[#170B2E]">{project.name}</p>
                       <Badge variant="purple">Production</Badge>
                     </div>
-                    <p className="text-xs text-[#8A8298] mt-0.5 truncate">
+                    <p className="text-xs text-[#3D3650] mt-0.5 truncate">
                       {project.description || 'No description'}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-[#8A8298]">
+                  <span className="text-xs text-[#3D3650]">
                     {projectKeys[project.id]?.length ?? 0} API Keys
                   </span>
                   <button
@@ -290,7 +290,7 @@ export default function ProjectsPage() {
                         style={{ borderColor: 'rgba(52,211,153,0.35)', background: 'rgba(16,185,129,0.06)' }}
                       >
                         <p className="text-xs font-semibold text-[#170B2E] mb-1">Your new API key</p>
-                        <p className="text-[11px] text-amber-400 mb-2">
+                        <p className="text-[11px] text-amber-700 mb-2">
                           Copy it now — you won&apos;t be able to view it again.
                         </p>
                         <div className="flex items-center gap-2">
@@ -299,7 +299,7 @@ export default function ProjectsPage() {
                           </code>
                           <button
                             onClick={copyRevealedKey}
-                            className="p-2 rounded-lg text-[#4B4560] hover:text-[#170B2E] hover:bg-[#7F40E8]/5 transition-colors border border-[#E7DFF5]"
+                            className="p-2 rounded-lg text-[#3D3650] hover:text-[#170B2E] hover:bg-[#7F40E8]/5 transition-colors border border-[#E7DFF5]"
                             title="Copy"
                           >
                             {copied === revealedKey.id
@@ -314,7 +314,7 @@ export default function ProjectsPage() {
                     )}
 
                     {!projectKeys[project.id]?.length ? (
-                      <p className="text-sm text-[#8A8298]">No API keys yet.</p>
+                      <p className="text-sm text-[#3D3650]">No API keys yet.</p>
                     ) : (
                       <div className="divide-y divide-[#E7DFF5] rounded-xl border border-[#E7DFF5]">
                         {projectKeys[project.id].map((key) => (
@@ -327,7 +327,7 @@ export default function ProjectsPage() {
                                   {key.isActive ? 'Active' : 'Revoked'}
                                 </Badge>
                               </div>
-                              <p className="text-xs font-mono text-[#8A8298] truncate">
+                              <p className="text-xs font-mono text-[#3D3650] truncate">
                                 {key.keyPrefix}••••••••••••••••••••
                               </p>
                             </div>
@@ -356,7 +356,7 @@ export default function ProjectsPage() {
                       </Button>
                     </div>
                     {project.webhookSecret && (
-                      <p className="text-xs text-[#8A8298] mt-2 flex items-center gap-1.5">
+                      <p className="text-xs text-[#3D3650] mt-2 flex items-center gap-1.5">
                         <Globe size={12} /> Webhook secret is configured for this project.
                       </p>
                     )}
@@ -377,7 +377,7 @@ export default function ProjectsPage() {
         </div>
         <div>
           <p className="text-sm font-medium text-[#170B2E]">Need the REST API?</p>
-          <p className="text-xs text-[#8A8298] mt-0.5">
+          <p className="text-xs text-[#3D3650] mt-0.5">
             All project and call endpoints are documented. Grab an API key above and start building.
           </p>
           <Link href="/docs" className="inline-flex items-center gap-1 text-xs font-medium text-[#6425C4] hover:text-[#6425C4] transition-colors mt-2">

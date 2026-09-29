@@ -26,7 +26,7 @@ export default function AdminUsagePage() {
   }, []);
 
   if (loading) {
-    return <div className="text-[#6B6478] text-sm py-20 text-center">Loading usage…</div>;
+    return <div className="text-[#3D3650] text-sm py-20 text-center">Loading usage…</div>;
   }
 
   if (error || !data) {
@@ -38,8 +38,8 @@ export default function AdminUsagePage() {
   }
 
   const cards = [
-    { label: 'Minutes Today', value: data.minutesToday, icon: Clock3 },
-    { label: 'Minutes This Month', value: data.minutesMonth, icon: CalendarDays },
+    { label: 'Platform Minutes Today', value: data.minutesToday, icon: Clock3 },
+    { label: 'Platform Minutes This Month', value: data.minutesMonth, icon: CalendarDays },
     { label: 'Calls Today', value: data.callsToday, icon: PhoneCall },
     { label: 'Calls This Month', value: data.callsMonth, icon: PhoneCall },
     { label: 'Avg Call Duration', value: `${data.avgDuration} min`, icon: Hourglass },
@@ -49,7 +49,7 @@ export default function AdminUsagePage() {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-bold text-[#170B2E]">Usage</h1>
-        <p className="text-[#6B6478] text-sm mt-1">Platform usage metrics</p>
+        <p className="text-[#3D3650] text-sm mt-1">Platform usage metrics</p>
       </header>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -57,7 +57,7 @@ export default function AdminUsagePage() {
           <div key={c.label} className="rounded-xl border border-[#E7DFF5] p-4" style={{ background: '#FFFFFF' }}>
             <div className="mb-2 text-[#6425C4]"><c.icon size={20} /></div>
             <div className="text-2xl font-bold text-[#170B2E]">{c.value}</div>
-            <div className="text-xs text-[#8A8298] mt-1">{c.label}</div>
+            <div className="text-xs text-[#3D3650] mt-1">{c.label}</div>
           </div>
         ))}
       </div>

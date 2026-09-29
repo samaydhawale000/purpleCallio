@@ -54,7 +54,7 @@ export default function SdksPage() {
                      <h3 className="mt-3 text-xl font-bold text-[#170B2E]">
                         {sdk.platform} <span className="text-[#6425C4]">→</span>
                      </h3>
-                     <p className="mt-2 text-sm leading-6 text-[#6B6478]">
+                     <p className="mt-2 text-sm leading-6 text-[#3D3650]">
                         {sdk.description}
                      </p>
                   </Link>
@@ -76,13 +76,13 @@ export default function SdksPage() {
                      key={sdk.platform}
                      className="rounded-2xl border border-dashed border-[#E7DFF5] bg-[#F8F4FD] p-6 opacity-80"
                   >
-                     <p className="font-mono text-xs uppercase tracking-widest text-[#8A8298]">
+                     <p className="font-mono text-xs uppercase tracking-widest text-[#3D3650]">
                         {sdk.package}
                      </p>
                      <h3 className="mt-3 text-xl font-bold text-[#170B2E]">
                         {sdk.platform}
                      </h3>
-                     <p className="mt-2 text-sm leading-6 text-[#6B6478]">
+                     <p className="mt-2 text-sm leading-6 text-[#3D3650]">
                         {sdk.description}
                      </p>
                   </div>

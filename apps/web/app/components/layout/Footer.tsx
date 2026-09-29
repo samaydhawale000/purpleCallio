@@ -78,7 +78,7 @@ export default function Footer() {
                      />
                   </Link>
 
-                  <p className="mt-6 max-w-sm leading-8 text-[#6B6478]">
+                  <p className="mt-6 max-w-sm leading-8 text-[#3D3650]">
                      Communication infrastructure for modern software. Build
                      secure video meetings with APIs, WebSocket signaling and
                      hosted UI.
@@ -100,7 +100,7 @@ export default function Footer() {
                            <Link
                               key={item.name}
                               href={item.href}
-                              className="group flex items-center gap-1 text-sm text-[#6B6478] transition hover:text-[#170B2E]"
+                              className="group flex items-center gap-1 text-sm text-[#3D3650] transition hover:text-[#170B2E]"
                            >
                               {item.name}
 
@@ -117,7 +117,7 @@ export default function Footer() {
 
             <div className="my-12 h-px bg-gradient-to-r from-transparent via-[#E7DFF5] to-transparent" />
 
-            <div className="flex flex-col items-center justify-between gap-4 text-sm text-[#8A8298] md:flex-row">
+            <div className="flex flex-col items-center justify-between gap-4 text-sm text-[#3D3650] md:flex-row">
                <span>
                   © {new Date().getFullYear()} PurpleCallio. All rights reserved.
                </span>
@@ -152,7 +152,7 @@ function Social({ href, children }) {
    return (
       <Link
          href={href}
-         className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#E7DFF5] bg-white text-[#6B6478] transition-all duration-300 hover:-translate-y-1 hover:border-[#7F40E8] hover:text-[#170B2E]"
+         className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#E7DFF5] bg-white text-[#3D3650] transition-all duration-300 hover:-translate-y-1 hover:border-[#7F40E8] hover:text-[#170B2E]"
       >
          {children}
       </Link>

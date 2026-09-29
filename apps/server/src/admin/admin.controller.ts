@@ -4,7 +4,9 @@ import {
   Get,
   Param,
   Patch,
+  Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 
@@ -32,6 +34,41 @@ export class AdminController {
     @Body() body: { status: 'ACTIVE' | 'SUSPENDED' },
   ) {
     return this.adminService.updateCustomerStatus(id, body.status);
+  }
+
+  @Get('customers/:id')
+  getCustomer(@Param('id') id: string) {
+    return this.adminService.getCustomer(id);
+  }
+
+  @Get('customers/:id/discount')
+  getCustomerDiscount(@Param('id') id: string) {
+    return this.adminService.getCustomerDiscount(id);
+  }
+
+  @Post('customers/:id/discount')
+  setCustomerDiscount(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body()
+    body: {
+      percentage: number;
+      effectiveFrom: string;
+      effectiveUntil?: string | null;
+      reason?: string | null;
+    },
+  ) {
+    return this.adminService.setCustomerDiscount(id, req.user.userId, {
+      percentage: body.percentage,
+      effectiveFrom: new Date(body.effectiveFrom),
+      effectiveUntil: body.effectiveUntil ? new Date(body.effectiveUntil) : null,
+      reason: body.reason ?? null,
+    });
+  }
+
+  @Patch('customers/:id/discount/disable')
+  disableCustomerDiscount(@Param('id') id: string, @Req() req: any) {
+    return this.adminService.disableCustomerDiscount(id, req.user.userId);
   }
 
   @Get('calls')

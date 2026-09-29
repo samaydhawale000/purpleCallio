@@ -43,7 +43,7 @@ export default function BillingTimeline({
   return (
     <div className="rounded-2xl border border-[#E7DFF5] p-6" style={{ background: '#FFFFFF' }}>
       <p className="text-sm font-semibold text-[#170B2E] mb-1">How your billing works</p>
-      <p className="text-xs text-[#8A8298] mb-5">
+      <p className="text-xs text-[#3D3650] mb-5">
         Usage-based billing, start to finish — this cycle.
       </p>
 
@@ -81,7 +81,7 @@ export default function BillingTimeline({
                     >
                       {step.label}
                     </p>
-                    <p className="text-[10px] text-[#9C93AC] leading-tight mt-0.5">{step.desc}</p>
+                    <p className="text-[10px] text-[#3D3650] leading-tight mt-0.5">{step.desc}</p>
                   </div>
                 </div>
                 {i < steps.length - 1 && (

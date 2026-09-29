@@ -51,7 +51,7 @@ export default function MobileMenu({
               <button
                 onClick={onClose}
                 aria-label="Close menu"
-                className="rounded-lg p-2 text-[#6B6478] transition hover:bg-[#7F40E8]/5 hover:text-[#170B2E]"
+                className="rounded-lg p-2 text-[#3D3650] transition hover:bg-[#7F40E8]/5 hover:text-[#170B2E]"
               >
                 <X size={22} />
               </button>
@@ -84,7 +84,7 @@ export default function MobileMenu({
                       logout?.();
                       window.location.href = "/";
                     }}
-                    className="rounded-lg border border-[#E7DFF5] py-3 text-center text-sm text-[#4B4560] transition hover:border-[#D6C4EE] hover:text-[#170B2E]"
+                    className="rounded-lg border border-[#E7DFF5] py-3 text-center text-sm text-[#3D3650] transition hover:border-[#D6C4EE] hover:text-[#170B2E]"
                   >
                     Logout
                   </button>

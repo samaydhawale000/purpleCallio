@@ -8,8 +8,8 @@
   --border:    #E7DFF5;
   --border-2:  #D6C4EE;
   --text:      #170B2E;
-  --muted:     #6B6478;
-  --dim:       #9C93AC;
+  --muted:     #3D3650;
+  --dim:       #3D3650;
 
   --brand:      #7F40E8;
   --brand-dark: #410686;
@@ -132,7 +132,6 @@ body {
   height: 100%;
   z-index: 0;
   background: #FFFFFF;
-  /* White base (color-1) + a single faint brand-colored wave layer (color-2) */
   --gradient-color-1: #FFFFFF;
   --gradient-color-2: #d9d7ff;;
   opacity: 0;
@@ -155,7 +154,7 @@ body {
 .lp-code-block { background: var(--surface-2); }
 .lp-pre        { line-height: 1.8; }
 
-.tok-comment  { color: #9C93AC; }
+.tok-comment  { color: #3D3650; }
 .tok-keyword  { color: #0891B2; }
 .tok-base     { color: #170B2E; }
 .tok-async    { color: #7F40E8; }

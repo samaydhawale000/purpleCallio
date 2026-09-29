@@ -7,6 +7,35 @@ export interface AuthUser {
   name?: string | null;
   avatarUrl?: string | null;
   phone?: string | null;
+  companyName?: string | null;
+  jobTitle?: string | null;
+  country?: string | null;
+  companyWebsite?: string | null;
+  expectedUsageRange?: string | null;
+  primaryUseCase?: string | null;
+  /** Backend-controlled onboarding gate; undefined only for a stale persisted session. */
+  profileCompleted?: boolean;
+}
+
+/**
+ * Normalizes a user from /auth/google ({ id, ... }), /auth/profile
+ * ({ id, ... }) or /auth/me ({ userId, ... }) to the store shape.
+ */
+export function toAuthUser(u: any): AuthUser {
+  return {
+    userId: u.userId ?? u.id,
+    email: u.email ?? null,
+    name: u.name ?? null,
+    avatarUrl: u.avatarUrl ?? null,
+    phone: u.phone ?? null,
+    companyName: u.companyName ?? null,
+    jobTitle: u.jobTitle ?? null,
+    country: u.country ?? null,
+    companyWebsite: u.companyWebsite ?? null,
+    expectedUsageRange: u.expectedUsageRange ?? null,
+    primaryUseCase: u.primaryUseCase ?? null,
+    profileCompleted: typeof u.profileCompleted === 'boolean' ? u.profileCompleted : undefined,
+  };
 }
 
 interface AuthState {

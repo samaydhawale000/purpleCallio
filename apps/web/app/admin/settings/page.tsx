@@ -35,7 +35,7 @@ export default function AdminSettingsPage() {
   };
 
   if (loading) {
-    return <div className="text-[#6B6478] text-sm py-20 text-center">Loading settings…</div>;
+    return <div className="text-[#3D3650] text-sm py-20 text-center">Loading settings…</div>;
   }
 
   if (error || !data) {
@@ -50,7 +50,7 @@ export default function AdminSettingsPage() {
     <div className="space-y-6">
 <header>
         <h1 className="text-2xl font-bold text-[#170B2E]">Platform Settings</h1>
-        <p className="text-[#6B6478] text-sm mt-1">Manage maintenance mode and announcements</p>
+        <p className="text-[#3D3650] text-sm mt-1">Manage maintenance mode and announcements</p>
       </header>
 
       {/* Maintenance + announcement */}
@@ -63,15 +63,15 @@ export default function AdminSettingsPage() {
             onChange={(e) => setMaintenance(e.target.checked)}
             className="w-4 h-4 accent-[#7F40E8]"
           />
-          <span className="text-sm text-[#4B4560]">Enable Maintenance Mode</span>
+          <span className="text-sm text-[#3D3650]">Enable Maintenance Mode</span>
         </label>
 
-        <label className="block mb-2 text-sm text-[#4B4560]">Announcement</label>
+        <label className="block mb-2 text-sm text-[#3D3650]">Announcement</label>
         <textarea
           value={announcement}
           onChange={(e) => setAnnouncement(e.target.value)}
           placeholder="Broadcast a message to all users on the platform…"
-          className="w-full rounded-lg border border-[#E7DFF5] bg-[#FFFFFF] px-3 py-2.5 text-sm text-[#170B2E] placeholder:text-[#9C93AC] resize-none"
+          className="w-full rounded-lg border border-[#E7DFF5] bg-[#FFFFFF] px-3 py-2.5 text-sm text-[#170B2E] placeholder:text-[#6B6478] resize-none"
           rows={3}
         />
 
@@ -90,12 +90,12 @@ export default function AdminSettingsPage() {
           <p className="text-sm font-semibold text-[#170B2E]">Server Logs</p>
           <button
             onClick={() => window.alert('Log streaming is not wired up yet.')}
-            className="text-[11px] px-3 py-1.5 rounded border border-[#E7DFF5] text-[#4B4560] hover:border-[#7F40E8] transition-colors"
+            className="text-[11px] px-3 py-1.5 rounded border border-[#E7DFF5] text-[#3D3650] hover:border-[#7F40E8] transition-colors"
           >
             View logs
           </button>
         </div>
-        <p className="text-xs text-[#8A8298]">Access to realtime server logs coming soon.</p>
+        <p className="text-xs text-[#3D3650]">Access to realtime server logs coming soon.</p>
       </div>
     </div>
   );

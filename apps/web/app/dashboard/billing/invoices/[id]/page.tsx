@@ -31,6 +31,9 @@ interface InvoiceDetail {
   videoPaise: number;
   screenSharePaise: number;
   subtotalPaise: number;
+  discountPercent: number | null;
+  discountPaise: number;
+  discountReason: string | null;
   taxPaise: number;
   totalPaise: number;
   currency: string;
@@ -109,7 +112,7 @@ export default function InvoiceDetailPage() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="animate-spin h-6 w-6 text-[#7F40E8]" />
-          <span className="text-sm text-[#8A8298]">Loading invoice…</span>
+          <span className="text-sm text-[#3D3650]">Loading invoice…</span>
         </div>
       </div>
     );
@@ -118,7 +121,7 @@ export default function InvoiceDetailPage() {
   if (error || !invoice) {
     return (
       <div className="flex flex-col gap-4">
-        <Link href="/dashboard/billing" className="inline-flex items-center gap-1.5 text-sm text-[#6B6478] hover:text-[#170B2E] transition-colors w-fit">
+        <Link href="/dashboard/billing" className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E] transition-colors w-fit">
           <ArrowLeft size={14} /> Back to Billing
         </Link>
         <div className="rounded-lg border border-red-500/30 px-4 py-3 text-sm text-red-600" style={{ background: 'rgba(239,68,68,0.06)' }}>
@@ -133,7 +136,7 @@ export default function InvoiceDetailPage() {
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
       <div className="flex items-center justify-between">
-        <Link href="/dashboard/billing" className="inline-flex items-center gap-1.5 text-sm text-[#6B6478] hover:text-[#170B2E] transition-colors">
+        <Link href="/dashboard/billing" className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E] transition-colors">
           <ArrowLeft size={14} /> Back to Billing
         </Link>
         <button
@@ -150,7 +153,7 @@ export default function InvoiceDetailPage() {
       <Card padding glow>
         <div className="flex items-start justify-between mb-6">
           <div>
-            <p className="text-xs text-[#8A8298] mb-1">Invoice</p>
+            <p className="text-xs text-[#3D3650] mb-1">Invoice</p>
             <p className="text-lg font-bold text-[#170B2E] font-mono">{invoice.invoiceNumber}</p>
           </div>
           <Badge variant={statusVariant[invoice.status] ?? 'default'}>{invoice.status.toUpperCase()}</Badge>
@@ -158,7 +161,7 @@ export default function InvoiceDetailPage() {
 
         <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
           <div>
-            <p className="text-xs text-[#8A8298] mb-0.5">Billing period</p>
+            <p className="text-xs text-[#3D3650] mb-0.5">Billing period</p>
             <p className="text-[#3D3650]">
               {new Date(invoice.cycleStart).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
               {' – '}
@@ -166,14 +169,14 @@ export default function InvoiceDetailPage() {
             </p>
           </div>
           <div>
-            <p className="text-xs text-[#8A8298] mb-0.5">Invoice date</p>
+            <p className="text-xs text-[#3D3650] mb-0.5">Invoice date</p>
             <p className="text-[#3D3650]">
               {new Date(invoice.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
             </p>
           </div>
           {invoice.paidAt && (
             <div>
-              <p className="text-xs text-[#8A8298] mb-0.5">Paid on</p>
+              <p className="text-xs text-[#3D3650] mb-0.5">Paid on</p>
               <p className="text-[#3D3650]">
                 {new Date(invoice.paidAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
               </p>
@@ -184,9 +187,9 @@ export default function InvoiceDetailPage() {
         <div className="border-t border-[#E7DFF5] pt-4 mb-4">
           <p className="text-sm font-semibold text-[#170B2E] mb-3">Usage</p>
           <div className="flex flex-col gap-2 text-sm">
-            <Row label={`Audio — ${invoice.audioMinutes.toLocaleString('en-IN')} min`} value={paiseToINR(invoice.audioPaise)} />
-            <Row label={`Video — ${invoice.videoMinutes.toLocaleString('en-IN')} min`} value={paiseToINR(invoice.videoPaise)} />
-            <Row label={`Screen share — ${invoice.screenShareMinutes.toLocaleString('en-IN')} min`} value={paiseToINR(invoice.screenSharePaise)} />
+            <Row label={`Audio — ${invoice.audioMinutes.toLocaleString('en-IN')} participant-min`} value={paiseToINR(invoice.audioPaise)} />
+            <Row label={`Video — ${invoice.videoMinutes.toLocaleString('en-IN')} participant-min`} value={paiseToINR(invoice.videoPaise)} />
+            <Row label={`Screen share — ${invoice.screenShareMinutes.toLocaleString('en-IN')} participant-min`} value={paiseToINR(invoice.screenSharePaise)} />
           </div>
         </div>
 
@@ -207,6 +210,16 @@ export default function InvoiceDetailPage() {
 
         <div className="border-t border-[#E7DFF5] pt-4 flex flex-col gap-2 text-sm">
           <Row label="Subtotal" value={paiseToINR(invoice.subtotalPaise)} />
+          {invoice.discountPaise > 0 && (
+            <Row
+              label={
+                invoice.discountPercent != null
+                  ? `Volume discount (${invoice.discountPercent}%)`
+                  : 'Discount'
+              }
+              value={`-${paiseToINR(invoice.discountPaise)}`}
+            />
+          )}
           <Row label="Tax (GST)" value={paiseToINR(invoice.taxPaise)} />
           <div className="flex items-center justify-between text-base font-bold text-[#170B2E] pt-2 border-t border-[#E7DFF5]">
             <span>Total</span>
@@ -220,8 +233,8 @@ export default function InvoiceDetailPage() {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between text-[#4B4560]">
-      <span className="text-[#6B6478]">{label}</span>
+    <div className="flex items-center justify-between text-[#3D3650]">
+      <span className="text-[#3D3650]">{label}</span>
       <span className="font-medium text-[#170B2E]">{value}</span>
     </div>
   );

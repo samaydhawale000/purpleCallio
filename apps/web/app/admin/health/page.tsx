@@ -122,7 +122,7 @@ export default function AdminHealthPage() {
   }, []);
 
   if (loading) {
-    return <div className="text-[#6B6478] text-sm py-20 text-center">Loading health…</div>;
+    return <div className="text-[#3D3650] text-sm py-20 text-center">Loading health…</div>;
   }
 
   if (error || !health) {
@@ -152,7 +152,7 @@ export default function AdminHealthPage() {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-bold text-[#170B2E]">System Health</h1>
-        <p className="text-[#6B6478] text-sm mt-1">
+        <p className="text-[#3D3650] text-sm mt-1">
           Live infrastructure status · refreshes every {POLL_MS / 1000}s
         </p>
       </header>
@@ -174,12 +174,12 @@ export default function AdminHealthPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <StatCard icon={Server} title="Server">
             <div className="flex items-center justify-between text-sm mb-1">
-              <span className="text-[#8A8298]">OCI Monitoring</span>
+              <span className="text-[#3D3650]">OCI Monitoring</span>
               <span
                 className={`inline-flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 rounded-full border ${
                   m.server.oci.connected
                     ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30'
-                    : 'bg-slate-500/10 text-[#8A8298] border-slate-600/40'
+                    : 'bg-slate-500/10 text-[#3D3650] border-slate-600/40'
                 }`}
                 title={m.server.oci.error ?? undefined}
               >
@@ -250,7 +250,7 @@ export default function AdminHealthPage() {
               value={fmtPct(m.webrtc.iceFailureRate)}
             />
             {!m.webrtc.available && (
-              <p className="text-[11px] text-[#9C93AC] mt-1">
+              <p className="text-[11px] text-[#3D3650] mt-1">
                 No calls have reported a transport or ICE outcome yet this month.
               </p>
             )}
@@ -262,7 +262,7 @@ export default function AdminHealthPage() {
             <StatRow label="Bytes received" na={!m.turn.available} value={fmtBytes(m.turn.bytesReceived)} />
             <StatRow label="Bytes sent" na={!m.turn.available} value={fmtBytes(m.turn.bytesSent)} />
             {!m.turn.available && (
-              <p className="text-[11px] text-[#9C93AC] mt-1">
+              <p className="text-[11px] text-[#3D3650] mt-1">
                 {m.turn.configured
                   ? "coturn's REST admin/stats API isn't enabled yet."
                   : 'TURN is not configured.'}
@@ -280,7 +280,7 @@ export default function AdminHealthPage() {
         ) : (
           <div className="space-y-2">
             {alerts.map((a) => (
-              <div key={a.id} className="flex items-center gap-2 text-sm text-amber-400">
+              <div key={a.id} className="flex items-center gap-2 text-sm text-amber-700">
                 <CircleAlert size={16} />
                 <span>{a.message}</span>
               </div>
@@ -304,7 +304,7 @@ export default function AdminHealthPage() {
             >
               {c.status}
             </span>
-            {c.detail && <p className="text-[11px] text-[#8A8298] mt-1.5">{c.detail}</p>}
+            {c.detail && <p className="text-[11px] text-[#3D3650] mt-1.5">{c.detail}</p>}
           </div>
         ))}
       </div>
@@ -334,7 +334,7 @@ function HeroStat({
     <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
       <div className="flex items-center gap-2 text-[#6425C4] mb-2">
         <Icon size={18} />
-        <p className="text-xs text-[#8A8298] uppercase tracking-wide">{label}</p>
+        <p className="text-xs text-[#3D3650] uppercase tracking-wide">{label}</p>
       </div>
       <p className="text-4xl font-bold text-[#170B2E]">{value}</p>
     </div>
@@ -376,16 +376,16 @@ function StatRow({
 }) {
   return (
     <div className="flex items-center justify-between text-sm">
-      <span className="text-[#8A8298]">{label}</span>
+      <span className="text-[#3D3650]">{label}</span>
       {na ? (
         <span className="text-right">
-          <span className="text-[#9C93AC] font-mono text-xs">Not available</span>
+          <span className="text-[#3D3650] font-mono text-xs">Not available</span>
           {note && <span className="block text-[10px] text-slate-700">{note}</span>}
         </span>
       ) : (
         <span className="text-[#170B2E] font-mono">
           {value}
-          {suffix && <span className="text-[#8A8298]">{suffix}</span>}
+          {suffix && <span className="text-[#3D3650]">{suffix}</span>}
         </span>
       )}
     </div>
@@ -395,7 +395,7 @@ function StatRow({
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-      <p className="text-xs text-[#8A8298]">{label}</p>
+      <p className="text-xs text-[#3D3650]">{label}</p>
       <p className="text-2xl font-bold text-[#170B2E] mt-1">{value}</p>
     </div>
   );

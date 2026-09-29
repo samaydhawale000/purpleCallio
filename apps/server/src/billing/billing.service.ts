@@ -10,7 +10,7 @@ import { PAYMENT_SERVICE } from '../payment/payment.service';
 import type { PaymentService } from '../payment/payment.service';
 
 /** Loose E.164 check (+ up to 15 digits) — what Razorpay requires for a contact number. */
-const PHONE_RE = /^\+[1-9]\d{7,14}$/;
+export const PHONE_RE = /^\+[1-9]\d{7,14}$/;
 
 /**
  * PurpleCallio billing = usage-based (see UsageBillingService,
@@ -218,7 +218,7 @@ export class BillingService {
    * can open the Checkout modal with recurring = true. Returns the order id.
    *
    * The contact phone number Razorpay requires to authorise a recurring
-   * mandate is collected once at login (see AuthService.setPhone) and kept
+   * mandate is collected once at login (see AuthService.updateProfile) and kept
    * in sync on the Razorpay customer — not re-collected here.
    */
   async createPaymentSetup(userId: string) {

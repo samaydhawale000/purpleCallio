@@ -12,7 +12,7 @@ export default function EmptyState() {
         No Test Session
       </h2>
 
-      <p className="text-gray-500 mt-3">
+      <p className="text-[#3D3650] mt-3">
         Create a Video or Audio session to start testing.
       </p>
 

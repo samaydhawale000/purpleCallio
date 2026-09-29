@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -11,6 +12,7 @@ import { AuthService } from './auth.service';
 
 import { GoogleDto } from './dto/google.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 import { JwtGuard } from './guards/jwt.guard';
 
@@ -62,6 +64,21 @@ export class AuthController {
     return this.authService.setPhone(
       req.user.userId,
       body.phone,
+    );
+  }
+
+  // Onboarding / profile completion. The user is always the JWT subject —
+  // never an id from the request body.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @UseGuards(JwtGuard)
+  @Patch('profile')
+  updateProfile(
+    @Req() req: any,
+    @Body() body: UpdateProfileDto,
+  ) {
+    return this.authService.updateProfile(
+      req.user.userId,
+      body,
     );
   }
 }

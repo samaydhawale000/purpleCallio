@@ -18,7 +18,7 @@ export function Pagination({ page, pageCount, totalItems, pageSize, onPageChange
 
   return (
     <div className="flex items-center justify-between gap-3 pt-4 mt-2 border-t border-[#E7DFF5]">
-      <p className="text-xs text-[#8A8298]">
+      <p className="text-xs text-[#3D3650]">
         Showing {start}–{end} of {totalItems}
       </p>
       <div className="flex items-center gap-2">
@@ -26,19 +26,19 @@ export function Pagination({ page, pageCount, totalItems, pageSize, onPageChange
           type="button"
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
-          className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-[#E7DFF5] text-[#6B6478] hover:text-[#170B2E] hover:border-[#D6C4EE] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#6B6478] disabled:hover:border-[#E7DFF5]"
+          className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-[#E7DFF5] text-[#3D3650] hover:text-[#170B2E] hover:border-[#D6C4EE] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#3D3650] disabled:hover:border-[#E7DFF5]"
         >
           <ChevronLeft size={13} />
           Prev
         </button>
-        <span className="text-xs text-[#8A8298] px-1">
+        <span className="text-xs text-[#3D3650] px-1">
           Page {page} of {pageCount}
         </span>
         <button
           type="button"
           onClick={() => onPageChange(page + 1)}
           disabled={page >= pageCount}
-          className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-[#E7DFF5] text-[#6B6478] hover:text-[#170B2E] hover:border-[#D6C4EE] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#6B6478] disabled:hover:border-[#E7DFF5]"
+          className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-[#E7DFF5] text-[#3D3650] hover:text-[#170B2E] hover:border-[#D6C4EE] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#3D3650] disabled:hover:border-[#E7DFF5]"
         >
           Next
           <ChevronRight size={13} />

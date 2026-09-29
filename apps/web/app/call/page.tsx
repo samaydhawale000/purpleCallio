@@ -88,7 +88,7 @@ function Avatar({
             justifyContent: "center",
             fontSize: size * 0.35,
             fontFamily: "ui-monospace, monospace",
-            color: "#94A3B8",
+            color: "#E2E8F0",
             flexShrink: 0,
          }}
       >
@@ -1171,7 +1171,7 @@ function CallPageContent() {
    const surfaceBg = isDark ? "#0D1425" : "#FFFFFF";
    const borderColor = isDark ? "#1A2240" : "#E2E8F0";
    const textPrimary = isDark ? "#FFFFFF" : "#0F172A";
-   const textSecondary = isDark ? "#94A3B8" : "#64748B";
+   const textSecondary = isDark ? "#CBD5E1" : "#334155";
 
    function Screen({ children }: { children: React.ReactNode }) {
       return (
@@ -1193,7 +1193,7 @@ function CallPageContent() {
                )}
                <span
                   className="font-mono text-xs"
-                  style={{ color: isDark ? "#334155" : "#94A3B8" }}
+                  style={{ color: isDark ? "#CBD5E1" : "#334155" }}
                >
                   {branding.companyName}
                </span>
@@ -1221,7 +1221,7 @@ function CallPageContent() {
             </p>
             <p
                className="text-xs mt-2"
-               style={{ color: isDark ? "#334155" : "#94A3B8" }}
+               style={{ color: isDark ? "#CBD5E1" : "#334155" }}
             >
                Contact the sender for a new link.
             </p>
@@ -1531,7 +1531,7 @@ function CallPageContent() {
          >
             <span
                className="flex items-center gap-2 font-mono text-xs tracking-wider"
-               style={{ color: isDark ? "#64748B" : "#94A3B8" }}
+               style={{ color: isDark ? "#CBD5E1" : "#334155" }}
             >
                {branding.logoUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -1547,7 +1547,7 @@ function CallPageContent() {
                <ConnectionQualityDot quality={connectionQuality} />
                <span
                   className="font-mono text-sm tabular-nums"
-                  style={{ color: isDark ? "#94A3B8" : "#64748B" }}
+                  style={{ color: isDark ? "#CBD5E1" : "#334155" }}
                >
                   {duration}
                </span>
@@ -1919,7 +1919,7 @@ function ControlButton({
          </button>
          <span
             className="text-xs"
-            style={{ color: dark ? "#64748B" : "#94A3B8" }}
+            style={{ color: dark ? "#CBD5E1" : "#334155" }}
          >
             {label}
          </span>

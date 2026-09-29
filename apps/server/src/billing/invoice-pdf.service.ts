@@ -43,11 +43,11 @@ export class InvoicePdfService {
       doc.font('Helvetica-Bold').text('Usage');
       doc.font('Helvetica');
       const usedMinutes = invoice.audioMinutes + invoice.videoMinutes + invoice.screenShareMinutes;
-      doc.text(`Used (billable): ${usedMinutes.toLocaleString('en-IN')} participant minutes`);
-      doc.text(`  Audio: ${invoice.audioMinutes.toLocaleString('en-IN')} min — ${formatRupees(invoice.audioPaise)}`);
-      doc.text(`  Video: ${invoice.videoMinutes.toLocaleString('en-IN')} min — ${formatRupees(invoice.videoPaise)}`);
+      doc.text(`Used (billable): ${usedMinutes.toLocaleString('en-IN')} participant-min`);
+      doc.text(`  Audio: ${invoice.audioMinutes.toLocaleString('en-IN')} participant-min — ${formatRupees(invoice.audioPaise)}`);
+      doc.text(`  Video: ${invoice.videoMinutes.toLocaleString('en-IN')} participant-min — ${formatRupees(invoice.videoPaise)}`);
       doc.text(
-        `  Screen share: ${invoice.screenShareMinutes.toLocaleString('en-IN')} min — ${formatRupees(invoice.screenSharePaise)}`,
+        `  Screen share: ${invoice.screenShareMinutes.toLocaleString('en-IN')} participant-min — ${formatRupees(invoice.screenSharePaise)}`,
       );
       doc.moveDown(1);
 
@@ -67,6 +67,12 @@ export class InvoicePdfService {
 
       doc.font('Helvetica').fontSize(11);
       doc.text(`Subtotal:  ${formatRupees(invoice.subtotalPaise)}`, { align: 'right' });
+      if (invoice.discountPaise > 0) {
+        const label = invoice.discountPercent != null
+          ? `Volume discount (${invoice.discountPercent}%):`
+          : 'Discount:';
+        doc.text(`${label}  -${formatRupees(invoice.discountPaise)}`, { align: 'right' });
+      }
       doc.text(`Tax (GST):  ${formatRupees(invoice.taxPaise)}`, { align: 'right' });
       doc.font('Helvetica-Bold').fontSize(13);
       doc.text(`Total:  ${formatRupees(invoice.totalPaise)}`, { align: 'right' });

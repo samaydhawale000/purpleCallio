@@ -1,13 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Zap, LockKeyhole, ChartNoAxesCombined } from 'lucide-react';
-import { GoogleSignInButton } from '../components/ui/GoogleSignInButton';
-import { useAuthStore } from '../store/auth.store';
-import logo from '../assets/images/logo.webp';
+import { AuthCard } from '../components/auth/AuthCard';
 
 const BENEFITS = [
   {
@@ -28,18 +23,6 @@ const BENEFITS = [
 ];
 
 export default function SignupPage() {
-  const router = useRouter();
-  const token = useAuthStore((s) => s.token);
-  const hasHydrated = useAuthStore((s) => s.hasHydrated);
-
-  // If already logged in, bounce back to the dashboard.
-  useEffect(() => {
-    if (!hasHydrated) return;
-    if (token) {
-      router.replace('/dashboard');
-    }
-  }, [hasHydrated, token, router]);
-
   return (
     <div className="min-h-screen" style={{ background: '#FFFFFF' }}>
       <div className="min-h-screen grid lg:grid-cols-2">
@@ -75,7 +58,7 @@ export default function SignupPage() {
                 In minutes, not weeks.
               </span>
             </h1>
-            <p className="text-slate-400 text-lg mb-10 max-w-md">
+            <p className="text-slate-200 text-lg mb-10 max-w-md">
               Create your free account and start building real-time
               communication into your product today.
             </p>
@@ -99,7 +82,7 @@ export default function SignupPage() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-white">{item.label}</p>
-                    <p className="text-xs text-white/50">{item.desc}</p>
+                    <p className="text-xs text-white/80">{item.desc}</p>
                   </div>
                 </div>
               ))}
@@ -108,11 +91,11 @@ export default function SignupPage() {
 
           {/* Bottom: trust */}
           <div className="relative flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1.5 text-xs text-white/70 px-3 py-1.5 rounded-full border border-white/15">
+            <span className="inline-flex items-center gap-1.5 text-xs text-white/90 px-3 py-1.5 rounded-full border border-white/15">
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#10B981' }} />
               Free plan, no credit card
             </span>
-            <span className="inline-flex items-center gap-1.5 text-xs text-white/70 px-3 py-1.5 rounded-full border border-white/15">
+            <span className="inline-flex items-center gap-1.5 text-xs text-white/90 px-3 py-1.5 rounded-full border border-white/15">
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#10B981' }} />
               300 minutes / month free
             </span>
@@ -121,7 +104,7 @@ export default function SignupPage() {
 
         {/* ── Right: Signup card ── */}
         <div
-          className="relative flex items-center justify-center px-6 py-16"
+          className="relative flex items-center justify-center px-4 sm:px-6 py-10 sm:py-16"
           style={{ background: '#FFFFFF' }}
         >
           <div
@@ -132,61 +115,34 @@ export default function SignupPage() {
             }}
           />
 
-          <div className="relative w-full max-w-sm">
-            {/* Mobile brand */}
-            <div className="text-center mb-8 lg:hidden">
-              <Link href="/" className="inline-flex">
-                <Image src={logo} alt="PurpleCallio" width={176} height={42} className="h-auto w-44 object-contain" />
-              </Link>
-              <p className="text-[#8A8298] text-sm mt-1">Communication Infrastructure</p>
-            </div>
-
-            {/* Card */}
-            <div
-              className="rounded-2xl border border-[#E7DFF5] p-8"
-              style={{ background: '#FFFFFF', boxShadow: '0 24px 60px rgba(127,64,232,0.1)' }}
-            >
-              <div className="flex flex-col items-center gap-2 text-center mb-6">
-                <Image src={logo} alt="PurpleCallio" width={176} height={42} className="mb-2 h-auto w-40 object-contain" />
-                <h2 className="text-lg font-bold text-[#170B2E]">Create your account</h2>
-                <p className="text-sm text-[#6B6478]">
-                  Get started free — no credit card required.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <GoogleSignInButton />
-
-                <div className="flex items-center gap-3 my-1">
-                  <div className="flex-1" style={{ height: '1px', background: '#E7DFF5' }} />
-                  <span className="text-xs text-[#9C93AC] uppercase tracking-widest">or</span>
-                  <div className="flex-1" style={{ height: '1px', background: '#E7DFF5' }} />
-                </div>
-
-                <p className="text-center text-xs text-[#8A8298]">
-                  Already have an account?{' '}
-                  <Link
-                    href="/login"
-                    className="font-medium text-[#7F40E8] hover:text-[#6425C4] transition-colors"
-                  >
-                    Sign in
-                  </Link>
-                </p>
-              </div>
-            </div>
-
-<p className="text-center text-xs text-[#9C93AC] mt-6">
-              By creating an account, you agree to our{' '}
-              <Link href="/terms" className="hover:text-[#170B2E] transition-colors">
-                Terms of Service
-              </Link>{' '}
-              and{' '}
-              <Link href="/privacy" className="hover:text-[#170B2E] transition-colors">
-                Privacy Policy
-              </Link>
-              .
-            </p>
-          </div>
+          <AuthCard
+            title="Create your account"
+            subtitle="Get started free — no credit card required."
+            footer={
+              <p className="text-center text-xs text-[#3D3650]">
+                Already have an account?{' '}
+                <Link
+                  href="/login"
+                  className="font-medium text-[#7F40E8] hover:text-[#6425C4] transition-colors"
+                >
+                  Sign in
+                </Link>
+              </p>
+            }
+            legal={
+              <p className="text-center text-xs text-[#3D3650] mt-6">
+                By creating an account, you agree to our{' '}
+                <Link href="/terms" className="hover:text-[#170B2E] transition-colors">
+                  Terms of Service
+                </Link>{' '}
+                and{' '}
+                <Link href="/privacy" className="hover:text-[#170B2E] transition-colors">
+                  Privacy Policy
+                </Link>
+                .
+              </p>
+            }
+          />
         </div>
       </div>
     </div>

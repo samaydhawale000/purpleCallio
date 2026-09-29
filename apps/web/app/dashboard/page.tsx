@@ -271,7 +271,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <span className="text-sm text-[#8A8298]">Loading dashboard…</span>
+          <span className="text-sm text-[#3D3650]">Loading dashboard…</span>
         </div>
       </div>
     );
@@ -285,7 +285,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
 <h1 className="text-2xl font-bold text-[#170B2E]">
             Welcome back, <span className="gradient-text-hero capitalize">{userName}</span> <Hand size={20} className="inline-block align-text-bottom text-[#6425C4]" />
           </h1>
-          <p className="text-sm text-[#8A8298] mt-1">
+          <p className="text-sm text-[#3D3650] mt-1">
             Your communication platform at a glance.
           </p>
         </div>
@@ -299,14 +299,14 @@ const minutesUsed = usage?.minutesUsed ?? 0;
 {/* Plan / usage */}
         <div
           className="lg:col-span-2 rounded-2xl border border-[#E7DFF5] p-6"
-          style={{ background: 'linear-gradient(135deg, rgba(127,64,232,0.08), rgba(65,6,134,0.04))', borderColor: '#D6C4EE' }}
+          style={{ background: 'linear-gradient(135deg, rgba(128, 64, 232, 0.02), rgba(65,6,134,0.02))', borderColor: '#D6C4EE' }}
         >
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-sm font-semibold text-[#170B2E]">
                 {currentUsage?.isFreeTier ? 'Free Tier' : 'Pay as you go'}
               </p>
-              <p className="text-xs text-[#8A8298] mt-0.5">
+              <p className="text-xs text-[#3D3650] mt-0.5">
                 Pay only for what you use · {currentUsage?.freeAllowance?.audioMinutes ?? 500} audio + {currentUsage?.freeAllowance?.videoMinutes ?? 200} video participant-min free/month · screen share always paid
               </p>
             </div>
@@ -324,29 +324,29 @@ const minutesUsed = usage?.minutesUsed ?? 0;
             <MiniType label="Video" mins={videoMins} costPaise={currentUsage?.cost?.videoPaise ?? 0} showCost={!currentUsage?.isFreeTier} />
             <MiniType label="Screen Share" mins={screenMins} costPaise={currentUsage?.cost?.screenSharePaise ?? 0} showCost={!currentUsage?.isFreeTier} />
           </div>
-          <p className="text-[11px] text-[#9C93AC] -mt-2 mb-4">
+          <p className="text-[11px] text-[#3D3650] -mt-2 mb-4">
             Shown in participant-minutes (call duration × participants using that media) — not raw call length.
           </p>
 
           <div className="flex flex-wrap items-center justify-between mt-2 gap-3">
             <div className="flex items-center gap-6">
               <div>
-                <p className="text-xs text-[#8A8298]">Total usage</p>
+                <p className="text-xs text-[#3D3650]">Total usage</p>
                 <p className="text-lg font-bold text-[#170B2E]">
                   {totalBillable.toFixed(2)}
-                  <span className="text-xs font-normal text-[#8A8298]"> participant-min</span>
+                  <span className="text-xs font-normal text-[#3D3650]"> participant-min</span>
                 </p>
               </div>
               {!currentUsage?.isFreeTier && (
                 <>
                   <div>
-                    <p className="text-xs text-[#8A8298]">Current cost</p>
+                    <p className="text-xs text-[#3D3650]">Current cost</p>
                     <p className="text-lg font-bold" style={{ color: '#34D399' }}>{paiseToINR(currentCost)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-[#8A8298]">Est. month-end</p>
+                    <p className="text-xs text-[#3D3650]">Est. month-end</p>
                     <p className="text-lg font-bold text-[#170B2E]">{paiseToINR(monthEndCost)}</p>
-                    <p className="text-[10px] text-[#9C93AC]">projected from usage so far this cycle</p>
+                    <p className="text-[10px] text-[#3D3650]">projected from usage so far this cycle</p>
                   </div>
                 </>
               )}
@@ -366,12 +366,12 @@ const minutesUsed = usage?.minutesUsed ?? 0;
           style={{ background: '#FFFFFF' }}
         >
           <div className="flex items-center justify-between mb-4">
-            <p className="text-sm font-semibold text-[#170B2E]">Minutes this week</p>
-            <span className="text-xs text-[#8A8298]">{minutesUsed.toFixed(2)} total</span>
+            <p className="text-sm font-semibold text-[#170B2E]">Call time this week</p>
+            <span className="text-xs text-[#3D3650]">{minutesUsed.toFixed(2)} min call time (all-time)</span>
           </div>
           <div className="flex h-32 items-end justify-between gap-2">
             {weekData.length === 0 ? (
-              <div className="flex h-full w-full items-center justify-center text-xs text-[#9C93AC]">
+              <div className="flex h-full w-full items-center justify-center text-xs text-[#3D3650]">
                 No usage this week yet
               </div>
             ) : (
@@ -386,7 +386,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
                       }}
                     />
                   </div>
-                  <span className="text-[10px] text-[#9C93AC]">{d.label}</span>
+                  <span className="text-[10px] text-[#3D3650]">{d.label}</span>
                 </div>
               ))
             )}
@@ -399,7 +399,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
         <StatCard label="Projects" value={projects.length} color="#7F40E8" />
         <StatCard label="Active Calls" value={usage?.activeCalls ?? 0} color="#10B981" />
         <StatCard label="Calls" value={usage?.totalCalls ?? 0} color="#F59E0B" />
-        <StatCard label="Minutes" value={usage?.minutesUsed ?? 0} color="#410686" />
+        <StatCard label="Call time (min)" value={usage?.minutesUsed ?? 0} color="#410686" />
         <StatCard label="API Keys" value={totalKeys} color="#EC4899" />
       </div>
 
@@ -423,7 +423,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
           {calls.length === 0 ? (
             <div className="px-6 py-10 text-center">
               <p className="text-sm font-medium text-[#170B2E] mb-1">No calls yet</p>
-              <p className="text-sm text-[#8A8298] mb-5">
+              <p className="text-sm text-[#3D3650] mb-5">
                 Create your first communication session.
               </p>
               <div className="flex flex-col items-center gap-3">
@@ -434,7 +434,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
                 >
                   <Play size={15} /> Open Playground
                 </Link>
-                <span className="text-xs text-[#9C93AC]">or</span>
+                <span className="text-xs text-[#3D3650]">or</span>
                 <Link href="/docs" className="text-xs text-[#7F40E8] hover:text-[#6425C4] transition-colors">
                   Read Quick Start documentation
                 </Link>
@@ -469,13 +469,13 @@ const minutesUsed = usage?.minutesUsed ?? 0;
                         </p>
                         <Badge variant={statusBadge(call.status)}>{statusLabel(call.status)}</Badge>
                       </div>
-                      <p className="text-xs text-[#8A8298] mt-0.5">
+                      <p className="text-xs text-[#3D3650] mt-0.5">
                         {relativeTime(call.createdAt)}
                         {call.project?.name ? ` · ${call.project.name}` : ''}
                       </p>
                     </div>
                   </div>
-                  <span className="text-xs font-mono text-[#8A8298] shrink-0">
+                  <span className="text-xs font-mono text-[#3D3650] shrink-0">
                     {callDuration(call)}
                   </span>
                 </button>
@@ -510,7 +510,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
                 >
                   <action.icon size={16} style={{ color: action.color }} />
                 </div>
-                <span className="text-sm text-[#4B4560]">{action.label}</span>
+                <span className="text-sm text-[#3D3650]">{action.label}</span>
               </Link>
             ))}
           </div>
@@ -555,7 +555,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
                 <FolderKanban size={20} style={{ color: '#7F40E8' }} />
               </div>
               <p className="text-sm font-medium text-[#170B2E] mb-1">No projects yet</p>
-              <p className="text-sm text-[#8A8298] mb-5">
+              <p className="text-sm text-[#3D3650] mb-5">
                 Create a project to get your first API key.
               </p>
               <Button onClick={() => { setShowNewProject(true); setNewProjectName(''); }}>
@@ -580,7 +580,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
                     <Badge variant="purple">Production</Badge>
                   </div>
                   <p className="text-sm font-semibold text-[#170B2E] mb-0.5">{project.name}</p>
-                  <p className="text-xs text-[#8A8298] mb-4">
+                  <p className="text-xs text-[#3D3650] mb-4">
                     {projectKeys[project.id]?.length ?? 0} API Keys · Created{' '}
                     {new Date(project.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </p>
@@ -602,7 +602,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
           style={{ background: '#FFFFFF' }}
         >
           <p className="font-semibold text-[#170B2E] mb-1">Developer Resources</p>
-          <p className="text-xs text-[#8A8298] mb-4">Everything you need, one click away.</p>
+          <p className="text-xs text-[#3D3650] mb-4">Everything you need, one click away.</p>
           <div className="flex flex-col gap-2.5">
             {RESOURCES.map((r) => (
               <Link
@@ -620,8 +620,8 @@ const minutesUsed = usage?.minutesUsed ?? 0;
                 >
                   <r.icon size={15} style={{ color: '#6425C4' }} />
                 </div>
-                <span className="text-sm text-[#4B4560]">{r.label}</span>
-                <ArrowUpRight size={14} className="ml-auto text-[#9C93AC]" />
+                <span className="text-sm text-[#3D3650]">{r.label}</span>
+                <ArrowUpRight size={14} className="ml-auto text-[#3D3650]" />
               </Link>
             ))}
           </div>
@@ -638,7 +638,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
         </div>
         <div className="divide-y divide-[#E7DFF5]">
           {recentActivity.length === 0 ? (
-            <div className="px-6 py-8 text-center text-sm text-[#8A8298]">
+            <div className="px-6 py-8 text-center text-sm text-[#3D3650]">
               No activity yet. Create a project or place your first call.
             </div>
           ) : (
@@ -650,8 +650,8 @@ const minutesUsed = usage?.minutesUsed ?? 0;
                 >
                   <PhoneCall size={15} style={{ color: item.color }} />
                 </div>
-                <p className="text-sm text-[#4B4560]">{item.text}</p>
-                <span className="ml-auto text-xs text-[#9C93AC]">{item.time}</span>
+                <p className="text-sm text-[#3D3650]">{item.text}</p>
+                <span className="ml-auto text-xs text-[#3D3650]">{item.time}</span>
               </div>
             ))
           )}
@@ -674,7 +674,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
               <p className="font-bold text-[#170B2E]">Call Details</p>
               <button
                 onClick={() => setSelectedCall(null)}
-                className="text-[#8A8298] hover:text-[#170B2E] transition-colors text-sm"
+                className="text-[#3D3650] hover:text-[#170B2E] transition-colors text-sm"
                 aria-label="Close"
               >
                 ✕
@@ -716,10 +716,10 @@ function MiniType({
 }) {
   return (
     <div className="rounded-xl border border-[#E7DFF5] px-4 py-3 text-center" style={{ background: '#F8F4FD' }}>
-      <p className="text-[11px] text-[#8A8298]">{label}</p>
+      <p className="text-[11px] text-[#3D3650]">{label}</p>
       <p className="text-lg font-bold text-[#170B2E] mt-0.5">
         {mins.toFixed(2)}
-        <span className="text-xs font-normal text-[#8A8298]"> min</span>
+        <span className="text-xs font-normal text-[#3D3650]"> participant-min</span>
       </p>
       {showCost && <p className="text-[11px] font-semibold text-[#6425C4]">{paiseToINR(costPaise)}</p>}
     </div>
@@ -732,7 +732,7 @@ function StatCard({ label, value, color }: { label: string; value: number; color
       className="rounded-2xl border border-[#E7DFF5] p-5"
       style={{ background: '#FFFFFF' }}
     >
-      <p className="text-xs text-[#8A8298] mb-2">{label}</p>
+      <p className="text-xs text-[#3D3650] mb-2">{label}</p>
       <p className="text-2xl font-bold" style={{ color }}>{value.toLocaleString()}</p>
     </div>
   );
@@ -741,8 +741,8 @@ function StatCard({ label, value, color }: { label: string; value: number; color
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-4">
-      <span className="text-[#8A8298] shrink-0">{label}</span>
-      <span className={`text-[#4B4560] text-right break-all ${mono ? 'font-mono text-xs' : ''}`}>
+      <span className="text-[#3D3650] shrink-0">{label}</span>
+      <span className={`text-[#3D3650] text-right break-all ${mono ? 'font-mono text-xs' : ''}`}>
         {value}
       </span>
     </div>

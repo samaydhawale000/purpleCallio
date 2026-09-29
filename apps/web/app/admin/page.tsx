@@ -69,7 +69,7 @@ function BarChart({
               }}
             />
           </div>
-          <div className="text-[10px] text-[#9C93AC] truncate max-w-full text-center">
+          <div className="text-[10px] text-[#3D3650] truncate max-w-full text-center">
             {d.label}
           </div>
         </div>
@@ -93,7 +93,7 @@ export default function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <div className="text-[#6B6478] text-sm py-20 text-center">Loading overview…</div>
+      <div className="text-[#3D3650] text-sm py-20 text-center">Loading overview…</div>
     );
   }
 
@@ -101,7 +101,7 @@ export default function AdminDashboardPage() {
     return (
       <div className="py-20 text-center">
         <p className="text-red-600 text-sm mb-3">{error}</p>
-        <p className="text-[#8A8298] text-xs">Admin access required.</p>
+        <p className="text-[#3D3650] text-xs">Admin access required.</p>
       </div>
     );
   }
@@ -112,11 +112,11 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-8">
       <header>
-        <p className="text-[11px] font-mono uppercase tracking-widest text-[#8A8298] mb-1">
+        <p className="text-[11px] font-mono uppercase tracking-widest text-[#3D3650] mb-1">
           Internal Dashboard
         </p>
         <h1 className="text-2xl font-bold text-[#170B2E]">Platform Overview</h1>
-        <p className="text-[#6B6478] text-sm mt-1">
+        <p className="text-[#3D3650] text-sm mt-1">
           Is PurpleCallio healthy right now?
         </p>
       </header>
@@ -131,7 +131,7 @@ export default function AdminDashboardPage() {
           >
             <div className="mb-2 text-[#6425C4]"><c.icon size={20} /></div>
             <div className="text-2xl font-bold text-[#170B2E]">{c.value}</div>
-            <div className="text-xs text-[#8A8298] mt-1">{c.label}</div>
+            <div className="text-xs text-[#3D3650] mt-1">{c.label}</div>
           </div>
         ))}
       </div>
@@ -143,7 +143,7 @@ export default function AdminDashboardPage() {
           <BarChart data={charts.calls} color="#7F40E8" />
         </div>
         <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-          <p className="text-sm font-semibold text-[#170B2E] mb-4">Minutes (7d)</p>
+          <p className="text-sm font-semibold text-[#170B2E] mb-4">Platform Minutes (7d)</p>
           <BarChart data={charts.minutes} color="#410686" />
         </div>
         <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
@@ -168,7 +168,7 @@ export default function AdminDashboardPage() {
           >
             <div className="mb-2 flex justify-center text-[#6425C4]"><l.icon size={22} /></div>
             <p className="text-sm font-medium text-[#170B2E]">{l.label}</p>
-            <p className="text-xs text-[#8A8298] mt-1">View →</p>
+            <p className="text-xs text-[#3D3650] mt-1">View →</p>
           </Link>
         ))}
       </div>

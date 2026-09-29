@@ -106,7 +106,7 @@ export default function DevelopersPage() {
                      {label}
                   </p>
                   <h2 className="mt-3 text-xl font-bold text-[#170B2E]">{name}</h2>
-                  <p className="mt-2 text-sm leading-6 text-[#6B6478]">
+                  <p className="mt-2 text-sm leading-6 text-[#3D3650]">
                      {description}
                   </p>
                </article>
@@ -135,13 +135,13 @@ export default function DevelopersPage() {
                         <h3 className="mt-2 font-semibold text-[#170B2E]">
                            {sdk.platform} <span className="text-[#6425C4]">→</span>
                         </h3>
-                        <p className="mt-2 text-sm leading-6 text-[#6B6478]">
+                        <p className="mt-2 text-sm leading-6 text-[#3D3650]">
                            {sdk.description}
                         </p>
                      </Link>
                   ))}
             </div>
-            <p className="text-sm text-[#8A8298]">
+            <p className="text-sm text-[#3D3650]">
                Flutter, iOS, and Android SDKs are in development — see{" "}
                <Link href="/sdks" className="text-[#6425C4] hover:text-[#170B2E]">
                   the full SDK list
@@ -188,11 +188,11 @@ export default function DevelopersPage() {
                      className="rounded-xl border border-[#E7DFF5] p-5"
                   >
                      <h3 className="font-semibold text-[#170B2E]">{name}</h3>
-                     <p className="mt-3 text-sm text-[#6B6478]">
+                     <p className="mt-3 text-sm text-[#3D3650]">
                         <strong className="text-[#3D3650]">You build:</strong>{" "}
                         {build}
                      </p>
-                     <p className="mt-3 text-sm text-[#6B6478]">
+                     <p className="mt-3 text-sm text-[#3D3650]">
                         <strong className="text-[#3D3650]">
                            PurpleCallio handles:
                         </strong>{" "}
@@ -213,7 +213,7 @@ export default function DevelopersPage() {
                      <h3 className="font-semibold text-[#170B2E]">
                         {name} <span className="text-[#6425C4]">→</span>
                      </h3>
-                     <p className="mt-2 text-sm leading-6 text-[#6B6478]">
+                     <p className="mt-2 text-sm leading-6 text-[#3D3650]">
                         {description}
                      </p>
                   </Link>

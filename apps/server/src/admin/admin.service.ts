@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CallStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CallGateway } from '../socket/gateways/call.gateway';
 import { TurnService } from '../turn/turn.service';
 import { UsageBillingService } from '../billing/usage-billing.service';
+import { CustomerDiscountService, SetDiscountInput } from '../billing/customer-discount.service';
 import { OciMonitoringService } from '../oci/oci-monitoring.service';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class AdminService {
     private callGateway: CallGateway,
     private turnService: TurnService,
     private usageBilling: UsageBillingService,
+    private customerDiscounts: CustomerDiscountService,
     private ociMonitoring: OciMonitoringService,
   ) {}
 
@@ -172,6 +174,8 @@ export class AdminService {
           name: u.name,
           email: u.email,
           avatarUrl: u.avatarUrl,
+          companyName: u.companyName,
+          profileCompleted: u.profileCompleted,
           hasPaymentMethod: !!u.razorpayTokenId,
           status: u.status,
           role: u.role,
@@ -208,6 +212,75 @@ export class AdminService {
       { userId, status },
     );
     return user;
+  }
+
+  // ── Single customer detail (usage + billing rates + discount) ──
+  async getCustomer(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Customer not found');
+
+    const [usage, discount] = await Promise.all([
+      this.usageBilling.getCurrentUsage(userId),
+      this.getCustomerDiscount(userId),
+    ]);
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      companyName: user.companyName,
+      jobTitle: user.jobTitle,
+      country: user.country,
+      companyWebsite: user.companyWebsite,
+      expectedUsageRange: user.expectedUsageRange,
+      primaryUseCase: user.primaryUseCase,
+      profileCompleted: user.profileCompleted,
+      status: user.status,
+      hasPaymentMethod: !!user.razorpayTokenId,
+      spendingLimitPaise: user.spendingLimitPaise,
+      createdAt: user.createdAt,
+      usage,
+      discount,
+    };
+  }
+
+  // ── Customer-specific discount ──────────────────────
+  /**
+   * Current rates, the customer's latest discount record (active or not —
+   * so the admin UI can show "Disabled" state, not just "no discount"), and
+   * an illustrative (unrounded, display-only — never used for real billing)
+   * per-rate preview of what each rate becomes under that discount.
+   */
+  async getCustomerDiscount(userId: string) {
+    const [rates, discount] = await Promise.all([
+      this.usageBilling.getRates(),
+      this.customerDiscounts.getLatestDiscount(userId),
+    ]);
+
+    const percentage = discount?.active ? discount.percentage : 0;
+    const factor = (100 - percentage) / 100;
+    const effectiveRates = {
+      audioPaise: rates.audioPaise * factor,
+      videoPaise: rates.videoPaise * factor,
+      screenSharePaise: rates.screenSharePaise * factor,
+    };
+
+    return { discount, rates, effectiveRates };
+  }
+
+  async setCustomerDiscount(
+    userId: string,
+    adminId: string,
+    input: SetDiscountInput,
+  ) {
+    await this.customerDiscounts.setDiscount(userId, adminId, input);
+    return this.getCustomerDiscount(userId);
+  }
+
+  async disableCustomerDiscount(userId: string, adminId: string) {
+    await this.customerDiscounts.disableDiscount(userId, adminId);
+    return this.getCustomerDiscount(userId);
   }
 
   // ── Live calls ───────────────────────────────────────

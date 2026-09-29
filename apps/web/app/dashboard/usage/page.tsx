@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -56,7 +56,9 @@ interface CallUse {
    startedAt: string | null;
    endedAt: string | null;
    createdAt: string;
+   // Wall-clock seconds (display context only — not billable usage).
    durationSeconds?: {
+      callSeconds?: number;
       audioSeconds: number;
       videoSeconds: number;
       screenShareSeconds: number;
@@ -78,6 +80,11 @@ interface SegmentView {
    audio: boolean;
    video: boolean;
    screenShare: boolean;
+   // Rated participant-minutes for this segment, computed per participant
+   // by the backend rating engine.
+   audioMinutes?: number;
+   videoMinutes?: number;
+   screenShareMinutes?: number;
    costPaise: number;
 }
 
@@ -95,6 +102,12 @@ function formatDuration(totalSecondsRaw: number) {
    if (wholeMinutes === 0) return `${seconds} sec`;
    if (seconds === 0) return `${wholeMinutes} min`;
    return `${wholeMinutes} min ${seconds} sec`;
+}
+
+// Participant-minutes are billed values from the backend rating engine;
+// this only formats them for display (no rounding of stored values).
+function formatParticipantMinutes(value: number | null | undefined) {
+   return (Number.isFinite(value) ? Number(value) : 0).toFixed(2);
 }
 
 export default function UsagePage() {
@@ -209,7 +222,7 @@ export default function UsagePage() {
                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                   />
                </svg>
-               <span className="text-sm text-[#8A8298]">Loading usage…</span>
+               <span className="text-sm text-[#3D3650]">Loading usage…</span>
             </div>
          </div>
       );
@@ -234,7 +247,7 @@ export default function UsagePage() {
             <h1 className="text-2xl font-bold text-[#170B2E]">Current Usage</h1>
             {usage?.isFreeTier && (
                <span
-                  className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-mono font-semibold uppercase tracking-wider text-emerald-300"
+                  className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-mono font-semibold uppercase tracking-wider text-emerald-700"
                   style={{
                      background: "rgba(16,185,129,0.10)",
                      borderColor: "rgba(16,185,129,0.35)",
@@ -244,8 +257,8 @@ export default function UsagePage() {
                   Free tier active
                </span>
             )}
-            <p className="w-full text-sm text-[#8A8298] mt-1">
-               Pay only for what you use. Track minutes and cost by media type.
+            <p className="w-full text-sm text-[#3D3650] mt-1">
+               Pay only for what you use. Track participant-minutes and cost by media type.
             </p>
          </div>
 
@@ -273,7 +286,7 @@ export default function UsagePage() {
                      You&apos;ve used {usage.freeUsagePercent}% of your free
                      allowance
                   </p>
-                  <p className="text-xs text-[#6B6478] mt-0.5">
+                  <p className="text-xs text-[#3D3650] mt-0.5">
                      Audio and video beyond your free limit will be billed per
                      participant-minute.{" "}
                      {usage.hasPaymentMethod
@@ -346,7 +359,7 @@ export default function UsagePage() {
                   <p className="text-sm font-semibold text-[#170B2E]">
                      Usage by media type
                   </p>
-                  <p className="text-xs text-[#8A8298] mt-0.5">
+                  <p className="text-xs text-[#3D3650] mt-0.5">
                      {free ? `Free tier: ${free.audioMinutes} audio + ${free.videoMinutes} video participant-min/month · screen share always paid` : 'Free allowance loading'}
                   </p>
                </div>
@@ -397,15 +410,16 @@ export default function UsagePage() {
             <div className="flex flex-wrap items-center justify-between mb-6">
                <div>
                   <p className="text-sm font-semibold text-[#170B2E]">
-                     Minutes — Last 14 Days
+                     Call time — Last 14 Days
                   </p>
-                  <p className="text-xs text-[#8A8298] mt-0.5">
-                     {totalCallsInChart} calls in this period
+                  <p className="text-xs text-[#3D3650] mt-0.5">
+                     {totalCallsInChart} calls in this period · wall-clock
+                     minutes, not billed participant-minutes
                   </p>
                </div>
             </div>
             {chart.length === 0 ? (
-               <div className="flex h-48 items-center justify-center text-xs text-[#9C93AC]">
+               <div className="flex h-48 items-center justify-center text-xs text-[#3D3650]">
                   No usage data for this period.
                </div>
             ) : (
@@ -415,7 +429,7 @@ export default function UsagePage() {
                         key={d.date}
                         className="flex h-full flex-1 min-w-0 flex-col items-center justify-end gap-2"
                      >
-                        <span className="text-[10px] text-[#8A8298]">
+                        <span className="text-[10px] text-[#3D3650]">
                            {d.minutes > 0 ? d.minutes.toFixed(2) : ""}
                         </span>
                         <div className="flex h-full w-full items-end">
@@ -426,10 +440,10 @@ export default function UsagePage() {
                                  background:
                                     "linear-gradient(180deg, #7F40E8, rgba(127,64,232,0.25))",
                               }}
-                              title={`${d.label}: ${d.minutes.toFixed(2)} minutes, ${d.calls} calls`}
+                              title={`${d.label}: ${d.minutes.toFixed(2)} min call time, ${d.calls} calls`}
                            />
                         </div>
-                        <span className="text-[10px] text-[#9C93AC]">
+                        <span className="text-[10px] text-[#3D3650]">
                            {d.label}
                         </span>
                      </div>
@@ -448,24 +462,24 @@ export default function UsagePage() {
                   <p className="text-sm font-semibold text-[#170B2E]">
                      Call analytics
                   </p>
-                  <p className="text-xs text-[#8A8298] mt-0.5">
+                  <p className="text-xs text-[#3D3650] mt-0.5">
                      {usage?.isFreeTier
                         ? `Per-call usage and charge after your free allowance is applied.`
                         : "Per-call usage and charge for this billing cycle."}
                   </p>
-                  <p className="text-[11px] text-[#9C93AC] mt-1">
-                     Audio/Video/Screen below show actual call duration. Billing
-                     is calculated in participant-minutes (duration ×
-                     participants using that media) — see the summary above.
+                  <p className="text-[11px] text-[#3D3650] mt-1">
+                     Usage is shown in participant-minutes. Call duration is the
+                     wall-clock duration; billing multiplies each
+                     participant&apos;s active media time.
                   </p>
                </div>
-               <span className="text-xs text-[#8A8298]">{callTotal} calls</span>
+               <span className="text-xs text-[#3D3650]">{callTotal} calls</span>
             </div>
 
             {callUsage.length === 0 ? (
                <div className="flex flex-col items-center gap-2 py-8 text-center">
-                  <Receipt size={24} className="text-[#9C93AC]" />
-                  <p className="text-sm text-[#8A8298]">
+                  <Receipt size={24} className="text-[#3D3650]" />
+                  <p className="text-sm text-[#3D3650]">
                      No call usage recorded yet.
                   </p>
                </div>
@@ -473,11 +487,20 @@ export default function UsagePage() {
                <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                      <thead>
-                        <tr className="text-left text-xs text-[#8A8298] border-b border-[#E7DFF5]">
+                        <tr className="text-left text-xs text-[#3D3650] border-b border-[#E7DFF5]">
                            <th className="py-2 pr-4 font-medium">Call</th>
-                           <th className="py-2 pr-4 font-medium">Audio</th>
-                           <th className="py-2 pr-4 font-medium">Video</th>
-                           <th className="py-2 pr-4 font-medium">Screen</th>
+                           <th className="py-2 pr-4 font-medium">
+                              Audio{" "}
+                              <span className="font-normal">(participant-min)</span>
+                           </th>
+                           <th className="py-2 pr-4 font-medium">
+                              Video{" "}
+                              <span className="font-normal">(participant-min)</span>
+                           </th>
+                           <th className="py-2 pr-4 font-medium">
+                              Screen{" "}
+                              <span className="font-normal">(participant-min)</span>
+                           </th>
                            <th className="py-2 pr-4 font-medium">
                               Participants
                            </th>
@@ -488,20 +511,19 @@ export default function UsagePage() {
                         {callUsage.map((c) => {
                            const open = expandedCall === c.callId;
                            return (
-                              <>
+                              <Fragment key={c.id}>
                                  <tr
-                                    key={c.id}
                                     className="border-b border-[#E7DFF5]/60 last:border-0 cursor-pointer select-none"
                                     onClick={() => toggleSegment(c.callId)}
                                  >
                                     <td className="py-3 pr-4">
-                                       <p className="font-mono text-xs text-[#6B6478] flex items-center gap-1.5">
-                                          <span className="text-[#9C93AC] inline-block w-3 text-center">
+                                       <p className="font-mono text-xs text-[#3D3650] flex items-center gap-1.5">
+                                          <span className="text-[#3D3650] inline-block w-3 text-center">
                                              {open ? "▾" : "▸"}
                                           </span>
                                           {c.callId.slice(0, 12)}…
                                        </p>
-                                       <p className="text-[10px] text-[#9C93AC] mt-0.5 pl-[18px]">
+                                       <p className="text-[10px] text-[#3D3650] mt-0.5 pl-[18px]">
                                           {c.startedAt
                                              ? new Date(
                                                   c.startedAt,
@@ -509,23 +531,30 @@ export default function UsagePage() {
                                              : "—"}
                                        </p>
                                     </td>
-                                    <td className="py-3 pr-4 text-[#4B4560] whitespace-nowrap">
-                                       {formatDuration(
-                                          c.durationSeconds?.audioSeconds ?? 0,
-                                       )}
+                                    <td
+                                       className="py-3 pr-4 text-[#3D3650] whitespace-nowrap"
+                                       data-testid="call-audio"
+                                    >
+                                       {formatParticipantMinutes(c.audioMinutes)}{" "}
+                                       participant-min
                                     </td>
-                                    <td className="py-3 pr-4 text-[#4B4560] whitespace-nowrap">
-                                       {formatDuration(
-                                          c.durationSeconds?.videoSeconds ?? 0,
-                                       )}
+                                    <td
+                                       className="py-3 pr-4 text-[#3D3650] whitespace-nowrap"
+                                       data-testid="call-video"
+                                    >
+                                       {formatParticipantMinutes(c.videoMinutes)}{" "}
+                                       participant-min
                                     </td>
-                                    <td className="py-3 pr-4 text-[#4B4560] whitespace-nowrap">
-                                       {formatDuration(
-                                          c.durationSeconds
-                                             ?.screenShareSeconds ?? 0,
-                                       )}
+                                    <td
+                                       className="py-3 pr-4 text-[#3D3650] whitespace-nowrap"
+                                       data-testid="call-screen"
+                                    >
+                                       {formatParticipantMinutes(
+                                          c.screenShareMinutes,
+                                       )}{" "}
+                                       participant-min
                                     </td>
-                                    <td className="py-3 pr-4 text-[#4B4560]">
+                                    <td className="py-3 pr-4 text-[#3D3650]">
                                        {c.participants}
                                     </td>
                                     <td className="py-3 font-medium text-[#170B2E]">
@@ -533,8 +562,9 @@ export default function UsagePage() {
                                     </td>
                                  </tr>
                                  {open && (
-                                    <tr key={`${c.id}-segments`}>
+                                    <tr>
                                        <td colSpan={6} className="py-3 px-4">
+                                          <CallUsageDetail call={c} />
                                           <SegmentTimeline
                                              callId={c.callId}
                                              loading={
@@ -546,7 +576,7 @@ export default function UsagePage() {
                                        </td>
                                     </tr>
                                  )}
-                              </>
+                              </Fragment>
                            );
                         })}
                      </tbody>
@@ -580,12 +610,12 @@ export default function UsagePage() {
                <p className="text-sm font-medium text-[#170B2E]">
                   How usage is billed
                </p>
-               <p className="text-xs text-[#8A8298] mt-0.5">
+               <p className="text-xs text-[#3D3650] mt-0.5">
                   Usage is calculated to the second, per participant, from when
                   a call connects until it ends. Anything beyond the free
                   allowance is billed at{" "}
-                  {rates ? `${paiseToINRShort(rates.audioPaise)} (audio), ${paiseToINRShort(rates.videoPaise)} (video), and ${paiseToINRShort(rates.screenSharePaise)} (screen sharing)` : 'current rates loading'}
-                  (screen share) per participant-minute. An invoice is generated
+                  {rates ? `${paiseToINRShort(rates.audioPaise)} (audio), ${paiseToINRShort(rates.videoPaise)} (video), and ${paiseToINRShort(rates.screenSharePaise)} (screen sharing)` : 'current rates loading'}{" "}
+                  per participant-minute. An invoice is generated
                   and your card charged on the 1st of each month.
                </p>
             </div>
@@ -621,11 +651,11 @@ function UsageCard({
          >
             <Icon size={16} style={{ color }} />
          </div>
-         <p className="text-xs text-[#8A8298] mb-1">{label}</p>
+         <p className="text-xs text-[#3D3650] mb-1">{label}</p>
          <p className="text-2xl font-bold text-[#170B2E]">
             {value}
             {unit && (
-               <span className="text-xs font-normal text-[#8A8298]">
+               <span className="text-xs font-normal text-[#3D3650]">
                   {" "}
                   {unit}
                </span>
@@ -664,11 +694,11 @@ function TypeRow({
       >
          <div className="flex items-center gap-1.5 mb-1">
             {icon}
-            <p className="text-xs text-[#8A8298]">{label}</p>
+            <p className="text-xs text-[#3D3650]">{label}</p>
          </div>
          <p className="text-lg font-bold text-[#170B2E]">
             {minutes.toFixed(2)}
-            <span className="text-xs font-normal text-[#8A8298]">
+            <span className="text-xs font-normal text-[#3D3650]">
                {" "}
                participant-min
             </span>
@@ -678,12 +708,12 @@ function TypeRow({
                {paiseToINR(costPaise)}
             </p>
          )}
-         <p className="text-[11px] text-[#9C93AC] mt-0.5">{rate}</p>
+         <p className="text-[11px] text-[#3D3650] mt-0.5">{rate}</p>
          {freeOf > 0 && (
             <div className="mt-2.5">
-               <div className="flex items-center justify-between text-[10px] text-[#8A8298] mb-1">
+               <div className="flex items-center justify-between text-[10px] text-[#3D3650] mb-1">
                   <span>
-                     {remaining.toFixed(2)} / {freeOf} min remaining
+                     {remaining.toFixed(2)} / {freeOf} participant-min remaining
                   </span>
                   <span>{pct}%</span>
                </div>
@@ -721,7 +751,7 @@ function SegmentTimeline({
 }) {
    if (loading) {
       return (
-         <div className="rounded-lg border border-[#E7DFF5] p-4 text-center text-xs text-[#8A8298]">
+         <div className="rounded-lg border border-[#E7DFF5] p-4 text-center text-xs text-[#3D3650]">
             Loading segment timeline…
          </div>
       );
@@ -729,7 +759,7 @@ function SegmentTimeline({
 
    if (segments.length === 0) {
       return (
-         <div className="rounded-lg border border-[#E7DFF5] p-4 text-center text-xs text-[#8A8298]">
+         <div className="rounded-lg border border-[#E7DFF5] p-4 text-center text-xs text-[#3D3650]">
             No media segments recorded for this call.
          </div>
       );
@@ -750,7 +780,7 @@ function SegmentTimeline({
       >
          <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-semibold text-[#170B2E]">Segment timeline</p>
-            <p className="text-xs text-[#6B6478]">
+            <p className="text-xs text-[#3D3650]">
                {segments.length} segments
                {showCost && (
                   <>
@@ -784,11 +814,11 @@ function SegmentTimeline({
                   >
                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                           <span className="text-[10px] font-mono text-[#9C93AC]">
+                           <span className="text-[10px] font-mono text-[#3D3650]">
                               {fmtTime(s.startedAt)}
                            </span>
-                           <span className="text-[#9C93AC]">→</span>
-                           <span className="text-[10px] font-mono text-[#9C93AC]">
+                           <span className="text-[#3D3650]">→</span>
+                           <span className="text-[10px] font-mono text-[#3D3650]">
                               {fmtTime(s.endedAt)}
                            </span>
                            {badges.map(({ label, Icon }) => (
@@ -798,7 +828,7 @@ function SegmentTimeline({
                                  style={{
                                     background: "rgba(127,64,232,0.1)",
                                     border: "1px solid rgba(127,64,232,0.2)",
-                                    color: "#C7D2FE",
+                                    color: "#410686",
                                  }}
                               >
                                  <Icon
@@ -809,10 +839,16 @@ function SegmentTimeline({
                               </span>
                            ))}
                         </div>
-                        <p className="text-[10px] text-[#9C93AC] mt-0.5">
-                           {durSec.toFixed(0)}s · {s.participantCount || 1}{" "}
-                           participant
+                        <p className="text-[10px] text-[#3D3650] mt-0.5">
+                           {formatDuration(durSec)} wall-clock ·{" "}
+                           {s.participantCount || 1} participant
                            {(s.participantCount || 1) > 1 ? "s" : ""}
+                        </p>
+                        <p
+                           className="text-[10px] text-[#3D3650] mt-0.5"
+                           data-testid="segment-participant-minutes"
+                        >
+                           {segmentUsageLabel(s)}
                         </p>
                      </div>
                      {showCost && (
@@ -823,6 +859,82 @@ function SegmentTimeline({
                   </div>
                );
             })}
+         </div>
+      </div>
+   );
+}
+
+// Per-media participant-minutes for a segment, as rated by the backend
+// (each participant's own media state), e.g. "Video 1.10 participant-min".
+function segmentUsageLabel(s: SegmentView) {
+   const parts = [
+      { label: "Audio", value: s.audioMinutes ?? 0 },
+      { label: "Video", value: s.videoMinutes ?? 0 },
+      { label: "Screen share", value: s.screenShareMinutes ?? 0 },
+   ].filter((p) => p.value > 0);
+   if (parts.length === 0) return "0.00 participant-min";
+   return parts
+      .map((p) => `${p.label} ${formatParticipantMinutes(p.value)} participant-min`)
+      .join(" · ");
+}
+
+// Expanded-row context: billed participant-minutes (primary) alongside the
+// wall-clock call duration and participant count (secondary).
+function CallUsageDetail({ call }: { call: CallUse }) {
+   const d = call.durationSeconds;
+   const callSeconds =
+      d?.callSeconds ??
+      (call.startedAt && call.endedAt
+         ? (new Date(call.endedAt).getTime() -
+              new Date(call.startedAt).getTime()) /
+           1000
+         : 0);
+   const rows = [
+      {
+         label: "Audio",
+         value: call.audioMinutes,
+         activeSeconds: d?.audioSeconds ?? 0,
+      },
+      {
+         label: "Video",
+         value: call.videoMinutes,
+         activeSeconds: d?.videoSeconds ?? 0,
+      },
+      {
+         label: "Screen share",
+         value: call.screenShareMinutes,
+         activeSeconds: d?.screenShareSeconds ?? 0,
+      },
+   ];
+   return (
+      <div
+         className="mb-3 rounded-lg border border-[#E7DFF5] p-4"
+         style={{ background: "#FFFFFF" }}
+         data-testid="call-usage-detail"
+      >
+         <p className="text-xs text-[#3D3650]">
+            Call duration:{" "}
+            <span className="font-medium text-[#170B2E]">
+               {formatDuration(callSeconds)} wall-clock
+            </span>{" "}
+            · Participants:{" "}
+            <span className="font-medium text-[#170B2E]">
+               {call.participants}
+            </span>
+         </p>
+         <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {rows.map((r) => (
+               <div key={r.label}>
+                  <p className="text-[11px] text-[#3D3650]">{r.label}</p>
+                  <p className="text-sm font-semibold text-[#170B2E]">
+                     {formatParticipantMinutes(r.value)} participant-min
+                  </p>
+                  <p className="text-[10px] text-[#3D3650]">
+                     {formatDuration(r.activeSeconds)} with {r.label.toLowerCase()}{" "}
+                     on (wall-clock)
+                  </p>
+               </div>
+            ))}
          </div>
       </div>
    );

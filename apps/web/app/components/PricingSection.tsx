@@ -47,14 +47,16 @@ const EVERY_PLAN_INCLUDES = [
 ];
 
 const ENTERPRISE_FEATURES = [
-  'Dedicated TURN servers',
-  'White-label / custom branding',
-  'Custom SLA & 99.99% uptime',
-  'Dedicated account manager',
+  'Volume-based pricing',
+  'Custom usage rates',
+  'Higher concurrency requirements',
+  'Dedicated TURN infrastructure',
+  'Custom SLA & support',
   'Priority engineering support',
   'Custom integrations & migration',
-  'Volume discounts & custom billing',
-  'Private / on-premise deployment (future)',
+  'Private deployment options (where supported)',
+  'White-label / custom branding',
+  'Dedicated account manager',
 ];
 
 export default function PricingSection() {
@@ -124,7 +126,7 @@ export default function PricingSection() {
           <h2 className="lp-h2 font-bold text-[#170B2E] mb-4">
             Start free. Pay only for what you use.
           </h2>
-          <p className="text-[#6B6478] mb-14 max-w-2xl">
+          <p className="text-[#3D3650] mb-14 max-w-2xl">
             Audio, video, and screen sharing are tracked as separate participant-minute
             categories. Current rates and allowances are loaded from PurpleCallio's billing service.
           </p>
@@ -140,16 +142,16 @@ export default function PricingSection() {
                 Free tier
               </div>
               <div className="flex items-center gap-2 mb-1">
-                <CircleCheck size={18} className="text-emerald-400" />
+                <CircleCheck size={18} className="text-emerald-600" />
                 <p className="font-semibold text-[#170B2E]">Start Free</p>
               </div>
-              <p className="text-[#8A8298] text-xs mb-4 leading-relaxed">
+              <p className="text-[#3D3650] text-xs mb-4 leading-relaxed">
                 Build, test and prototype free. Add a card only when you go to production.
               </p>
               <div className="mb-5 rounded-lg p-4" style={{ background: 'rgba(127,64,232,0.05)', border: '1px solid #E7DFF5' }}>
                 <span className="price-text font-bold text-[#170B2E]">₹0</span>
-                <span className="text-[#8A8298] text-xs ml-1">/ month</span>
-                <p className="text-xs text-[#6B6478] mt-2">
+                <span className="text-[#3D3650] text-xs ml-1">/ month</span>
+                <p className="text-xs text-[#3D3650] mt-2">
                   Every paid plan starts free. No credit card required to begin.
                 </p>
               </div>
@@ -157,7 +159,7 @@ export default function PricingSection() {
                 {freeTierItems.map((f) => (
                   <div key={f} className="flex items-start gap-2">
                     <span className="check-indigo text-xs mt-0.5">✓</span>
-                    <p className="text-sm text-[#6B6478]">{f}</p>
+                    <p className="text-sm text-[#3D3650]">{f}</p>
                   </div>
                 ))}
               </div>
@@ -170,7 +172,7 @@ export default function PricingSection() {
             <div className="lg:col-span-3 flex flex-col gap-4">
               <div className="rounded-xl border border-[#E7DFF5] p-6 flex flex-col" style={{ background: '#FFFFFF' }}>
                 <p className="font-semibold text-[#170B2E] mb-1">Pay only for what you use</p>
-                <p className="text-xs text-[#8A8298] mb-5">
+                <p className="text-xs text-[#3D3650] mb-5">
                   No subscriptions. No up-front fees. Billed per participant-minute at the end of each month.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
@@ -184,28 +186,31 @@ export default function PricingSection() {
                       }}
                     >
                       <div className="mb-2 flex justify-center text-[#7F40E8]"><r.icon size={22} /></div>
-                      <p className="text-xs text-[#8A8298]">{r.media}</p>
+                      <p className="text-xs text-[#3D3650]">{r.media}</p>
                       <p className="price-text font-bold text-[#170B2E] text-xl mt-1">{r.price}</p>
-                      <p className="text-[10px] text-[#9C93AC]">{r.unit}</p>
-                      <p className="text-[11px] text-[#8A8298] mt-2 leading-relaxed">{r.note}</p>
+                      <p className="text-[10px] text-[#3D3650]">{r.unit}</p>
+                      <p className="text-[11px] text-[#3D3650] mt-2 leading-relaxed">{r.note}</p>
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-[#8A8298] leading-relaxed px-1">
+                <p className="text-xs text-[#3D3650] leading-relaxed px-1">
                   <CreditCard size={14} className="mr-1 inline-block align-text-bottom" /> Add a payment method in the dashboard — you'll only be charged for minutes beyond the
                   free allowance. GST of {gst}% applies on billable usage.
                 </p>
               </div>
 
-              {/* Enterprise */}
+              {/* Enterprise & High Volume */}
               <div className="rounded-xl border border-[#D6C4EE] p-6 flex flex-col sm:flex-row sm:items-center gap-6" style={{ background: 'linear-gradient(135deg, rgba(127,64,232,0.06), rgba(65,6,134,0.03))' }}>
                 <div className="sm:w-2/5">
                   <div className="flex items-center gap-2 mb-1">
                     <Building2 size={22} className="text-[#7F40E8]" />
-                    <p className="font-bold text-[#170B2E] text-lg">Enterprise</p>
+                    <p className="font-bold text-[#170B2E] text-lg">Enterprise &amp; High Volume</p>
                   </div>
-                  <p className="text-[#6B6478] text-sm mb-3 leading-relaxed">
-                    For organizations with large-scale communication needs.
+                  <p className="text-[#3D3650] text-sm mb-3 leading-relaxed">
+                    Built for organizations with large-scale communication needs. Running high call
+                    volumes or integrating PurpleCallio deeply into your product? Talk to our team
+                    about volume-based pricing tailored to your usage, dedicated infrastructure, and
+                    enterprise support.
                   </p>
                   <a href="mailto:purplecallio@gmail.com" className="inline-block text-center text-sm font-medium text-[#170B2E] px-5 py-2.5 rounded-lg border border-[#D6C4EE] hover:border-[#7F40E8] transition-all">
                     Talk to Sales →
@@ -215,7 +220,7 @@ export default function PricingSection() {
                   {ENTERPRISE_FEATURES.map((f) => (
                     <div key={f} className="flex items-start gap-2">
                       <span className="check-indigo text-xs mt-0.5">✓</span>
-                      <p className="text-sm text-[#4B4560]">{f}</p>
+                      <p className="text-sm text-[#3D3650]">{f}</p>
                     </div>
                   ))}
                 </div>
@@ -231,7 +236,7 @@ export default function PricingSection() {
             <p className="text-center font-bold text-[#170B2E] text-lg mb-2">
               Every account includes
             </p>
-            <p className="text-center text-sm text-[#8A8298] mb-8">
+            <p className="text-center text-sm text-[#3D3650] mb-8">
               The complete platform — same features on the free tier and pay-as-you-go. You only pay for minutes beyond the free allowance.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -242,7 +247,7 @@ export default function PricingSection() {
                   style={{ background: '#F8F4FD', border: '1px solid #E7DFF5' }}
                 >
                   <span className="check-indigo text-sm mt-0.5">✓</span>
-                  <p className="text-sm text-[#4B4560]">{item}</p>
+                  <p className="text-sm text-[#3D3650]">{item}</p>
                 </div>
               ))}
             </div>
@@ -256,7 +261,7 @@ export default function PricingSection() {
             <p className="font-bold text-[#170B2E] text-lg mb-2">
               Questions about pricing?
             </p>
-            <p className="text-sm text-[#6B6478] mb-6 max-w-xl mx-auto">
+            <p className="text-sm text-[#3D3650] mb-6 max-w-xl mx-auto">
               We've answered the most common questions about the free tier,
               metered rates, payment methods, and monthly invoices. If you
               still need help, our engineers are one email away.
@@ -271,14 +276,14 @@ export default function PricingSection() {
               </Link>
               <a
                 href="mailto:purplecallio@gmail.com"
-                className="inline-flex items-center gap-2 text-[#4B4560] font-medium text-sm px-6 py-2.5 rounded-lg border border-[#E7DFF5] hover:border-[#D6C4EE] transition-all"
+                className="inline-flex items-center gap-2 text-[#3D3650] font-medium text-sm px-6 py-2.5 rounded-lg border border-[#E7DFF5] hover:border-[#D6C4EE] transition-all"
               >
                 Talk to an engineer
               </a>
             </div>
           </div>
 
-          <p className="text-center text-xs text-[#9C93AC] mt-10">
+          <p className="text-center text-xs text-[#3D3650] mt-10">
             All rates in INR. Audio, video, and screen sharing are billed as separate
             participant-minute categories. GST of {gst}% applies on billable usage.
           </p>

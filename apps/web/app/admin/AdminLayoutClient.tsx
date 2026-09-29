@@ -73,7 +73,7 @@ export default function AdminLayout({
         </Link>
         <button
           onClick={() => setSidebarOpen(true)}
-          className="w-10 h-10 flex items-center justify-center rounded-lg border border-[#E7DFF5] text-[#6B6478]"
+          className="w-10 h-10 flex items-center justify-center rounded-lg border border-[#E7DFF5] text-[#3D3650]"
           aria-label="Open menu"
         >
           <Menu size={20} />
@@ -108,7 +108,7 @@ export default function AdminLayout({
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden w-8 h-8 flex items-center justify-center text-[#6B6478]"
+            className="lg:hidden w-8 h-8 flex items-center justify-center text-[#3D3650]"
             aria-label="Close menu"
           >
             <X size={18} />
@@ -117,7 +117,7 @@ export default function AdminLayout({
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 overflow-y-auto">
-          <p className="px-3 pb-2 text-[11px] font-mono uppercase tracking-widest text-[#9C93AC]">
+          <p className="px-3 pb-2 text-[11px] font-mono uppercase tracking-widest text-[#3D3650]">
             Internal
           </p>
           <div className="flex flex-col gap-0.5">
@@ -132,7 +132,7 @@ export default function AdminLayout({
                   href={item.href}
                   className={`
                     flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all
-                    ${active ? 'text-[#170B2E] font-medium' : 'text-[#6B6478] hover:text-[#170B2E]'}
+                    ${active ? 'text-[#170B2E] font-medium' : 'text-[#3D3650] hover:text-[#170B2E]'}
                   `}
                   style={
                     active
@@ -172,14 +172,14 @@ export default function AdminLayout({
             )}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-[#170B2E] truncate">{displayName}</p>
-              <p className="text-xs text-[#8A8298] truncate">Administrator</p>
+              <p className="text-xs text-[#3D3650] truncate">Administrator</p>
             </div>
             <button
               onClick={() => {
                 logout();
                 router.push('/');
               }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-[#6B6478] hover:text-red-600 hover:bg-[#7F40E8]/5 transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-[#3D3650] hover:text-red-600 hover:bg-[#7F40E8]/5 transition-colors"
               aria-label="Logout"
               title="Logout"
             >

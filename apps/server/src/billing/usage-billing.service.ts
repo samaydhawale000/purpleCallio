@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BillingService } from './billing.service';
+import { CustomerDiscountService } from './customer-discount.service';
+import { calculateDiscountPaise } from './discount.util';
 
 export interface UsageSnapshot {
   audioMinutes: number;
@@ -48,6 +50,7 @@ export class UsageBillingService {
   constructor(
     private prisma: PrismaService,
     private billingService: BillingService,
+    private customerDiscounts: CustomerDiscountService,
   ) {}
 
   /** Fetch the default billing rates (fall back to defaults if not seeded). */
@@ -415,7 +418,12 @@ cost: {
     const callIds = pageData.map((c) => c.callId);
     const segmentsByCall = new Map<
       string,
-      { audioSeconds: number; videoSeconds: number; screenShareSeconds: number }
+      {
+        callSeconds: number;
+        audioSeconds: number;
+        videoSeconds: number;
+        screenShareSeconds: number;
+      }
     >();
     if (callIds.length) {
       const segs = await this.prisma.usageSegment.findMany({
@@ -423,6 +431,7 @@ cost: {
       });
       for (const seg of segs) {
         const entry = segmentsByCall.get(seg.callId) ?? {
+          callSeconds: 0,
           audioSeconds: 0,
           videoSeconds: 0,
           screenShareSeconds: 0,
@@ -431,6 +440,10 @@ cost: {
           0,
           (seg.endedAt.getTime() - seg.startedAt.getTime()) / 1000,
         );
+        // Wall-clock only (display context). Billable usage is the
+        // per-participant audioMinutes/videoMinutes/screenShareMinutes on
+        // the CallUsage row itself — never derive it from these seconds.
+        entry.callSeconds += seconds;
         if (seg.audio) entry.audioSeconds += seconds;
         if (seg.video) entry.videoSeconds += seconds;
         if (seg.screenShare) entry.screenShareSeconds += seconds;
@@ -442,6 +455,7 @@ cost: {
       data: pageData.map((call) => ({
         ...call,
         durationSeconds: segmentsByCall.get(call.callId) ?? {
+          callSeconds: 0,
           audioSeconds: 0,
           videoSeconds: 0,
           screenShareSeconds: 0,
@@ -570,6 +584,15 @@ cost: {
   /**
    * Whether the owner's current-cycle billed cost is still under their
    * self-set monthly spending cap. No cap set → always allowed.
+   *
+   * Compared net of any active customer discount (not the raw billable
+   * cost): the spending limit exists to protect the customer from a
+   * surprise bill and cap PurpleCallio's exposure to unpaid usage — both of
+   * those are about the amount that will actually be charged, so a
+   * discounted customer's cap reflects their real, lower cost rather than
+   * the pre-discount rate card. This does NOT include tax, matching the
+   * pre-discount behavior this replaces (which also compared a pre-tax
+   * figure) — only the discount adjustment was added.
    */
   async checkSpendingLimit(
     ownerId: string,
@@ -581,7 +604,14 @@ cost: {
     if (!user?.spendingLimitPaise) return { allowed: true };
 
     const current = await this.getCurrentUsage(ownerId);
-    if (current.cost.totalPaise >= user.spendingLimitPaise) {
+    const discount = await this.customerDiscounts.getActiveDiscount(ownerId);
+    const discountPaise = calculateDiscountPaise(
+      current.cost.totalPaise,
+      discount?.percentage,
+    );
+    const netPaise = current.cost.totalPaise - discountPaise;
+
+    if (netPaise >= user.spendingLimitPaise) {
       return {
         allowed: false,
         reason: `You've reached your monthly spending limit of ₹${(user.spendingLimitPaise / 100).toFixed(2)}. Raise or remove it in Billing settings to continue making calls.`,

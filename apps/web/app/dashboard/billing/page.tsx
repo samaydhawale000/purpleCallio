@@ -63,6 +63,8 @@ interface UsageInvoice {
   videoPaise: number;
   screenSharePaise: number;
   subtotalPaise: number;
+  discountPercent: number | null;
+  discountPaise: number;
   taxPaise: number;
   totalPaise: number;
   currency: string;
@@ -194,7 +196,7 @@ export default function BillingPage() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="animate-spin h-6 w-6 text-[#7F40E8]" />
-          <span className="text-sm text-[#8A8298]">Loading billing…</span>
+          <span className="text-sm text-[#3D3650]">Loading billing…</span>
         </div>
       </div>
     );
@@ -226,7 +228,7 @@ const u = usage?.usage;
 
       <div>
         <h1 className="text-2xl font-bold text-[#170B2E]">Billing &amp; Usage</h1>
-        <p className="text-sm text-[#8A8298] mt-1">
+        <p className="text-sm text-[#3D3650] mt-1">
           Pay only for what you use. Add a card and we&apos;ll auto-charge you at the end of each billing cycle.
         </p>
       </div>
@@ -262,16 +264,16 @@ const u = usage?.usage;
             </div>
             <div>
               <p className="text-lg font-bold text-[#170B2E]">{usage?.isFreeTier ? 'Free Tier' : 'Pay as you go'}</p>
-<p className="text-sm text-[#6B6478] mt-0.5">
+<p className="text-sm text-[#3D3650] mt-0.5">
                 {free?.audioMinutes ?? 500} audio + {free?.videoMinutes ?? 200} video participant-min / month free · screen share always paid
               </p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-xs text-[#8A8298] mb-1">Current balance (this cycle)</p>
+            <p className="text-xs text-[#3D3650] mb-1">Current balance (this cycle)</p>
             <p className="text-2xl font-bold text-[#170B2E]">{paiseToINR(cost?.totalPaise ?? 0)}</p>
             <p
-              className="text-[11px] text-[#8A8298] mt-0.5"
+              className="text-[11px] text-[#3D3650] mt-0.5"
               title="Projected total for the full cycle, based on your usage so far."
             >
               est. month-end {paiseToINR(usage?.estimatedMonthEndPaise ?? 0)}
@@ -373,13 +375,13 @@ const u = usage?.usage;
       <div className="rounded-2xl border border-[#E7DFF5] p-6" style={{ background: '#FFFFFF' }}>
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm font-semibold text-[#170B2E]">Invoices</p>
-          <span className="text-xs text-[#8A8298]">{invoices.length} total</span>
+          <span className="text-xs text-[#3D3650]">{invoices.length} total</span>
         </div>
 
         {invoices.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-8 text-center">
-            <Receipt size={24} className="text-[#9C93AC]" />
-            <p className="text-sm text-[#8A8298]">
+            <Receipt size={24} className="text-[#3D3650]" />
+            <p className="text-sm text-[#3D3650]">
               No invoices yet. You&apos;ll be billed at the end of each billing cycle for usage beyond the free tier.
             </p>
           </div>
@@ -387,7 +389,7 @@ const u = usage?.usage;
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-[#8A8298] border-b border-[#E7DFF5]">
+                <tr className="text-left text-xs text-[#3D3650] border-b border-[#E7DFF5]">
                   <th className="py-2 pr-4 font-medium">Invoice</th>
                   <th className="py-2 pr-4 font-medium">Cycle</th>
                   <th className="py-2 pr-4 font-medium">Usage</th>
@@ -400,14 +402,21 @@ const u = usage?.usage;
               <tbody>
                 {invoices.map((inv) => (
                   <tr key={inv.id} className="border-b border-[#E7DFF5]/60 last:border-0">
-                    <td className="py-3 pr-4 font-mono text-xs text-[#6B6478]">{inv.invoiceNumber}</td>
-                    <td className="py-3 pr-4 text-[#4B4560]">
+                    <td className="py-3 pr-4 font-mono text-xs text-[#3D3650]">{inv.invoiceNumber}</td>
+                    <td className="py-3 pr-4 text-[#3D3650]">
                       {new Date(inv.cycleStart).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
                       {' – '}
                       {new Date(inv.cycleEnd).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
                     </td>
-                    <td className="py-3 pr-4 font-medium text-[#170B2E]">{paiseToINR(inv.subtotalPaise)}</td>
-                    <td className="py-3 pr-4 text-[#6B6478]">{paiseToINR(inv.taxPaise)}</td>
+                    <td className="py-3 pr-4 font-medium text-[#170B2E]">
+                      {paiseToINR(inv.subtotalPaise)}
+                      {inv.discountPaise > 0 && (
+                        <span className="block text-xs font-normal text-emerald-600">
+                          {inv.discountPercent != null ? `${inv.discountPercent}% discount` : 'Discount'} applied
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 pr-4 text-[#3D3650]">{paiseToINR(inv.taxPaise)}</td>
                     <td className="py-3 pr-4 font-medium text-[#170B2E]">{paiseToINR(inv.totalPaise)}</td>
                     <td className="py-3 pr-4">
                       <Badge variant={statusVariant[inv.status] ?? 'default'}>
@@ -425,7 +434,7 @@ const u = usage?.usage;
                         <button
                           onClick={() => downloadInvoicePdf(inv)}
                           disabled={downloadingId === inv.id}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-[#6B6478] hover:text-[#170B2E] transition-colors disabled:opacity-50"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-[#3D3650] hover:text-[#170B2E] transition-colors disabled:opacity-50"
                         >
                           <Download size={12} />
                           {downloadingId === inv.id ? 'Downloading…' : 'PDF'}
@@ -451,19 +460,19 @@ const u = usage?.usage;
       <div className="rounded-2xl border border-[#E7DFF5] p-6" style={{ background: '#FFFFFF' }}>
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm font-semibold text-[#170B2E]">Usage history</p>
-          <span className="text-xs text-[#8A8298]">{usageHistoryTotal} cycles</span>
+          <span className="text-xs text-[#3D3650]">{usageHistoryTotal} cycles</span>
         </div>
 
         {usageHistory.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-8 text-center">
-            <Clock size={24} className="text-[#9C93AC]" />
-            <p className="text-sm text-[#8A8298]">No usage recorded yet.</p>
+            <Clock size={24} className="text-[#3D3650]" />
+            <p className="text-sm text-[#3D3650]">No usage recorded yet.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-[#8A8298] border-b border-[#E7DFF5]">
+                <tr className="text-left text-xs text-[#3D3650] border-b border-[#E7DFF5]">
                   <th className="py-2 pr-4 font-medium">Cycle</th>
                   <th className="py-2 pr-4 font-medium">Audio</th>
                   <th className="py-2 pr-4 font-medium">Video</th>
@@ -476,7 +485,7 @@ const u = usage?.usage;
                   const isCurrent = new Date(row.billingCycleEnd) > new Date();
                   return (
                     <tr key={row.id} className="border-b border-[#E7DFF5]/60 last:border-0">
-                      <td className="py-3 pr-4 text-[#4B4560]">
+                      <td className="py-3 pr-4 text-[#3D3650]">
                         {new Date(row.billingCycleStart).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
                         {' – '}
                         {new Date(row.billingCycleEnd).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
@@ -484,9 +493,9 @@ const u = usage?.usage;
                           <span className="ml-2 text-[10px] font-medium text-[#7F40E8]">CURRENT</span>
                         )}
                       </td>
-                      <td className="py-3 pr-4 text-[#4B4560]">{row.audioMinutes.toFixed(2)} min</td>
-                      <td className="py-3 pr-4 text-[#4B4560]">{row.videoMinutes.toFixed(2)} min</td>
-                      <td className="py-3 pr-4 text-[#4B4560]">{row.screenShareMinutes.toFixed(2)} min</td>
+                      <td className="py-3 pr-4 text-[#3D3650]">{row.audioMinutes.toFixed(2)} participant-min</td>
+                      <td className="py-3 pr-4 text-[#3D3650]">{row.videoMinutes.toFixed(2)} participant-min</td>
+                      <td className="py-3 pr-4 text-[#3D3650]">{row.screenShareMinutes.toFixed(2)} participant-min</td>
                       <td className="py-3 font-medium text-[#170B2E]">{paiseToINR(row.usageCostPaise)}</td>
                     </tr>
                   );
@@ -550,20 +559,20 @@ function TypeRow({
     <div className="rounded-xl border border-[#E7DFF5] p-4" style={{ background: '#F8F4FD' }}>
       <div className="flex items-center gap-1.5 mb-1">
         {icon}
-        <p className="text-xs text-[#8A8298]">{label}</p>
+        <p className="text-xs text-[#3D3650]">{label}</p>
       </div>
       <p className="text-lg font-bold text-[#170B2E]">
         {minutes.toFixed(2)}
-        <span className="text-xs font-normal text-[#8A8298]"> participant-min</span>
+        <span className="text-xs font-normal text-[#3D3650]"> participant-min</span>
       </p>
       <p className="text-xs font-semibold mt-1" style={{ color }}>
         {paiseToINR(costPaise)}
       </p>
-      <p className="text-[11px] text-[#9C93AC] mt-0.5">{rate}</p>
+      <p className="text-[11px] text-[#3D3650] mt-0.5">{rate}</p>
       {freeOf > 0 && (
         <div className="mt-2.5">
-          <div className="flex items-center justify-between text-[10px] text-[#8A8298] mb-1">
-            <span>{remaining.toFixed(2)} / {freeOf} min remaining</span>
+          <div className="flex items-center justify-between text-[10px] text-[#3D3650] mb-1">
+            <span>{remaining.toFixed(2)} / {freeOf} participant-min remaining</span>
             <span>{pct}%</span>
           </div>
           <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#E7DFF5' }}>
@@ -596,7 +605,7 @@ function SummaryTile({
 }) {
   return (
     <div title={hint}>
-      <p className="text-[11px] text-[#8A8298] mb-1">{label}</p>
+      <p className="text-[11px] text-[#3D3650] mb-1">{label}</p>
       <p
         className="text-sm font-semibold flex items-center gap-1.5 truncate"
         style={{ color: valueColor ?? '#F1F5F9' }}
@@ -628,7 +637,7 @@ function InfoCard({
         </div>
         <p className="text-sm font-semibold text-[#170B2E]">{title}</p>
       </div>
-      <p className="text-xs text-[#8A8298] leading-relaxed">{body}</p>
+      <p className="text-xs text-[#3D3650] leading-relaxed">{body}</p>
     </div>
   );
 }
@@ -716,12 +725,12 @@ function SpendingLimitCard({
         <ShieldCheck size={16} style={{ color: '#34D399' }} />
         <p className="text-sm font-semibold text-[#170B2E]">Monthly spending limit</p>
       </div>
-      <p className="text-xs text-[#8A8298] mb-3">
+      <p className="text-xs text-[#3D3650] mb-3">
         Cap how much paid usage (beyond your free allowance) can be billed each month. New calls are blocked once you hit it — active calls are never interrupted.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5 rounded-lg border border-[#E7DFF5] px-3 py-2" style={{ background: '#F8F4FD' }}>
-          <span className="text-[#8A8298] text-sm">₹</span>
+          <span className="text-[#3D3650] text-sm">₹</span>
           <input
             type="number"
             min={0}
@@ -748,7 +757,7 @@ function SpendingLimitCard({
           <button
             onClick={() => { setInput(''); save(null); }}
             disabled={saving}
-            className="text-sm text-[#6B6478] hover:text-[#170B2E] transition-colors disabled:opacity-50"
+            className="text-sm text-[#3D3650] hover:text-[#170B2E] transition-colors disabled:opacity-50"
           >
             Remove limit
           </button>
