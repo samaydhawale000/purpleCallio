@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ContentSection, PublicPage } from "../components/marketing/PublicPage";
 import { JsonLd } from "../components/seo/JsonLd";
-import { PURPLECALLIO_DESCRIPTION, PURPLECALLIO_NAME } from "../lib/brand";
+import { PURPLECALLIO_DESCRIPTION, PURPLECALLIO_HOST, PURPLECALLIO_NAME } from "../lib/brand";
 import { pageMetadata, siteUrl } from "../lib/seo";
 
 export const metadata: Metadata = pageMetadata({
@@ -14,8 +14,8 @@ export const metadata: Metadata = pageMetadata({
 
 const faqs = [
    ["What is PurpleCallio?", PURPLECALLIO_DESCRIPTION],
-   ["How do I integrate video calling using PurpleCallio?", "Use the PurpleCallio REST API or @purplecallio/sdk from your backend to create a call and generate participant session information. Your frontend can then join with @purplecallio/react components, the headless SDK, or hosted UI. See the quickstart at purplecallio.com/docs/quickstart and the video guide at purplecallio.com/docs/video."],
-   ["How do I integrate audio calling using PurpleCallio?", "Create a call from your backend with the REST API or @purplecallio/sdk, then join from the browser with @purplecallio/react, the headless JavaScript SDK, or hosted UI. See purplecallio.com/docs/audio for a full walkthrough."],
+   ["How do I integrate video calling using PurpleCallio?", `Use the PurpleCallio REST API or @purplecallio/sdk from your backend to create a call and generate participant session information. Your frontend can then join with @purplecallio/react components, the headless SDK, or hosted UI. See the quickstart at ${PURPLECALLIO_HOST}/docs/quickstart and the video guide at ${PURPLECALLIO_HOST}/docs/video.`],
+   ["How do I integrate audio calling using PurpleCallio?", `Create a call from your backend with the REST API or @purplecallio/sdk, then join from the browser with @purplecallio/react, the headless JavaScript SDK, or hosted UI. See ${PURPLECALLIO_HOST}/docs/audio for a full walkthrough.`],
    ["What can I build with PurpleCallio?", "Developers can build 1:1 audio calls, 1:1 video calls, screen sharing, custom communication interfaces, and embedded calling experiences."],
    ["Does PurpleCallio support video calls?", "Yes. PurpleCallio supports video calling."],
    ["Does PurpleCallio support audio calls?", "Yes. PurpleCallio supports audio calling and audio participant usage tracking."],
@@ -23,7 +23,7 @@ const faqs = [
    ["Does PurpleCallio have a JavaScript SDK?", "Yes. @purplecallio/sdk is the official JavaScript and TypeScript SDK."],
    ["Does PurpleCallio have React components?", "Yes. @purplecallio/react provides official React components and hooks."],
    ["How does PurpleCallio pricing work?", "PurpleCallio uses participant-minute usage pricing. Audio, video, and screen sharing are tracked as separate usage categories."],
-   ["Where is the PurpleCallio API documentation?", "The official API documentation is available at purplecallio.com/docs/rest-api."],
+   ["Where is the PurpleCallio API documentation?", `The official API documentation is available at ${PURPLECALLIO_HOST}/docs/rest-api.`],
 ] as const;
 
 const integrationPaths = [

@@ -39,10 +39,11 @@ export interface DevicesResult {
     videoInput: string;
   };
   loading: boolean;
+  error: string | null;
   refresh: () => Promise<void>;
-  setAudioInput: (deviceId: string) => void;
-  setAudioOutput: (deviceId: string) => void;
-  setVideoInput: (deviceId: string) => void;
+  setAudioInput: (deviceId: string) => Promise<void>;
+  setAudioOutput: (deviceId: string) => Promise<void>;
+  setVideoInput: (deviceId: string) => Promise<void>;
 }
 
 /** Enumerate available media devices and switch between them. */
@@ -58,9 +59,15 @@ export function useDevices(): DevicesResult {
     videoInput: '',
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (typeof navigator === 'undefined') return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) {
+      setLoading(false);
+      setError('DEVICE_ENUMERATION_UNSUPPORTED');
+      return;
+    }
+    try {
     const devices = await navigator.mediaDevices.enumerateDevices();
 
     const inputs: DeviceInfo[] = [];
@@ -79,10 +86,14 @@ export function useDevices(): DevicesResult {
     setVideoInputs(vids);
 
     setSelected((prev) => ({
-      audioInput: prev.audioInput || inputs[0]?.deviceId || '',
-      audioOutput: prev.audioOutput || outputs[0]?.deviceId || '',
-      videoInput: prev.videoInput || vids[0]?.deviceId || '',
+      audioInput: inputs.some((item) => item.deviceId === prev.audioInput) ? prev.audioInput : inputs[0]?.deviceId || '',
+      audioOutput: outputs.some((item) => item.deviceId === prev.audioOutput) ? prev.audioOutput : outputs[0]?.deviceId || '',
+      videoInput: vids.some((item) => item.deviceId === prev.videoInput) ? prev.videoInput : vids[0]?.deviceId || '',
     }));
+    setError(null);
+    } catch {
+      setError('DEVICE_ENUMERATION_FAILED');
+    }
     setLoading(false);
   }, []);
 
@@ -91,23 +102,43 @@ export function useDevices(): DevicesResult {
   }, [refresh]);
 
   const setAudioInput = useCallback(
-    (deviceId: string) => {
-      setSelected((s) => ({ ...s, audioInput: deviceId }));
-      void engine?.microphone;
-      // Re-acquire local media is handled at engine level; the engine
-      // will pick up new constraints on next join. We keep it simple.
+    async (deviceId: string) => {
+      if (!engine) throw new Error('MEETING_NOT_JOINED');
+      try {
+        await engine.setAudioInput(deviceId);
+        setSelected((s) => ({ ...s, audioInput: deviceId }));
+        setError(null);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'DEVICE_SWITCH_FAILED');
+        throw cause;
+      }
     },
     [engine],
   );
 
-  const setAudioOutput = useCallback((deviceId: string) => {
-    setSelected((s) => ({ ...s, audioOutput: deviceId }));
-  }, []);
+  const setAudioOutput = useCallback(async (deviceId: string) => {
+    if (!engine) throw new Error('MEETING_NOT_JOINED');
+    try {
+      await engine.setAudioOutput(deviceId);
+      setSelected((s) => ({ ...s, audioOutput: deviceId }));
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'DEVICE_SWITCH_FAILED');
+      throw cause;
+    }
+  }, [engine]);
 
   const setVideoInput = useCallback(
-    (deviceId: string) => {
-      setSelected((s) => ({ ...s, videoInput: deviceId }));
-      void engine?.camera;
+    async (deviceId: string) => {
+      if (!engine) throw new Error('MEETING_NOT_JOINED');
+      try {
+        await engine.setVideoInput(deviceId);
+        setSelected((s) => ({ ...s, videoInput: deviceId }));
+        setError(null);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'DEVICE_SWITCH_FAILED');
+        throw cause;
+      }
     },
     [engine],
   );
@@ -118,6 +149,7 @@ export function useDevices(): DevicesResult {
     videoInputs,
     selected,
     loading,
+    error,
     refresh,
     setAudioInput,
     setAudioOutput,
@@ -129,4 +161,3 @@ export function useDevices(): DevicesResult {
 export function useConnection(): ConnectionState {
   return useMeetingContext().connectionState;
 }
-

@@ -1,46 +1,78 @@
-# Status: PurpleCallio Flutter SDK
+# Flutter SDK implementation and release status
 
-**Foundation only. Not functional. Not built. Not tested. Do not publish.**
+**Implementation present; not release-ready until Flutter and device validation passes.**
 
-## What exists
+## Implemented
 
-- `pubspec.yaml` — real package manifest shape, with `flutter_webrtc` and
-  `socket_io_client` declared as the intended dependencies (not resolved —
-  no Flutter SDK available in this environment to run `flutter pub get`).
-- `lib/purplecallio.dart` — the intended public Dart API surface
-  (`PurpleCallioMeeting`, `PurpleCallioMeetingConfig`,
-  `PurpleCallioConnectionState`, `PurpleCallioParticipant`), matching the
-  same concepts as every other PurpleCallio package. Every method throws
-  `UnimplementedError` with a message pointing back here — this is
-  intentional, so misuse fails loudly instead of silently no-op'ing.
+- `PurpleCallioClient` and `PurpleCallioMeeting`, using participant-token
+  authentication, the backend REST endpoints, Socket.IO signaling, and the
+  `flutter_webrtc` peer connection implementation.
+- Caller/receiver flow, call state, participant snapshots/events, candidate
+  buffering, ICE restart/watchdog, socket reconnect, REST call ending, and
+  deterministic resource cleanup.
+- Microphone/camera toggles, front/back switching, Flutter video rendering,
+  participant list and lifecycle helpers.
+- Android screen capture through `flutter_webrtc` and a foreground service;
+  iOS screen sharing is explicitly unsupported because this package does not
+  include a ReplayKit Broadcast Upload Extension.
+- Unit tests with fake signaling/RTC, an example app, package README, and a
+  gated real-server signaling/REST integration test.
 
-## What does NOT exist (the actual SDK)
+## Verified in this environment (Flutter stable, Android SDK 35, no device)
 
-- No WebRTC peer connection wiring (`flutter_webrtc` platform channel
-  usage).
-- No signaling client implementing the socket.io event contract from
-  `packages/sdk/src/signaling/events.ts` / `transport/socket.ts`.
-- No camera/microphone permission handling.
-- No Android or iOS platform-specific configuration (`AndroidManifest.xml`
-  permissions, `Info.plist` usage-description keys, Gradle/CocoaPods
-  wiring for the WebRTC binary).
-- No tests, no example app, nothing run on a device or simulator.
+- `flutter analyze lib test`: no errors or warnings (7 style infos).
+  Fixed while getting here: `dispose()` called `reconnection(false)`, but in
+  socket_io_client 3.1.6 `reconnection` is a field, so reconnection was never
+  turned off. It now sets `reconnection = false`.
+- `flutter test`: **87 passed, 3 skipped** (90 with the real-server tests enabled) (the skipped ones are the gated
+  real-server tests). Coverage includes models, auth (ack/rejection/timeout,
+  `auth-error`), caller/receiver ordering, candidate queueing, toggles,
+  billing-safe muted join, remote media filtering, reconnect/re-join, ICE
+  restart and watchdog (fake_async), server-side `call.ended`/`call.expired`,
+  refused `join-call`, holding the answer until `join-call`, cleanup, log
+  redaction, ICE merge, and widgets.
+- **Real-server tests** (`test/integration/e2e_test.dart`, with
+  `PURPLECALLIO_E2E_BASE_URL`/`PURPLECALLIO_E2E_API_KEY`): **3 passed**
+  against the local server using the real socket_io_client + http (WebRTC
+  faked): a full call, an invalid token, and caller cancel while ringing.
+  The database shows the full server-side event lifecycle for those calls.
+- Room-scoped messages (offer/answer/ICE/`call.started`) wait for the
+  `join-call` ack. `baseUrl` is required (no default host) and Socket.IO
+  connects to the host without `/api`. socket_io_client throws an uncaught
+  `WebSocketConnectionClosed` after a server-initiated disconnect; the channel
+  now contains that one error.
+- Behaviour change to match the hardened gateway: a bare server-initiated
+  disconnect is now terminal (`failed(connectionFailed)`). It used to
+  trigger a manual reconnect, which would loop into the per-IP limit.
+- `flutter pub publish --dry-run`: no package-content issues. The two
+  warnings are git-state only (uncommitted changes; the old
+  `lib/purplecallio.dart` is deleted but still tracked).
+- `example/` now has Android/iOS platform folders, the README's permissions
+  (AndroidManifest, Info.plist) and `minSdk = 23`; `flutter analyze` is clean.
+- `flutter build apk --debug` for the example succeeds. The APK bundles
+  flutter_webrtc's native `libjingle_peerconnection_so` for arm64-v8a,
+  armeabi-v7a and x86_64. It has not been installed on a device.
 
-## Why
+## Not yet validated
 
-Building this for real requires the Flutter SDK, an Android toolchain
-(Android Studio/Gradle/JDK/emulator or device), and an iOS toolchain
-(Xcode with a real `Xcode.app` install, not just Command Line Tools,
-plus a simulator or device) — none of which are present in the
-environment this was authored in (verified: `flutter`, `gradle`, `adb`,
-and a full `xcodebuild` are all absent; only Command Line Tools' bare
-`swift` compiler is present, which is not sufficient to build or test an
-iOS framework).
+- Anything that needs a device: real WebRTC media through `flutter_webrtc`,
+  camera/microphone, `PurpleCallioVideoView` rendering, permission prompts,
+  audio routes, lifecycle, and Android screen sharing (experimental).
+- No iOS build (no Xcode.app here).
+- Not published to pub.dev. `repository` in pubspec points at
+  github.com/samaydhawale000/BlueJoinet, which must be public before
+  publishing.
 
-## Recommended next step
+## Commands to release-check
 
-A Flutter engineer with a real toolchain should: add `flutter_webrtc`,
-implement the signaling client against the event contract referenced
-above, wire camera/mic permissions via `permission_handler`, build a
-minimal example app, and test on both an Android emulator/device and an
-iOS simulator/device before this is published or advertised anywhere.
+```sh
+flutter pub get
+flutter analyze
+flutter test
+cd example && flutter pub get && flutter build apk --debug
+```
+
+Then run the example on physical Android and iOS devices and validate calls
+against a staging PurpleCallio server. Run `test/integration/e2e_test.dart`
+with test-only staging environment variables to validate the real signaling
+server. Never place the API key used by that test in the app.

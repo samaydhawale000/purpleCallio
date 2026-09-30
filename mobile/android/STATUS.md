@@ -1,46 +1,71 @@
-# Status: PurpleCallio Android SDK
+# Android SDK implementation and release status
 
-**Foundation only. Not functional. Not compiled. Not verified. Do not publish.**
+**Implementation present; not release-ready until Gradle and physical-device validation passes.**
 
-## What exists
+## Implemented
 
-- `purplecallio/build.gradle.kts` — real Gradle module manifest shape
-  (Android library module, `org.webrtc:google-webrtc` dependency
-  commented in as the intended real dependency).
-- `purplecallio/src/main/kotlin/com/purplecallio/sdk/PurpleCallio.kt` —
-  the intended public Kotlin API (`PurpleCallioMeeting`,
-  `PurpleCallioMeetingConfig`, `PurpleCallioConnectionState`,
-  `PurpleCallioParticipant`, `PurpleCallioMeetingListener`), matching the
-  same concepts as every other PurpleCallio package. Every method throws
-  `PurpleCallioNotImplementedError` — intentional, so misuse fails loudly
-  instead of silently no-op'ing.
+- Android library module using Stream's WebRTC Android binding, Socket.IO,
+  OkHttp, and Kotlin coroutines; Maven publication configuration is present.
+- Participant-token authentication, backend REST call lifecycle, Socket.IO
+  signaling, WebRTC SDP/ICE handling, reconnect and ICE recovery, participant
+  state/events, typed errors, redacted logging, and cleanup.
+- Runtime permission helpers, audio focus/lifecycle handling, microphone and
+  camera controls, camera switching, and `SurfaceViewRenderer`-based video.
+- Android MediaProjection consent flow and foreground service for screen
+  sharing. The sample app is in `sample/`.
+- JVM tests with fake API/signaling/RTC/platform dependencies.
 
-## Unlike the iOS foundation, this Kotlin file was NOT type-checked
+## Verified in this environment (JDK 17, Android SDK 35, no device)
 
-No Kotlin compiler (`kotlinc`), Gradle, Android SDK, or JDK is available
-in this environment (`java -version` fails: "Unable to locate a Java
-Runtime"; `gradle`/`adb`/`kotlinc` are all absent). The Swift foundation
-file in `../ios/` was actually run through `swiftc -typecheck` and
-verified — this Kotlin file could not be given the same treatment.
-Treat it as a plausible design sketch, not verified code, until someone
-with a real Android toolchain compiles it.
+- `./gradlew :purplecallio:testDebugUnitTest` passes **41 JVM tests in 8
+  classes**: authentication (ack, rejection, timeout, `auth-error`), caller
+  and receiver ordering, candidate queueing, toggle semantics, billing-safe
+  join with mic/camera off, remote media filtering, reconnect/re-join,
+  caller-only ICE restart, the 15 s watchdog, every ending path including
+  server-side `call.ended`/`call.expired`, refused `join-call`, resource
+  balance across join → leave → join → leave, and log redaction. A mutation
+  check (removing the `call.expired` handler) makes the suite fail.
+- **Real-server integration** (`RealServerIntegrationTest`, gated on
+  `PURPLECALLIO_E2E_BASE_URL`/`PURPLECALLIO_E2E_API_KEY`): two meetings using
+  the SDK's real io.socket signaling and OkHttp REST clients (WebRTC faked)
+  complete a call through the local PurpleCallio server: auth, incoming
+  call, REST accept, offer/answer/ICE relayed by the server, media-state
+  relay, hang-up delivered as `remoteEnded`, balanced cleanup. An invalid
+  token is rejected by the real server.
+- That test found a real race, now fixed: the receiver's answer could be
+  sent before its `join-call`, and the hardened gateway silently drops
+  signaling from sockets not in the room. Outbound offer/answer/candidates
+  are now held until the `join-call` **ack**, including `call.started`
+  (the gateway joins the room only after a database re-check; the real-server
+  test failed without this and passes with it). `baseUrl` is required (no
+  default host); Socket.IO connects to the host without `/api`.
+- `:purplecallio:assembleRelease`, `:sample:assembleDebug` and
+  `:purplecallio:publishToMavenLocal` succeed (AAR, sources jar, POM, Gradle
+  module metadata). `lintRelease`: 0 errors, 19 warnings (mostly newer
+  dependency versions available).
+- A clean consumer project resolves
+  `com.purplecallio:purplecallio-android:0.1.0` from `mavenLocal()`, with
+  transitive `stream-webrtc-android` and `socket.io-client`, and assembles.
 
-## What does NOT exist (the actual SDK)
+## Not yet validated
 
-- No WebRTC dependency resolved or wired (`PeerConnection` usage).
-- No signaling client implementing the event contract from
-  `packages/sdk/src/signaling/events.ts` / `transport/socket.ts`.
-- No runtime permission request flow, no `AudioManager` routing, no
-  `ProcessLifecycleOwner` background/foreground handling, no telephony
-  interruption handling.
-- No Gradle wrapper, no full Android project, no example app, nothing
-  built or run on an emulator or device.
+- Nothing that needs a device or emulator: camera capture and switching,
+  microphone, audio focus/routing, `SurfaceViewRenderer` rendering, runtime
+  permission prompts, app lifecycle, MediaProjection screen sharing, and
+  real WebRTC media. The `org.webrtc` engine (`WebRtcEngine.kt`) compiles
+  but has not run.
+- No instrumentation tests have run (no emulator/device here).
+- Not published to Maven Central (needs Sonatype credentials and signing).
+- Do not publish or mark production-ready until physical-device calls
+  (Android ↔ web, Android ↔ iOS) pass.
 
-## Recommended next step
+## Host app requirements
 
-An Android engineer with a real toolchain (Android Studio, JDK, Gradle,
-an emulator or device) should: verify this file actually compiles, add
-the WebRTC dependency, implement the signaling client against the event
-contract referenced above, wire runtime permissions and audio routing,
-build a minimal example app, and test on an emulator/device before this
-is published or advertised anywhere.
+Request `RECORD_AUDIO` and `CAMERA` at runtime before joining/accepting. Merge
+the SDK manifest, which declares network/media permissions and the internal
+MediaProjection foreground service. Screen share additionally requires a
+fresh `MediaProjectionManager.createScreenCaptureIntent()` consent result for
+each capture. Never embed a project API key in the app; pass only that
+participant's token.
+
+See [README.md](README.md) for dependency setup and Kotlin usage.

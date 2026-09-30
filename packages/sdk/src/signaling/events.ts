@@ -1,4 +1,4 @@
-import type { ParticipantMedia, ParticipantRole } from '../types';
+import type { Participant, ParticipantMedia, ParticipantRole } from '../types';
 
 /**
  * Map of signaling event name → payload type.
@@ -17,6 +17,7 @@ export interface SignalingEventMap {
     participantId: string;
     media?: ParticipantMedia;
   };
+  'call.state': { callId: string; participants: Participant[] };
 
   'camera.enabled': { callId: string; participantId: string };
   'camera.disabled': { callId: string; participantId: string };
@@ -27,6 +28,8 @@ export interface SignalingEventMap {
 
 'call.started': { callId: string };
   'call.ended': { callId: string };
+  'call.expired': { callId: string };
+  'connection.diagnostic': { code: 'TURN_CREDENTIALS_FAILED' | 'AUDIO_AUTOPLAY_BLOCKED' | 'AUDIO_OUTPUT_SWITCH_FAILED' | 'ICE_FAILED' };
 
   // Local media stream events (emitted by the engine, not the server).
   'remote.stream': MediaStream;
@@ -62,6 +65,7 @@ export class SignalingEvents {
     'participant.joined': new Set(),
     'participant.left': new Set(),
     'participant.updated': new Set(),
+    'call.state': new Set(),
     'camera.enabled': new Set(),
     'camera.disabled': new Set(),
     'microphone.enabled': new Set(),
@@ -70,6 +74,8 @@ export class SignalingEvents {
     'screenShare.stopped': new Set(),
 'call.started': new Set(),
     'call.ended': new Set(),
+    'call.expired': new Set(),
+    'connection.diagnostic': new Set(),
     'remote.stream': new Set(),
     'remote.stream.ended': new Set(),
     'join-call': new Set(),

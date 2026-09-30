@@ -1,4 +1,5 @@
 import LegalLayout, { LegalSection, LegalBullets } from "../components/LegalLayout";
+import { PURPLECALLIO_URL } from "../lib/brand";
 import { pageMetadata } from "../lib/seo";
 
 export const metadata = pageMetadata({ title: "Privacy Policy", description: "How PurpleCallio collects, uses, stores, and protects personal information for its website and services.", path: "/privacy" });
@@ -207,7 +208,7 @@ export default function PrivacyPage() {
         <LegalBullets items={[
           "PurpleCallio",
           "Privacy Email: purplecallio@gmail.com",
-          "Website: https://purplecallio.com",
+          `Website: ${PURPLECALLIO_URL}`,
         ]} />
       </LegalSection>
     </LegalLayout>

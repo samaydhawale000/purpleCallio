@@ -8,6 +8,7 @@ import { SocketModule } from '../socket/socket.module';
 import { TurnModule } from '../turn/turn.module';
 import { BillingModule } from '../billing/billing.module';
 import { OciMonitoringModule } from '../oci/oci-monitoring.module';
+import { CallModule } from '../call/call.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { OciMonitoringModule } from '../oci/oci-monitoring.module';
     TurnModule,
     BillingModule,
     OciMonitoringModule,
+    CallModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminGuard],

@@ -10,7 +10,7 @@ vi.mock('@purplecallio/sdk', async () => {
 });
 
 // Imported after the mock is registered so the provider picks up FakeMeeting.
-import { MeetingProvider, useMeeting } from '../src/index';
+import { MeetingProvider, MeetingRoom, useMeeting } from '../src/index';
 
 const baseProps = {
   token: 'participant-token',
@@ -55,6 +55,21 @@ beforeEach(() => {
 });
 
 describe('MeetingProvider toggle behavior', () => {
+  it('shows the waiting room after the room join reaches joined state', () => {
+    render(
+      <MeetingProvider {...baseProps}>
+        <MeetingRoom waitingRoomTimeoutMs={60_000}>
+          <TestConsumer />
+        </MeetingRoom>
+      </MeetingProvider>,
+    );
+    const engine = FakeMeeting.instances[FakeMeeting.instances.length - 1];
+
+    act(() => engine.setConnectionState('joined'));
+
+    expect(screen.getByText('Waiting for the other participant…')).toBeTruthy();
+  });
+
   it('toggleCamera() delegates to the engine\'s camera.toggle(), not enable()/disable()', () => {
     const engine = renderProvider();
 

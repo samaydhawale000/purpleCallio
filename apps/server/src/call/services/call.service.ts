@@ -2,13 +2,14 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  GoneException,
   Injectable,
   Logger,
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
 
-import { CallStatus, CallType } from '@prisma/client';
+import { CallSource, CallStatus, CallType } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { CallSessionService } from '../../call-session/services/call-session.service';
@@ -56,6 +57,23 @@ export class CallService implements OnModuleInit {
     setInterval(() => {
       this.missExpiredCalls();
     }, 10_000).unref();
+    this.expirePlaygroundCalls().catch((err) =>
+      this.logger.error('Playground expiry sweep failed', err),
+    );
+    setInterval(() => {
+      this.expirePlaygroundCalls().catch((err) =>
+        this.logger.error('Playground expiry sweep failed', err),
+      );
+    }, 1_000).unref();
+    setInterval(() => {
+      this.prisma.playgroundAttempt
+        .deleteMany({
+          where: { createdAt: { lt: new Date(Date.now() - 86_400_000) } },
+        })
+        .catch((err) =>
+          this.logger.error('Playground attempt cleanup failed', err),
+        );
+    }, 3_600_000).unref();
   }
 
   async createCall(
@@ -72,6 +90,10 @@ export class CallService implements OnModuleInit {
     options?: {
       skipWebhook?: boolean;
       skipUsageCheck?: boolean;
+      source?: CallSource;
+      expiresAt?: Date;
+      maxParticipants?: number;
+      creatorIdentity?: string;
     },
   ) {
     // 1. Duplicate protection: this exact (caller, receiver) pair already has
@@ -156,6 +178,10 @@ export class CallService implements OnModuleInit {
         receiverId: data.receiverId,
         type: data.type,
         status: CallStatus.RINGING,
+        source: options?.source ?? CallSource.CUSTOMER,
+        expiresAt: options?.expiresAt,
+        maxParticipants: options?.maxParticipants,
+        creatorIdentity: options?.creatorIdentity,
         callerName: data.callerName,
         callerAvatar: data.callerAvatar,
         receiverName: data.receiverName,
@@ -282,6 +308,8 @@ export class CallService implements OnModuleInit {
       callId,
     });
     this.webhookService.fireForCall(callId, 'call.missed');
+    if (call.source === CallSource.PLAYGROUND)
+      await this.finishPlaygroundSockets(callId);
 
     return updated;
   }
@@ -293,6 +321,7 @@ export class CallService implements OnModuleInit {
 
     const call = await this.prisma.call.findUnique({ where: { id: callId } });
     if (!call) throw new NotFoundException('Call not found');
+    this.assertPlaygroundActive(call);
 
     // Guard against accepting a call that has already reached a terminal state.
     if (
@@ -332,6 +361,7 @@ export class CallService implements OnModuleInit {
 
     const call = await this.prisma.call.findUnique({ where: { id: callId } });
     if (!call) throw new NotFoundException('Call not found');
+    this.assertPlaygroundActive(call);
     if (
       call.status !== CallStatus.RINGING &&
       call.status !== CallStatus.INITIATED
@@ -354,6 +384,8 @@ export class CallService implements OnModuleInit {
       callId,
     });
     this.webhookService.fireForCall(callId, 'call.rejected');
+    if (call.source === CallSource.PLAYGROUND)
+      await this.finishPlaygroundSockets(callId);
 
     return updated;
   }
@@ -366,6 +398,7 @@ export class CallService implements OnModuleInit {
 
     const call = await this.prisma.call.findUnique({ where: { id: callId } });
     if (!call) throw new NotFoundException('Call not found');
+    this.assertPlaygroundActive(call);
     if (
       call.status !== CallStatus.RINGING &&
       call.status !== CallStatus.INITIATED
@@ -388,8 +421,38 @@ export class CallService implements OnModuleInit {
       callId,
     });
     this.webhookService.fireForCall(callId, 'call.cancelled');
+    if (call.source === CallSource.PLAYGROUND)
+      await this.finishPlaygroundSockets(callId);
 
     return updated;
+  }
+
+  private async finishPlaygroundSockets(callId: string) {
+    await this.callSessionService.deleteByCallId(callId);
+    this.callGateway.terminateCall(callId, 'call.ended');
+  }
+
+  private assertPlaygroundActive(call: {
+    source: CallSource;
+    expiresAt: Date | null;
+    status: CallStatus;
+  }) {
+    if (
+      call.source === CallSource.PLAYGROUND &&
+      (!call.expiresAt ||
+        call.expiresAt.getTime() <= Date.now() ||
+        call.status === CallStatus.ENDED ||
+        call.status === CallStatus.MISSED ||
+        call.status === CallStatus.REJECTED ||
+        call.status === CallStatus.CANCELLED ||
+        call.status === CallStatus.BUSY)
+    ) {
+      throw new GoneException({
+        code: 'PLAYGROUND_CALL_EXPIRED',
+        message:
+          'This demo call has ended. Playground calls are limited to 1 minute.',
+      });
+    }
   }
 
   async endCall(callId: string) {
@@ -398,6 +461,20 @@ export class CallService implements OnModuleInit {
       include: { project: true },
     });
     if (!call) throw new NotFoundException('Call not found');
+
+    if (call.source === CallSource.PLAYGROUND) {
+      const endedAt = new Date();
+      await this.prisma.call.updateMany({
+        where: { id: callId, status: { not: CallStatus.ENDED } },
+        data: { status: CallStatus.ENDED, endedAt },
+      });
+      await this.prisma.callEvent.create({
+        data: { callId, event: 'CALL_ENDED' },
+      });
+      await this.callSessionService.deleteByCallId(callId);
+      this.callGateway.terminateCall(callId, 'call.ended');
+      return this.prisma.call.findUniqueOrThrow({ where: { id: callId } });
+    }
 
     const endedAt = new Date();
 
@@ -417,6 +494,12 @@ export class CallService implements OnModuleInit {
     const updated = await this.prisma.call.findUniqueOrThrow({
       where: { id: callId },
     });
+
+    // Ending the billable call must also terminate its signaling sessions.
+    // Otherwise a participant can end through the REST API and keep an
+    // already-negotiated peer-to-peer media session running after rating has
+    // stopped.
+    this.callGateway.terminateCall(callId, 'call.ended');
 
     await this.prisma.callEvent.create({
       data: { callId, event: 'CALL_ENDED', participantId: call.callerId },
@@ -502,8 +585,70 @@ export class CallService implements OnModuleInit {
 
     return updated;
   }
-  async getCall(callId: string) {
-    const call = await this.prisma.call.findUnique({ where: { id: callId } });
+
+  /** Periodic database-backed cleanup. Expiry checks also happen synchronously
+   * in session and socket authorization, so worker delay never extends access. */
+  async expirePlaygroundCalls() {
+    const now = new Date();
+    const playgroundDisabled =
+      (process.env.PLAYGROUND_ENABLED ?? 'true').toLowerCase() !== 'true';
+    const active = await this.prisma.call.findMany({
+      where: {
+        source: CallSource.PLAYGROUND,
+        status: {
+          in: [CallStatus.INITIATED, CallStatus.RINGING, CallStatus.ACCEPTED],
+        },
+        ...(playgroundDisabled
+          ? {}
+          : {
+              OR: [
+                { expiresAt: { lte: now } },
+                {
+                  createdAt: {
+                    lte: new Date(
+                      now.getTime() -
+                        Number(
+                          process.env.PLAYGROUND_IDLE_TIMEOUT_SECONDS ?? 30,
+                        ) *
+                          1000,
+                    ),
+                  },
+                  events: { none: { event: 'PARTICIPANT_JOINED' } },
+                },
+              ],
+            }),
+      },
+      select: { id: true },
+    });
+    for (const { id } of active) {
+      const result = await this.prisma.call.updateMany({
+        where: {
+          id,
+          source: CallSource.PLAYGROUND,
+          status: {
+            in: [CallStatus.INITIATED, CallStatus.RINGING, CallStatus.ACCEPTED],
+          },
+        },
+        data: { status: CallStatus.ENDED, endedAt: now },
+      });
+      if (result.count) {
+        const event = playgroundDisabled ? 'CALL_ENDED' : 'CALL_EXPIRED';
+        await this.prisma.callEvent.create({ data: { callId: id, event } });
+        await this.callSessionService.deleteByCallId(id);
+        this.callGateway.terminateCall(
+          id,
+          playgroundDisabled ? 'call.ended' : 'call.expired',
+        );
+        this.logger.log(
+          `Playground call ${playgroundDisabled ? 'ended by kill switch' : 'expired'}: ${id}`,
+        );
+      }
+    }
+  }
+  async getCall(callId: string, projectId?: string) {
+    const call = await this.prisma.call.findFirst({
+      where: { id: callId, ...(projectId ? { projectId } : {}) },
+    });
     if (!call) throw new NotFoundException('Call not found');
     return call;
   }

@@ -21,24 +21,19 @@ usermod -aG docker $USER
 echo "==> Installing Certbot..."
 apt-get install -y certbot
 
-echo "==> Getting SSL certs for $DOMAIN and api.$DOMAIN..."
-mkdir -p ssl
+# One host serves the web app, /api/, /socket.io/ and TURN (see DEPLOYMENT.md).
+# Nginx and Coturn both read /etc/letsencrypt/live/$DOMAIN/.
+echo "==> Getting the TLS certificate for $DOMAIN..."
 certbot certonly --standalone \
-  -d $DOMAIN -d www.$DOMAIN \
-  --non-interactive --agree-tos -m $EMAIL
-certbot certonly --standalone \
-  -d api.$DOMAIN \
+  -d $DOMAIN \
   --non-interactive --agree-tos -m $EMAIL
 
-echo "==> Symlinking certs..."
-mkdir -p ssl/$DOMAIN ssl/api.$DOMAIN
-ln -sf /etc/letsencrypt/live/$DOMAIN/fullchain.pem ssl/$DOMAIN/fullchain.pem
-ln -sf /etc/letsencrypt/live/$DOMAIN/privkey.pem  ssl/$DOMAIN/privkey.pem
-ln -sf /etc/letsencrypt/live/api.$DOMAIN/fullchain.pem ssl/api.$DOMAIN/fullchain.pem
-ln -sf /etc/letsencrypt/live/api.$DOMAIN/privkey.pem  ssl/api.$DOMAIN/privkey.pem
-
-echo "==> Updating nginx conf with your domain..."
-sed -i "s/yourdomain.com/$DOMAIN/g" nginx/conf.d/web.conf nginx/conf.d/api.conf
+# Nginx, the web build and TURN all derive from PUBLIC_HOST in .env.
+if [ ! -f .env ]; then
+  echo "==> Creating .env for $DOMAIN..."
+  sed "s/^PUBLIC_HOST=.*/PUBLIC_HOST=$DOMAIN/" .env.example > .env
+  chmod 600 .env
+fi
 
 echo "==> Opening firewall ports..."
 ufw allow 80/tcp
@@ -52,6 +47,7 @@ ufw --force enable
 
 echo ""
 echo "==> Done. Next steps:"
-echo "   1. Copy .env.example → .env and fill in all values"
-echo "   2. cd infra && docker compose up -d --build"
+echo "   1. Fill in the <placeholder> values in .env (PUBLIC_HOST=$DOMAIN is set)"
+echo "   2. node scripts/check-env.mjs .env"
+echo "   3. docker compose up -d --build"
 echo ""

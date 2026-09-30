@@ -5,6 +5,7 @@ import { useState } from "react";
 import { api } from "../../lib/api";
 import { useEffect } from "react";
 import { formatPaise, type BillingRates } from "../../lib/pricing";
+import { PURPLECALLIO_API_URL } from '../../lib/brand';
 
 const paths = [
    {
@@ -47,7 +48,7 @@ const paths = [
       builds: "Your authorization rules and application-specific call flow.",
       handles: "Call creation and the participant session information returned by the API.",
       install: "No SDK required.",
-      code: `const response = await fetch("https://api.purplecallio.com/calls", {\n  method: "POST",\n  headers: {\n    "Content-Type": "application/json",\n    "x-api-key": process.env.PURPLECALLIO_API_KEY!,\n  },\n  body: JSON.stringify({ callerId, receiverId, type: "VIDEO" }),\n});`,
+      code: `const response = await fetch("${PURPLECALLIO_API_URL}/calls", {\n  method: "POST",\n  headers: {\n    "Content-Type": "application/json",\n    "x-api-key": process.env.PURPLECALLIO_API_KEY!,\n  },\n  body: JSON.stringify({ callerId, receiverId, type: "VIDEO" }),\n});`,
       href: "/docs/rest-api",
    },
 ] as const;

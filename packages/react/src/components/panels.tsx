@@ -44,7 +44,7 @@ export function DeviceSelector({ showLabel = true, className }: DeviceSelectorPr
               <select
                 style={selectStyle}
                 value={devices.selected.audioInput}
-                onChange={(e) => devices.setAudioInput(e.target.value)}
+                onChange={(e) => void devices.setAudioInput(e.target.value).catch(() => undefined)}
               >
                 {devices.audioInputs.map((d) => (
                   <option key={d.deviceId} value={d.deviceId}>
@@ -61,7 +61,7 @@ export function DeviceSelector({ showLabel = true, className }: DeviceSelectorPr
               <select
                 style={selectStyle}
                 value={devices.selected.audioOutput}
-                onChange={(e) => devices.setAudioOutput(e.target.value)}
+                onChange={(e) => void devices.setAudioOutput(e.target.value).catch(() => undefined)}
               >
                 {devices.audioOutputs.map((d) => (
                   <option key={d.deviceId} value={d.deviceId}>
@@ -78,7 +78,7 @@ export function DeviceSelector({ showLabel = true, className }: DeviceSelectorPr
               <select
                 style={selectStyle}
                 value={devices.selected.videoInput}
-                onChange={(e) => devices.setVideoInput(e.target.value)}
+                onChange={(e) => void devices.setVideoInput(e.target.value).catch(() => undefined)}
               >
                 {devices.videoInputs.map((d) => (
                   <option key={d.deviceId} value={d.deviceId}>
@@ -88,6 +88,7 @@ export function DeviceSelector({ showLabel = true, className }: DeviceSelectorPr
               </select>
             </label>
           )}
+          {devices.error && <p role="alert" style={{ color: '#FCA5A5', fontSize: 12, margin: 0 }}>{devices.error === 'AUDIO_OUTPUT_SWITCH_UNSUPPORTED' ? 'Speaker selection is not supported by this browser.' : 'Could not switch device. Your current device is still active.'}</p>}
         </>
       )}
     </div>
@@ -291,4 +292,3 @@ export function LocalVideoPreview({ className }: LocalVideoPreviewProps) {
     </div>
   );
 }
-

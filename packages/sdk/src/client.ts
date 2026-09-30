@@ -13,12 +13,20 @@ import type {
  */
 export class PurpleCallioClient {
   private readonly apiKey: string;
-  private readonly baseUrl: string;
+  private readonly apiUrl: string;
 
   constructor(config: PurpleCallioConfig) {
     if (!config.apiKey) throw new Error('PurpleCallio: apiKey is required');
     this.apiKey = config.apiKey;
-    this.baseUrl = config.baseUrl ?? 'https://api.purplecallio.com';
+    // No default: there is no fixed public API host yet, and a default that
+    // does not resolve fails in a confusing way deep inside fetch().
+    const apiUrl = config.apiUrl ?? config.baseUrl;
+    if (!apiUrl) {
+      throw new Error(
+        'PurpleCallio: apiUrl is required (your PurpleCallio REST API base, e.g. https://<your-purplecallio-host>/api)',
+      );
+    }
+    this.apiUrl = apiUrl.replace(/\/$/, '');
   }
 
   private async request<T>(
@@ -27,7 +35,7 @@ export class PurpleCallioClient {
     body?: unknown,
     headers?: Record<string, string>,
   ): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
+    const res = await fetch(`${this.apiUrl}${path}`, {
       method,
       headers: {
         'Content-Type': 'application/json',
@@ -126,4 +134,3 @@ export class PurpleCallioClient {
     return this.request<Call[]>('GET', '/calls');
   }
 }
-

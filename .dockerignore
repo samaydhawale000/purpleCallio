@@ -1,0 +1,27 @@
+# Build context for infra/docker-compose.yml is the repository root.
+# Keep secrets and local state out of every image layer.
+
+# Environment files (real secrets). Examples are safe to include.
+**/.env
+**/.env.*
+!**/.env.example
+
+# VCS, editor and OS noise
+.git
+.gitignore
+**/.DS_Store
+.vscode
+.idea
+
+# Dependencies and build output are recreated inside the image
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/*.tsbuildinfo
+*.tgz
+
+# Not part of the server or web images
+mobile
+infra
+**/purplecallio-sdk-test

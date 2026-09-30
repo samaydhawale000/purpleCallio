@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { useMeetingContext } from '../context';
 
@@ -11,6 +11,7 @@ export interface MeetingRoomProps {
   /** Render a "waiting" state until the remote joins. */
   showWaitingRoom?: boolean;
   waitingRoomLabel?: string;
+  waitingRoomTimeoutMs?: number;
 }
 
 export function MeetingRoom({
@@ -18,14 +19,24 @@ export function MeetingRoom({
   className,
   showWaitingRoom = true,
   waitingRoomLabel = 'Waiting for the other participant…',
+  waitingRoomTimeoutMs = 30_000,
 }: MeetingRoomProps) {
-  const { connectionState, participants } = useMeetingContext();
+  const { connectionState, participants, participantId, leave, join } = useMeetingContext();
+  const [waitElapsed, setWaitElapsed] = useState(false);
 
   const others = participants.filter(
-    (p) => p.participantId !== useSelfId(),
+    (p) => p.participantId !== (participantId ?? ''),
   );
+  const isInCall = connectionState === 'joined' || connectionState === 'connected';
 
-  if (showWaitingRoom && connectionState === 'connected' && others.length === 0) {
+  useEffect(() => {
+    setWaitElapsed(false);
+    if (!isInCall || others.length > 0) return;
+    const timer = window.setTimeout(() => setWaitElapsed(true), waitingRoomTimeoutMs);
+    return () => window.clearTimeout(timer);
+  }, [isInCall, others.length, waitingRoomTimeoutMs]);
+
+  if (showWaitingRoom && isInCall && others.length === 0 && !waitElapsed) {
     return (
       <div
         className="bj-room bj-room-waiting"
@@ -49,14 +60,16 @@ export function MeetingRoom({
       className={`bj-room${className ? ` ${className}` : ''}`}
       style={{ width: '100%', minHeight: 320, background: '#0D1425', borderRadius: 12 }}
     >
+      {waitElapsed && others.length === 0 && showWaitingRoom && (
+        <div role="status" style={{ color: '#94A3B8', fontSize: 14, padding: 12 }}>
+          <p>{waitingRoomLabel} Check the invite or connection.</p>
+          <button type="button" onClick={() => { void leave().then(join); }}>Retry connection</button>
+          <button type="button" onClick={() => { void leave(); }}>Leave call</button>
+        </div>
+      )}
       {children}
     </div>
   );
-}
-
-function useSelfId(): string {
-  const { participantId } = useMeetingContext();
-  return participantId ?? '';
 }
 
 // ── ParticipantTile ───────────────────────────────────────
@@ -83,13 +96,19 @@ export function ParticipantTile({
   style,
 }: ParticipantTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const { engine } = useMeetingContext();
+  const [audioBlocked, setAudioBlocked] = useState(false);
   const hasVideo = stream?.getVideoTracks().some((t) => t.enabled) ?? false;
 
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-    }
-  }, [stream]);
+    const element = videoRef.current ?? audioRef.current;
+    if (!element || !stream) return;
+    element.srcObject = stream;
+    const unregister = engine?.registerAudioElement(element);
+    void element.play().then(() => setAudioBlocked(false)).catch(() => setAudioBlocked(true));
+    return () => unregister?.();
+  }, [engine, stream]);
 
   return (
     <div
@@ -103,7 +122,7 @@ export function ParticipantTile({
         ...style,
       }}
     >
-      {hasVideo ? (
+      {stream && hasVideo ? (
         <video
           ref={videoRef}
           autoPlay
@@ -112,6 +131,7 @@ export function ParticipantTile({
           style={{
             width: '100%',
             height: '100%',
+            display: hasVideo ? 'block' : 'none',
             objectFit: 'cover',
             transform: mirror ? 'scaleX(-1)' : undefined,
           }}
@@ -130,6 +150,12 @@ export function ParticipantTile({
           <Avatar id={participantId} />
         </div>
       )}
+
+      {stream && !hasVideo && stream.getAudioTracks().length > 0 && (
+        <audio ref={audioRef} autoPlay muted={muted} />
+      )}
+
+      {audioBlocked && !muted && <button type="button" onClick={() => { const element = videoRef.current ?? audioRef.current; if (element) void element.play().then(() => setAudioBlocked(false)).catch(() => setAudioBlocked(true)); }} style={{ position: 'absolute', inset: 'auto 8px 8px', zIndex: 2 }}>Click to enable audio</button>}
 
       {name && (
         <span
@@ -285,4 +311,3 @@ export function ActiveSpeakerView({
     </div>
   );
 }
-

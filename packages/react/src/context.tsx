@@ -18,6 +18,7 @@ export interface MeetingProviderProps {
   token: string;
   callId: string;
   signalUrl: string;
+  apiUrl?: string;
   video?: boolean;
   audio?: boolean;
   /** Custom ICE servers passed through to the engine. */
@@ -68,6 +69,7 @@ export function MeetingProvider({
   token,
   callId,
   signalUrl,
+  apiUrl,
   video = true,
   audio = true,
   iceServers,
@@ -94,6 +96,7 @@ engineRef.current = new PurpleCallioMeeting({
       token,
       callId,
       signalUrl,
+      apiUrl,
       video,
       audio,
       iceServers,
@@ -107,14 +110,13 @@ engineRef.current = new PurpleCallioMeeting({
 
     const offs: Array<() => void> = [];
 
+    offs.push(engine.onConnectionStateChanged((state) => setConnectionState(state as ConnectionState)));
+
     offs.push(
       engine.on('connected', (p) => {
-        setConnectionState('connected');
         setParticipantId(p.participantId);
       }),
     );
-    offs.push(engine.on('reconnected', () => setConnectionState('connected')));
-    offs.push(engine.on('disconnected', () => setConnectionState('disconnected')));
     offs.push(
       engine.on('remote.stream', (stream) => setRemoteStream(stream)),
     );
@@ -122,20 +124,14 @@ engineRef.current = new PurpleCallioMeeting({
       engine.on('remote.stream.ended', () => setRemoteStream(null)),
     );
     offs.push(
-      engine.on('participant.joined', () =>
-        setParticipants(engine.participants()),
-      ),
+      engine.onParticipantsChanged(setParticipants),
     );
-    offs.push(
-      engine.on('participant.left', () =>
-        setParticipants(engine.participants()),
-      ),
-    );
-    offs.push(
-      engine.on('participant.updated', () =>
-        setParticipants(engine.participants()),
-      ),
-    );
+    offs.push(engine.onMeetingStateChanged?.((state) => {
+      setLocalStream(state.localStream);
+      setRemoteStream(state.remoteStream);
+      setParticipantId(state.participantId || null);
+      setMedia(state.media);
+    }) ?? (() => {}));
     offs.push(engine.on('camera.enabled', () => setMedia((m) => ({ ...m, camera: true }))));
     offs.push(engine.on('camera.disabled', () => setMedia((m) => ({ ...m, camera: false }))));
     offs.push(engine.on('microphone.enabled', () => setMedia((m) => ({ ...m, microphone: true }))));
@@ -148,15 +144,17 @@ engineRef.current = new PurpleCallioMeeting({
     };
   }, [engine]);
 
-  // Sync localStream from engine when it becomes available.
+  // Defer final cleanup so StrictMode's development-only setup/cleanup replay
+  // does not tear down an engine that is immediately mounted again.
+  const lifecycleRef = useRef(0);
   useEffect(() => {
-    if (!engine) return;
-    const t = setInterval(() => {
-      const stream = engine.localStreamRef;
-      if (stream && stream !== localStream) setLocalStream(stream);
-    }, 250);
-    return () => clearInterval(t);
-  }, [engine, localStream]);
+    const generation = ++lifecycleRef.current;
+    return () => {
+      queueMicrotask(() => {
+        if (lifecycleRef.current === generation) void engine.leave();
+      });
+    };
+  }, [engine]);
 
   const join = useCallback(async () => {
     if (!engine) return;
@@ -168,6 +166,10 @@ engineRef.current = new PurpleCallioMeeting({
     await engine.leave();
     setConnectionState('disconnected');
     setRemoteStream(null);
+    setLocalStream(null);
+    setParticipantId(null);
+    setParticipants([]);
+    setMedia({ camera: false, microphone: false, screenShare: false });
   }, [engine]);
 
   const toggleCamera = useCallback(() => {
@@ -240,4 +242,3 @@ engineRef.current = new PurpleCallioMeeting({
     <MeetingContext.Provider value={value}>{children}</MeetingContext.Provider>
   );
 }
-
