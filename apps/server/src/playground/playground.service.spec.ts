@@ -1,7 +1,4 @@
-import {
-  ConflictException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import { PlaygroundService } from './playground.service';
 
 describe('PlaygroundService capacity and abuse controls', () => {
@@ -55,6 +52,24 @@ describe('PlaygroundService capacity and abuse controls', () => {
     expect(result.callerToken).not.toBe(result.receiverToken);
     expect(tx.callSession.create.mock.calls[0][0].data.expiresAt).toEqual(
       call.expiresAt,
+    );
+  });
+
+  it('selects a deserializable column from every advisory lock query', async () => {
+    // pg_advisory_xact_lock() returns void, which Prisma's $queryRaw cannot
+    // deserialize (P2010 on a real database; mocks hide it).
+    const { service, tx } = build();
+    await service.createDemoCall({ userId: 'user-1' }, 'VIDEO', '127.0.0.1');
+    const sql = tx.$queryRaw.mock.calls.map((call: any[]) =>
+      (call[0] as string[]).join('?'),
+    );
+    for (const query of sql.filter((q: string) =>
+      q.includes('pg_advisory_xact_lock'),
+    )) {
+      expect(query).toMatch(/^SELECT 1 AS locked FROM pg_advisory_xact_lock\(/);
+    }
+    expect(sql.some((q: string) => q.includes('pg_advisory_xact_lock'))).toBe(
+      true,
     );
   });
 

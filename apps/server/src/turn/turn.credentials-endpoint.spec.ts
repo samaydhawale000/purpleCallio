@@ -208,6 +208,11 @@ describe('GET /turn/credentials', () => {
         Math.floor(found.call.expiresAt!.getTime() / 1000),
       );
       expect(tx.playgroundAttempt.create).toHaveBeenCalledTimes(1);
+      // pg_advisory_xact_lock() returns void, which $queryRaw cannot
+      // deserialize: the lock must be selected FROM, returning a plain column.
+      expect((tx.$queryRaw.mock.calls[0][0] as string[]).join('?')).toMatch(
+        /^SELECT 1 AS locked FROM pg_advisory_xact_lock\(/,
+      );
     });
   });
 

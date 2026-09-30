@@ -33,7 +33,7 @@ export class TurnService {
     const windowStart = new Date(now.getTime() - 60_000);
     const allowed = Number(process.env.PLAYGROUND_TURN_CALLS_PER_MINUTE ?? 3);
     const count = await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`purplecallio:turn:${identityKey}:${ipKey}`}))`;
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${`purplecallio:turn:${identityKey}:${ipKey}`}))`;
       const current = await tx.playgroundAttempt.count({
         where: {
           identityKey,
