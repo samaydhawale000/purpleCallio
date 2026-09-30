@@ -32,7 +32,8 @@ class JoinScreen extends StatefulWidget {
 }
 
 class _JoinScreenState extends State<JoinScreen> {
-  final _apiUrl = TextEditingController(text: 'https://api.purplecallio.com');
+  // Your PurpleCallio REST API base, e.g. https://<host>/api.
+  final _apiUrl = TextEditingController();
   final _token = TextEditingController();
   final _backendUrl = TextEditingController();
   bool _mic = true;

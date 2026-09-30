@@ -142,6 +142,36 @@ class CallFlowTest {
         assertTrue("candidate after join-call: $names", joinCall < names.indexOf("ice-candidate"))
     }
 
+    /**
+     * The gateway's join-call re-checks the call in the database before adding
+     * the socket to the room, so an offer sent right after emitting join-call
+     * can still be dropped. Nothing that needs the room goes out before the ack.
+     */
+    @Test fun callerOfferWaitsForTheJoinCallAck() = runTest {
+        val h = Harness(this, options = PurpleCallioJoinOptions(microphoneEnabled = false))
+        h.join()
+        h.signaling.holdJoinAck = true
+        h.server("call-accepted", mapOf("callId" to "call-1"))
+        assertTrue(h.emits().contains("join-call"))
+        assertFalse("offer held until the ack: ${h.emits()}", h.emits().contains("offer"))
+        assertFalse("media correction held until the ack", h.emits().contains("microphone.disabled"))
+        h.signaling.releaseJoinAck()
+        runCurrent()
+        val names = h.emits()
+        assertTrue(names.indexOf("join-call") < names.indexOf("offer"))
+        assertTrue(names.contains("microphone.disabled"))
+    }
+
+    @Test fun joinCallWithoutAnAckProceedsAfterTheTimeout() = runTest {
+        val h = Harness(this)
+        h.join()
+        h.signaling.joinCallAck = null // an old server that never acks
+        h.server("call-accepted", mapOf("callId" to "call-1"))
+        assertFalse(h.emits().contains("offer"))
+        advanceTimeBy(10_100); runCurrent()
+        assertTrue(h.emits().contains("offer"))
+    }
+
     @Test fun rejectPostsRejectAndEndsRejected() = runTest {
         val h = Harness(this, role = PurpleCallioRole.RECEIVER)
         h.join()

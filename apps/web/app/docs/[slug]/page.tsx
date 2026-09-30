@@ -13,6 +13,7 @@ import {
    ReactMeetingPreview,
 } from "../../components/marketing/InteractiveTools";
 import { PricingAuthority } from "../../components/PricingAuthority";
+import { PURPLECALLIO_API_URL } from "../../lib/brand";
 
 const docs = {
    quickstart: {
@@ -587,7 +588,7 @@ client.dispose()`,
    },
    "rest-api": {
       title: "Create a call with the REST API",
-      code: `curl -X POST https://api.purplecallio.com/calls \\
+      code: `curl -X POST ${PURPLECALLIO_API_URL}/calls \\
   -H "x-api-key: $PURPLECALLIO_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"callerId":"user_alice","receiverId":"user_bob"}'`,

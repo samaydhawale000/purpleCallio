@@ -24,7 +24,7 @@
   Fixed while getting here: `dispose()` called `reconnection(false)`, but in
   socket_io_client 3.1.6 `reconnection` is a field, so reconnection was never
   turned off. It now sets `reconnection = false`.
-- `flutter test`: **84 passed, 3 skipped** (the skipped ones are the gated
+- `flutter test`: **87 passed, 3 skipped** (90 with the real-server tests enabled) (the skipped ones are the gated
   real-server tests). Coverage includes models, auth (ack/rejection/timeout,
   `auth-error`), caller/receiver ordering, candidate queueing, toggles,
   billing-safe muted join, remote media filtering, reconnect/re-join, ICE
@@ -36,6 +36,11 @@
   against the local server using the real socket_io_client + http (WebRTC
   faked): a full call, an invalid token, and caller cancel while ringing.
   The database shows the full server-side event lifecycle for those calls.
+- Room-scoped messages (offer/answer/ICE/`call.started`) wait for the
+  `join-call` ack. `baseUrl` is required (no default host) and Socket.IO
+  connects to the host without `/api`. socket_io_client throws an uncaught
+  `WebSocketConnectionClosed` after a server-initiated disconnect; the channel
+  now contains that one error.
 - Behaviour change to match the hardened gateway: a bare server-initiated
   disconnect is now terminal (`failed(connectionFailed)`). It used to
   trigger a manual reconnect, which would loop into the per-IP limit.

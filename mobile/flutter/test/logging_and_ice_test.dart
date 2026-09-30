@@ -117,4 +117,16 @@ void main() {
       expect(h.rtc.peer.iceServers.single.urls, ['turn:only']);
     });
   });
+
+  group('endpoints', () {
+    test('Socket.IO connects to the host without /api', () {
+      expect(PurpleCallioClient.signalingUrlFor(Uri.parse('https://calls.example.com/api')).toString(),
+          'https://calls.example.com');
+      expect(PurpleCallioClient.signalingUrlFor(Uri.parse('https://calls.example.com/api/')).toString(),
+          'https://calls.example.com');
+    });
+    test('a base without /api is used as-is', () {
+      expect(PurpleCallioClient.signalingUrlFor(Uri.parse('http://localhost:3005')).toString(), 'http://localhost:3005');
+    });
+  });
 }

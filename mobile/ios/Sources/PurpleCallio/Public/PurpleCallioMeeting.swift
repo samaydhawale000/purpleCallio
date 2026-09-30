@@ -445,7 +445,7 @@ public final class PurpleCallioMeeting: ObservableObject {
                 try await peer.setLocalDescription(offer)
                 guard !self.ending else { return }
                 self.emitSignal(WireEvent.offer, ["offer": offer.wirePayload])
-                if thenCallStarted { self.signaling.emit(WireEvent.callStarted, ["callId": self.callId]) }
+                if thenCallStarted { self.emitSignal(WireEvent.callStarted, ["callId": self.callId]) }
                 self.logger.info(iceRestart ? "ICE restart offer sent" : "Offer sent")
             } catch {
                 if iceRestart {
@@ -496,7 +496,7 @@ public final class PurpleCallioMeeting: ObservableObject {
         guard phase == .accepting, !ending else { throw PurpleCallioError.meetingEnded(disconnectReason ?? .left) }
         phase = .inCall
         emitJoinCall()
-        signaling.emit(WireEvent.callStarted, ["callId": callId])
+        emitSignal(WireEvent.callStarted, ["callId": callId])
         recomputeState()
         logger.info("Accepted; call.started")
     }
@@ -544,17 +544,35 @@ public final class PurpleCallioMeeting: ObservableObject {
     }
 
     /// `join-call`, then (only on this edge) the `*.disabled` events for media that is off.
+    /// Incremented per join-call so a late ack from an earlier socket is ignored.
+    private var joinAttempt = 0
+
     private func emitJoinCall() {
         // If the socket is down, afterReauthentication() emits join-call on reconnect.
         guard socketConnected else { return }
+        joinAttempt += 1
+        let attempt = joinAttempt
+        // The gateway adds the socket to the room only after re-checking the call
+        // in the database, and relays offer/answer/ICE/call.started and media
+        // events only from sockets in the room: hold them until the ack.
         signaling.emitWithAck(WireEvent.joinCall, ["callId": callId], timeout: timeouts.authAck) { [weak self] ack in
-            // The gateway acks `{ success: false, error }` when the join is refused
-            // (e.g. PLAYGROUND_PARTICIPANT_LIMIT). A missing ack is not treated as failure.
-            guard let self, case .response(let items) = ack,
-                  let body = items.first as? [String: Any], body["success"] as? Bool == false,
-                  self.phase != .ended, !self.ending else { return }
-            let reason = body["error"] as? String ?? "join-call refused"
-            self.fail(.signalingFailed(cause: PurpleCallioInternalError(reason)))
+            self?.onJoinCallAck(attempt, ack)
+        }
+    }
+
+    private func onJoinCallAck(_ attempt: Int, _ ack: SignalingAck) {
+        guard attempt == joinAttempt, !joinedRoom, phase != .ended, !ending, socketConnected else { return }
+        switch ack {
+        case .response(let items):
+            // Refused (e.g. PLAYGROUND_PARTICIPANT_LIMIT, CALL_ENDED): not in the room.
+            if let body = items.first as? [String: Any], body["success"] as? Bool == false {
+                let reason = body["error"] as? String ?? "join-call refused"
+                fail(.signalingFailed(cause: PurpleCallioInternalError(reason)))
+                return
+            }
+        case .timeout:
+            // A server that never acks must not stall the call.
+            logger.warning("No join-call ack; continuing")
         }
         joinedRoom = true
         flushPendingSignals()

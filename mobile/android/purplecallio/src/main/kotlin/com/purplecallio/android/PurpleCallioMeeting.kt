@@ -547,7 +547,7 @@ class PurpleCallioMeeting internal constructor(
                 ensureLive()
                 emitSignal("offer", mapOf("offer" to offer.toPayload()))
             }
-            signaling.emit("call.started", callIdPayload)
+            emitSignal("call.started", callIdPayload)
         } catch (e: CancellationException) {
             throw e
         } catch (e: PurpleCallioError) {
@@ -597,7 +597,7 @@ class PurpleCallioMeeting internal constructor(
                 postOrThrow(CallAction.JOIN)
                 ensureLive()
                 emitJoinCall()
-                signaling.emit("call.started", callIdPayload)
+                emitSignal("call.started", callIdPayload)
                 log.i { "Accepted call" }
             } catch (e: Throwable) {
                 if (e is PurpleCallioError.MeetingEnded || terminated) throw e
@@ -836,27 +836,49 @@ class PurpleCallioMeeting internal constructor(
 
     // ================================================================ room / media events
 
+    /** Incremented per join-call so a late ack from a previous socket is ignored. */
+    private var joinAttempt = 0
+    private var joinAckTimeout: Job? = null
+
     private fun emitJoinCall() {
+        joinedOnce = true
+        val attempt = ++joinAttempt
+        // The gateway adds the socket to the room only after re-checking the
+        // call in the database, and relays offer/answer/ICE and media events
+        // only from sockets in the room. So nothing that needs the room is sent
+        // until the ack arrives (PROTOCOL.md).
         signaling.emitWithAck("join-call", callIdPayload) { ack ->
-            // The gateway acks `{ success: false, error }` when the join is refused
-            // (e.g. PLAYGROUND_PARTICIPANT_LIMIT). A missing ack is not a failure.
-            val map = ack as? Map<*, *> ?: return@emitWithAck
-            if (map["success"] == false) {
-                val reason = map["error"] as? String ?: "join-call refused"
-                // We are not in the room: fail without hanging up (no POST end for the other side).
-                scope.launch {
-                    terminate(
-                        PurpleCallioConnectionState.FAILED, null,
-                        PurpleCallioError.SignalingFailed(IllegalStateException(reason)), Hangup.NONE,
-                    )
-                }
+            scope.launch { onJoinCallAck(attempt, ack) }
+        }
+        // A server that never acks must not stall the call.
+        joinAckTimeout?.cancel()
+        joinAckTimeout = scope.launch {
+            delay(timings.authTimeoutMs)
+            if (attempt == joinAttempt && !inRoom) {
+                log.w { "No join-call ack within ${timings.authTimeoutMs} ms; continuing" }
+                onJoinCallAck(attempt, null)
             }
         }
+    }
+
+    private suspend fun onJoinCallAck(attempt: Int, ack: Any?) {
+        if (attempt != joinAttempt || inRoom || ending || terminated) return
+        if (ack != null) joinAckTimeout?.cancel()
+        val map = ack as? Map<*, *>
+        if (map?.get("success") == false) {
+            // Refused (e.g. PLAYGROUND_PARTICIPANT_LIMIT, CALL_ENDED): we are not in
+            // the room, so fail without hanging up (no POST end for the other side).
+            val reason = map["error"] as? String ?: "join-call refused"
+            terminate(
+                PurpleCallioConnectionState.FAILED, null,
+                PurpleCallioError.SignalingFailed(IllegalStateException(reason)), Hangup.NONE,
+            )
+            return
+        }
         inRoom = true
-        joinedOnce = true
         flushPendingSignals()
         // The server's billing defaults at join are VIDEO → camera on, mic on.
-        // Only tell it where we differ, once, right after join-call.
+        // Only tell it where we differ, once, now that we are in the room.
         if (!_microphoneEnabled.value) emitMedia("microphone.disabled")
         if (callType == PurpleCallioCallType.VIDEO && !_cameraEnabled.value) emitMedia("camera.disabled")
         if (_screenSharing.value) emitMedia("screenShare.started")
@@ -1336,6 +1358,8 @@ class PurpleCallioMeeting internal constructor(
         pendingCandidates.clear()
         inRoom = false
         pendingSignals.clear()
+        joinAckTimeout?.cancel()
+        joinAckTimeout = null
         remotePresent = false
         remoteVideo = null
         _screenSharing.value = false

@@ -127,11 +127,14 @@ export interface ExchangeResult {
 
 export interface PurpleCallioConfig {
   apiKey: string;
-  /** PurpleCallio REST API base URL (include /api when required by your proxy). */
+  /**
+   * PurpleCallio REST API base URL, e.g. `https://<your-purplecallio-host>/api`.
+   * Required (or its `baseUrl` alias); there is no default host.
+   */
   apiUrl?: string;
   /** @deprecated Use apiUrl. Kept as a backwards-compatible REST base URL alias. */
   baseUrl?: string;
-  /** Hosted call UI base URL. Default: https://call.purplecallio.com */
+  /** Reserved; currently unused. Hosted call links come from the API (`hostedUrl`). */
   callBaseUrl?: string;
 }
 

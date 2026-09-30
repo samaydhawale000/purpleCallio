@@ -38,7 +38,14 @@ final class FakeSignaling: SignalingChannel {
     var eventsBeforeAck: [(String, SignalingPayload)] = []
     var autoConnect = true
     /// Ack body delivered for `join-call` (nil: the server never acks).
-    var joinCallAck: SignalingPayload?
+    var joinCallAck: SignalingPayload? = ["success": true, "participants": 2]
+    /// When true, join-call acks are held until `releaseJoinAck()`.
+    var holdJoinAck = false
+    private var heldJoinAck: (() -> Void)?
+    func releaseJoinAck() {
+        heldJoinAck?()
+        heldJoinAck = nil
+    }
 
     private(set) var handlers: [String: [(SignalingPayload) -> Void]] = [:]
     private var lifecycle: ((SignalingLifecycleEvent) -> Void)?
@@ -98,7 +105,8 @@ final class FakeSignaling: SignalingChannel {
         emits.append((event, payload))
         log.add("emit:\(event)")
         if event == WireEvent.joinCall, let body = joinCallAck {
-            DispatchQueue.main.async { MainActor.assumeIsolated { completion(.response([body])) } }
+            let deliver = { completion(.response([body])) }
+            if holdJoinAck { heldJoinAck = deliver } else { deliver() }
             return
         }
         guard event == WireEvent.authenticate else { return }

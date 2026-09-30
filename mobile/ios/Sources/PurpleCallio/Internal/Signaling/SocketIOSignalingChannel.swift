@@ -15,7 +15,7 @@ final class SocketIOSignalingChannel: SignalingChannel {
 
     init(baseURL: URL, logger: PurpleCallioLogger) {
         self.logger = logger
-        manager = SocketManager(socketURL: baseURL, config: [
+        manager = SocketManager(socketURL: PurpleCallioEndpoints.signalingURL(from: baseURL), config: [
             .log(false), // the library logs raw packets, which would include the token
             .forceWebsockets(true),
             // Use Apple's URLSessionWebSocketTask instead of Starscream's own HTTP

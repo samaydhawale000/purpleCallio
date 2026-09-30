@@ -49,7 +49,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        client = PurpleCallioClient(applicationContext)
+        client = PurpleCallioClient(applicationContext, baseUrl = BuildConfig.PURPLECALLIO_API_URL)
         buildUi()
     }
 

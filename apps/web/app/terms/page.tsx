@@ -1,4 +1,5 @@
 import LegalLayout, { LegalSection, LegalBullets } from "../components/LegalLayout";
+import { PURPLECALLIO_URL } from "../lib/brand";
 import { pageMetadata } from "../lib/seo";
 
 export const metadata = pageMetadata({ title: "Terms of Service", description: "Terms governing use of PurpleCallio's website, APIs, SDKs, hosted communication interfaces, and services.", path: "/terms" });
@@ -275,7 +276,7 @@ export default function TermsPage() {
         <LegalBullets items={[
           "PurpleCallio",
           "Email: purplecallio@gmail.com",
-          "Website: https://purplecallio.com",
+          `Website: ${PURPLECALLIO_URL}`,
         ]} />
       </LegalSection>
     </LegalLayout>

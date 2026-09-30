@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
+import { PURPLECALLIO_HOST } from '../lib/brand';
 import { PricingAuthority } from '../components/PricingAuthority';
 
 const FAQ_GROUPS = [
@@ -11,11 +12,11 @@ const FAQ_GROUPS = [
     items: [
       {
         q: 'How do I integrate video calling using PurpleCallio?',
-        a: 'Create a call from your backend with the REST API or @purplecallio/sdk, then join from the browser with @purplecallio/react components, the headless JavaScript SDK, or hosted UI. See the quickstart and video docs at purplecallio.com/docs/quickstart and purplecallio.com/docs/video.',
+        a: `Create a call from your backend with the REST API or @purplecallio/sdk, then join from the browser with @purplecallio/react components, the headless JavaScript SDK, or hosted UI. See the quickstart and video docs at ${PURPLECALLIO_HOST}/docs/quickstart and ${PURPLECALLIO_HOST}/docs/video.`,
       },
       {
         q: 'How do I integrate audio calling using PurpleCallio?',
-        a: 'Create a call from your backend with the REST API or @purplecallio/sdk, then join from the browser with @purplecallio/react, the headless SDK, or hosted UI. See purplecallio.com/docs/audio for a full walkthrough.',
+        a: `Create a call from your backend with the REST API or @purplecallio/sdk, then join from the browser with @purplecallio/react, the headless SDK, or hosted UI. See ${PURPLECALLIO_HOST}/docs/audio for a full walkthrough.`,
       },
       {
         q: 'Which integration should I pick?',

@@ -99,14 +99,24 @@ internal class FakeSignaling(private val rec: Recorder, private val counters: Re
         rec.add("emit:$event")
     }
 
-    /** Ack body for `join-call`; null = the server never acks it. */
-    var joinCallAck: Map<String, Any?>? = null
+    /** Ack body for `join-call` (the real gateway always acks); null = never acks. */
+    var joinCallAck: Map<String, Any?>? = mapOf("success" to true, "participants" to 2)
+
+    /** When true, join-call acks are held until [releaseJoinAck]. */
+    var holdJoinAck = false
+    private var heldJoinAck: (() -> Unit)? = null
+
+    fun releaseJoinAck() {
+        heldJoinAck?.invoke()
+        heldJoinAck = null
+    }
 
     override fun emitWithAck(event: String, payload: Payload, onAck: (Any?) -> Unit) {
         rec.add("emit:$event")
         emits += event to payload
         if (event == "join-call") {
-            joinCallAck?.let(onAck)
+            val ack = joinCallAck ?: return
+            if (holdJoinAck) heldJoinAck = { onAck(ack) } else onAck(ack)
             return
         }
         if (event == "authenticate") {

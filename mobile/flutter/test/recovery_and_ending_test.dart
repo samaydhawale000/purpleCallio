@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:purplecallio_flutter/purplecallio_flutter.dart';
@@ -158,6 +160,23 @@ void main() {
       expect(m.connectionState, PurpleCallioConnectionState.failed);
       expect(m.error, isA<SignalingFailedError>());
       expect(h.api.calls, isNot(contains('end')));
+    });
+
+    test('caller offer and call.started wait for the join-call ack', () async {
+      final h = Harness();
+      final m = await h.join();
+      h.signaling.joinAckGate = Completer<void>();
+      h.signaling.serverEmit('call-accepted', {'callId': kCallId});
+      await settle();
+      var names = h.signaling.emitted.map((e) => e.$1).toList();
+      expect(names, contains('join-call'));
+      expect(names, isNot(contains('offer')), reason: 'held until the ack');
+      expect(names, isNot(contains('call.started')), reason: 'held until the ack');
+      h.signaling.joinAckGate!.complete();
+      await settle();
+      names = h.signaling.emitted.map((e) => e.$1).toList();
+      expect(names.indexOf('offer'), lessThan(names.indexOf('call.started')));
+      await m.leave();
     });
 
     test('receiver holds answer and candidates until join-call', () async {

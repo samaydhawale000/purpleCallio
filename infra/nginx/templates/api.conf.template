@@ -1,7 +1,13 @@
+# Rendered at container start by the nginx image's envsubst step into
+# /etc/nginx/conf.d/api.conf. Only ${PUBLIC_HOST} is substituted
+# (NGINX_ENVSUBST_FILTER in docker-compose.yml); nginx's own $variables are
+# left alone. Set PUBLIC_HOST in infra/.env: the certificate must exist at
+# /etc/letsencrypt/live/${PUBLIC_HOST}/.
+
 # HTTP → HTTPS
 server {
     listen 80;
-    server_name purplecallio.serveminecraft.net;
+    server_name ${PUBLIC_HOST};
 
     return 301 https://$host$request_uri;
 }
@@ -10,10 +16,10 @@ server {
 # HTTPS
 server {
     listen 443 ssl;
-    server_name purplecallio.serveminecraft.net;
+    server_name ${PUBLIC_HOST};
 
-    ssl_certificate /etc/letsencrypt/live/purplecallio.serveminecraft.net/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/purplecallio.serveminecraft.net/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/${PUBLIC_HOST}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${PUBLIC_HOST}/privkey.pem;
 
     ssl_protocols TLSv1.2 TLSv1.3;
 

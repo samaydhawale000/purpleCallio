@@ -125,7 +125,9 @@ described under [Screen sharing](#screen-sharing).
 import 'package:purplecallio_flutter/purplecallio_flutter.dart';
 
 final client = PurpleCallioClient(
-  baseUrl: 'https://api.purplecallio.com', // the default
+  // Required: your PurpleCallio REST API base. Socket.IO connects to the
+  // same host without /api.
+  baseUrl: 'https://<your-purplecallio-host>/api',
 );
 
 // 1. Get a participant token from YOUR backend. Never embed an API key.
@@ -159,7 +161,7 @@ camera for video calls), so the OS permission prompt appears at that point.
 Your server creates the call and returns only a token to each device:
 
 ```http
-POST https://api.purplecallio.com/calls
+POST https://<your-purplecallio-host>/api/calls
 x-api-key: <YOUR PROJECT API KEY>        ← server-side only
 Content-Type: application/json
 
@@ -414,6 +416,7 @@ de-duplicated by URL, or use only yours:
 
 ```dart
 PurpleCallioClient(
+  baseUrl: 'https://<your-purplecallio-host>/api',
   iceServers: const [
     PurpleCallioIceServer(urls: ['turn:turn.example.com:3478'],
         username: 'u', credential: 'p'),
@@ -426,6 +429,7 @@ PurpleCallioClient(
 
 ```dart
 PurpleCallioClient(
+  baseUrl: 'https://<your-purplecallio-host>/api',
   logLevel: PurpleCallioLogLevel.debug, // default: none
   logSink: (level, message) => myLogger.log(level.name, message),
 );

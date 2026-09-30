@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { Atom, Blocks, BookOpen, Cable, CreditCard, Gauge, KeyRound, Lightbulb, Monitor, RotateCw, Server, Smartphone, UserRound, Webhook, Zap } from 'lucide-react';
 import { api } from '../lib/api';
+import { PURPLECALLIO_API_URL, PURPLECALLIO_SIGNAL_URL, PURPLECALLIO_URL } from '../lib/brand';
 
 // ── Sidebar nav ───────────────────────────────────────────────────────────────
 const NAV = [
@@ -208,7 +209,7 @@ const { callId, callerUrl, receiverUrl } = await bj.createCall({
   callerId: 'user_alice',
   receiverId: 'user_bob',
 });`,
-                        node: `const res = await fetch('https://api.purplecallio.com/calls', {
+                        node: `const res = await fetch('${PURPLECALLIO_API_URL}/calls', {
   method: 'POST',
   headers: {
     'x-api-key': process.env.PURPLECALLIO_API_KEY!,
@@ -222,14 +223,14 @@ import httpx
 
 async with httpx.AsyncClient() as client:
     r = await client.post(
-        'https://api.purplecallio.com/calls',
+        '${PURPLECALLIO_API_URL}/calls',
         headers={'x-api-key': os.environ['PURPLECALLIO_API_KEY']},
         json={'callerId': 'user_alice', 'receiverId': 'user_bob'},
     )
 data = r.json()
 caller_url  = data['callerUrl']
 receiver_url = data['receiverUrl']`,
-                        curl: `curl -X POST https://api.purplecallio.com/calls \\
+                        curl: `curl -X POST ${PURPLECALLIO_API_URL}/calls \\
   -H "x-api-key: $PURPLECALLIO_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"callerId":"user_alice","receiverId":"user_bob"}'`,
@@ -449,7 +450,8 @@ function Status() {
 const meeting = new PurpleCallioMeeting({
   token,            // bj_session_... for this participant
   callId,
-  signalUrl: 'wss://api.purplecallio.com',
+  signalUrl: '${PURPLECALLIO_SIGNAL_URL}',
+  apiUrl: '${PURPLECALLIO_API_URL}',
 });
 
 await meeting.join();
@@ -710,7 +712,7 @@ join();
           {/* ── REST API ─────────────────────────────── */}
           <Section id="api-create">
             <Heading>REST API</Heading>
-            <p className="text-[#3D3650] text-sm mb-5">Base URL: <code className="font-mono text-xs px-2 py-0.5 rounded" style={{ background: '#FFFFFF', color: '#6425C4' }}>https://api.purplecallio.com</code></p>
+            <p className="text-[#3D3650] text-sm mb-5">Base URL: <code className="font-mono text-xs px-2 py-0.5 rounded" style={{ background: '#FFFFFF', color: '#6425C4' }}>{PURPLECALLIO_API_URL}</code></p>
 
             {/* POST /calls */}
             <Endpoint method="POST" path="/calls" summary="Create a call">
@@ -741,7 +743,7 @@ join();
   callerId: 'user_alice',
   receiverId: 'user_bob',
 });`,
-                curl: `curl -X POST https://api.purplecallio.com/calls \\
+                curl: `curl -X POST ${PURPLECALLIO_API_URL}/calls \\
   -H "x-api-key: $PURPLECALLIO_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"callerId":"user_alice","receiverId":"user_bob"}'`,
@@ -750,18 +752,18 @@ join();
               <p className="text-xs font-semibold text-[#3D3650] mb-2 mt-4">Response — 201</p>
               <Code code={`{
   "callId": "clx8f2z...",
-  "hostedUrl": "https://purplecallio.com/call?callId=clx8f...&token=bj_session_...",
+  "hostedUrl": "${PURPLECALLIO_URL}/call?callId=clx8f...&token=bj_session_...",
   "participants": [
     {
       "participantId": "user_alice",
       "token": "bj_session_...",
-      "hostedUrl": "https://purplecallio.com/call?callId=clx8f...&token=bj_session_...",
+      "hostedUrl": "${PURPLECALLIO_URL}/call?callId=clx8f...&token=bj_session_...",
       "expiresAt": "2026-08-02T10:00:00.000Z"
     },
     {
       "participantId": "user_bob",
       "token": "bj_session_...",
-      "hostedUrl": "https://purplecallio.com/call?callId=clx8f...&token=bj_session_...",
+      "hostedUrl": "${PURPLECALLIO_URL}/call?callId=clx8f...&token=bj_session_...",
       "expiresAt": "2026-08-02T10:00:00.000Z"
     }
   ]
@@ -778,7 +780,7 @@ join();
 sdk: `// SDK: engine.join() does this for you
 const meeting = new PurpleCallioMeeting({ token, callId, signalUrl });
 await meeting.join();`,
-                curl: `curl -X POST https://api.purplecallio.com/calls/CALL_ID/join \\
+                curl: `curl -X POST ${PURPLECALLIO_API_URL}/calls/CALL_ID/join \\
   -H "Authorization: Bearer bj_session_..."`,
               }} />
               <Code code={`{ "callId": "clx8f2z...", "participantId": "user_bob", "joined": true }`} />
@@ -791,7 +793,7 @@ await meeting.join();`,
               </p>
               <LangTabs tabs={{
                 sdk: `await meeting.leave();`,
-                curl: `curl -X POST https://api.purplecallio.com/calls/CALL_ID/leave \\
+                curl: `curl -X POST ${PURPLECALLIO_API_URL}/calls/CALL_ID/leave \\
   -H "Authorization: Bearer bj_session_..."`,
               }} />
               <Code code={`{ "callId": "clx8f2z...", "participantId": "user_bob", "left": true }`} />
@@ -800,7 +802,7 @@ await meeting.join();`,
             {/* POST accept */}
             <Endpoint method="POST" path="/calls/:callId/accept" summary="Accept a call" id="api-accept">
               <p className="text-[#3D3650] text-sm mb-4 mt-3">Marks a call as accepted. The hosted UI does this automatically when the receiver taps Accept.</p>
-              <LangTabs tabs={{ sdk: `await bj.acceptCall('clx8f2z...');`, curl: `curl -X POST https://api.purplecallio.com/calls/CALL_ID/accept \\
+              <LangTabs tabs={{ sdk: `await bj.acceptCall('clx8f2z...');`, curl: `curl -X POST ${PURPLECALLIO_API_URL}/calls/CALL_ID/accept \\
   -H "Authorization: Bearer bj_session_"` }} />
               <Code code={`{ "callId": "clx8f2z...", "status": "ACCEPTED" }`} />
             </Endpoint>
@@ -808,7 +810,7 @@ await meeting.join();`,
             {/* POST reject */}
             <Endpoint method="POST" path="/calls/:callId/reject" summary="Reject a call" id="api-reject">
               <p className="text-[#3D3650] text-sm mb-4 mt-3">Receiver declines. The caller's UI is notified via WebSocket.</p>
-              <LangTabs tabs={{ sdk: `await bj.rejectCall('clx8f2z...');`, curl: `curl -X POST https://api.purplecallio.com/calls/CALL_ID/reject \\
+              <LangTabs tabs={{ sdk: `await bj.rejectCall('clx8f2z...');`, curl: `curl -X POST ${PURPLECALLIO_API_URL}/calls/CALL_ID/reject \\
   -H "Authorization: Bearer bj_session_"` }} />
               <Code code={`{ "callId": "clx8f2z...", "status": "REJECTED" }`} />
             </Endpoint>
@@ -816,7 +818,7 @@ await meeting.join();`,
             {/* POST end */}
             <Endpoint method="POST" path="/calls/:callId/end" summary="End a call" id="api-end">
               <p className="text-[#3D3650] text-sm mb-4 mt-3">Ends an active call. Both participants receive a WebSocket <code className="font-mono text-xs bg-black/30 px-1 rounded">call.ended</code> event.</p>
-              <LangTabs tabs={{ sdk: `await bj.endCall('clx8f2z...');`, curl: `curl -X POST https://api.purplecallio.com/calls/CALL_ID/end \\
+              <LangTabs tabs={{ sdk: `await bj.endCall('clx8f2z...');`, curl: `curl -X POST ${PURPLECALLIO_API_URL}/calls/CALL_ID/end \\
   -H "Authorization: Bearer bj_session_"` }} />
               <Code code={`{ "callId": "clx8f2z...", "status": "ENDED" }`} />
             </Endpoint>
@@ -824,7 +826,7 @@ await meeting.join();`,
             {/* GET call */}
             <Endpoint method="GET" path="/calls/:callId" summary="Get call status" id="api-get">
               <p className="text-[#3D3650] text-sm mb-4 mt-3">Returns the current state of a call.</p>
-              <LangTabs tabs={{ sdk: `const call = await bj.getCall('clx8f2z...');`, curl: `curl https://api.purplecallio.com/calls/CALL_ID \\
+              <LangTabs tabs={{ sdk: `const call = await bj.getCall('clx8f2z...');`, curl: `curl ${PURPLECALLIO_API_URL}/calls/CALL_ID \\
   -H "x-api-key: $PURPLECALLIO_API_KEY"` }} />
               <Code code={`{
   "callId": "clx8f2z...",
@@ -851,7 +853,7 @@ await meeting.join();`,
 
             <Code label="connect" code={`import { io } from 'socket.io-client';
 
-const socket = io('https://api.purplecallio.com', {
+const socket = io('${PURPLECALLIO_SIGNAL_URL}', {
   auth: { token: 'bj_session_...' },
   transports: ['websocket'],
 });
@@ -1016,7 +1018,7 @@ async def webhook(request: Request):
 
 const bj = new PurpleCallio({
   apiKey: process.env.PURPLECALLIO_API_KEY,
-  baseUrl: 'https://api.purplecallio.com',
+  apiUrl: '${PURPLECALLIO_API_URL}',
 });
 
 // 1. Create a call from your backend

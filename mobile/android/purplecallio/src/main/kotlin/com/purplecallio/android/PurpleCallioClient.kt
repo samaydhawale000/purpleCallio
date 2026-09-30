@@ -45,7 +45,8 @@ class PurpleCallioClient internal constructor(
 ) {
     /**
      * @param context any context; the application context is retained.
-     * @param baseUrl PurpleCallio API origin, used for REST and Socket.IO.
+     * @param baseUrl your PurpleCallio REST API base, e.g. `https://<host>/api`. Required: there is
+     *   no default host. Socket.IO connects to the same host without `/api`.
      * @param logLevel SDK log verbosity (default [PurpleCallioLogLevel.NONE]).
      * @param iceServers extra STUN/TURN servers, merged with `/turn/credentials` and de-duplicated by URL.
      * @param overrideIceServers use only [iceServers] and skip `/turn/credentials`.
@@ -54,7 +55,7 @@ class PurpleCallioClient internal constructor(
     @JvmOverloads
     constructor(
         context: Context,
-        baseUrl: String = DEFAULT_BASE_URL,
+        baseUrl: String,
         logLevel: PurpleCallioLogLevel = PurpleCallioLogLevel.NONE,
         iceServers: List<PurpleCallioIceServer> = emptyList(),
         overrideIceServers: Boolean = false,
@@ -119,8 +120,6 @@ class PurpleCallioClient internal constructor(
     }
 
     companion object {
-        const val DEFAULT_BASE_URL: String = "https://api.purplecallio.com"
-
         /** SDK version. */
         const val VERSION: String = BuildConfig.SDK_VERSION
 

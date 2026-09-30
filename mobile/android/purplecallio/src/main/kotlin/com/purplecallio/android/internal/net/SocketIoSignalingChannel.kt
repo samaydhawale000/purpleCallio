@@ -40,7 +40,7 @@ internal class SocketIoSignalingChannel(
             callFactory = Http.socketClient
             webSocketFactory = Http.socketClient
         }
-        IO.socket(URI.create(baseUrl), opts).also { s ->
+        IO.socket(URI.create(Endpoints.signalingUrl(baseUrl)), opts).also { s ->
             s.on(Socket.EVENT_CONNECT) { listener?.onConnect() }
             s.on(Socket.EVENT_DISCONNECT) { args ->
                 val reason = args.firstOrNull()?.toString() ?: "unknown"

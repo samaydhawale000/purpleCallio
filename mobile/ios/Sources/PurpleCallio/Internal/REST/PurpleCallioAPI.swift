@@ -114,7 +114,7 @@ final class URLSessionPurpleCallioAPI: PurpleCallioAPI {
     // MARK: - Transport
 
     private func makeRequest(_ method: String, _ path: String, body: [String: Any]?) throws -> URLRequest {
-        guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
+        guard let url = PurpleCallioEndpoints.apiURL(baseURL, path) else {
             throw PurpleCallioError.connectionFailed(cause: PurpleCallioInternalError("Invalid URL for \(path)"))
         }
         var request = URLRequest(url: url)

@@ -111,7 +111,7 @@ Send each participant **their own** `token` and the shared `callId` to their bro
 
 `MeetingProvider` (and the `PurpleCallioMeeting` engine it wraps) requires a `signalUrl`; it accepts an optional `apiUrl` for REST requests such as TURN credentials. These values are not currently included in `CreateCallResult`, so return them with the call session from your backend.
 
-Use the Socket.IO origin for `signalUrl` and the REST API base for `apiUrl`. With the current Nginx routing, the hosted deployment uses `signalUrl: 'https://purplecallio.serveminecraft.net'` and `apiUrl: 'https://purplecallio.serveminecraft.net/api'`. If `apiUrl` is omitted for compatibility, the SDK uses `signalUrl` as the REST base; provide it explicitly when REST is mounted under a prefix.
+Use the Socket.IO origin for `signalUrl` and the REST API base for `apiUrl`. With the current Nginx routing, the hosted deployment uses `signalUrl: 'https://<your-purplecallio-host>'` and `apiUrl: 'https://<your-purplecallio-host>/api'`. If `apiUrl` is omitted for compatibility, the SDK uses `signalUrl` as the REST base; provide it explicitly when REST is mounted under a prefix.
 
 ---
 

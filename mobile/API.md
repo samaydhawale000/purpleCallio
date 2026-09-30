@@ -8,7 +8,9 @@ syntax. The wire behaviour behind every call is specified in
 
 `PurpleCallioClient(baseUrl, logLevel = none, iceServers = [], overrideIceServers = false)`
 
-- `baseUrl`: PurpleCallio API origin (REST and Socket.IO). Default `https://api.purplecallio.com`.
+- `baseUrl`: **required** PurpleCallio REST API base, e.g. `https://<host>/api` (no default host).
+  Socket.IO connects to the same host with a trailing `/api` removed, matching
+  the hosted web app and the Nginx layout (`/api/` → REST, `/socket.io/` → signaling).
 - `iceServers`: extra STUN/TURN servers, merged with the backend's
   `/turn/credentials` and de-duplicated by URL. With `overrideIceServers`,
   only these are used.

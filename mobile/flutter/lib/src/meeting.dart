@@ -577,20 +577,36 @@ class PurpleCallioMeeting implements Listenable {
     return true;
   }
 
+  /// Incremented per join-call so a late ack from an earlier socket is ignored.
+  int _joinAttempt = 0;
+
   void _emitJoinCall() {
     if (!_authenticated || !_signaling.isConnected) {
       _log.debug('dropped join-call (signaling not ready)');
       return;
     }
-    // The gateway acks `{ success: false, error }` when the join is refused
-    // (e.g. PLAYGROUND_PARTICIPANT_LIMIT). A missing ack is not a failure.
+    final attempt = ++_joinAttempt;
+    // The gateway adds the socket to the room only after re-checking the call
+    // in the database, and relays offer/answer/ICE/call.started and media
+    // events only from sockets in the room: hold them until the ack.
     _signaling
         .emitWithAck('join-call', {'callId': callId}, timeout: _timings.authAckTimeout)
-        .then((ack) {
-      if (ack is Map && ack['success'] == false && !_ending) {
-        _fail(SignalingFailedError('join-call refused: ${ack['error'] ?? 'unknown'}'));
-      }
-    }).catchError((Object _) {});
+        .then((ack) => _onJoinCallAck(attempt, ack))
+        .catchError((Object _) {
+      // No ack in time: a server that never acks must not stall the call.
+      _log.warning('no join-call ack; continuing');
+      _onJoinCallAck(attempt, null);
+    });
+  }
+
+  void _onJoinCallAck(int attempt, Object? ack) {
+    if (attempt != _joinAttempt || _inRoom || _ending) return;
+    if (!_authenticated || !_signaling.isConnected) return;
+    if (ack is Map && ack['success'] == false) {
+      // Refused (e.g. PLAYGROUND_PARTICIPANT_LIMIT, CALL_ENDED): not in the room.
+      _fail(SignalingFailedError('join-call refused: ${ack['error'] ?? 'unknown'}'));
+      return;
+    }
     _inRoom = true;
     _flushPendingSignals();
     _syncMediaState();
@@ -635,7 +651,7 @@ class PurpleCallioMeeting implements Listenable {
     await pc.setLocalDescription(offer);
     if (_ending) return;
     _sendSignal('offer', {'offer': offer.toJson()});
-    _send('call.started', {'callId': callId});
+    _sendSignal('call.started', {'callId': callId});
     _defaultSpeaker();
   }
 
@@ -678,7 +694,7 @@ class PurpleCallioMeeting implements Listenable {
     }
     if (_ending) return;
     _emitJoinCall();
-    _send('call.started', {'callId': callId});
+    _sendSignal('call.started', {'callId': callId});
     _defaultSpeaker();
     final pending = _pendingOffer;
     if (pending != null) {

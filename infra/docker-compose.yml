@@ -44,11 +44,17 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
 
-      TURN_SERVER: ${TURN_SERVER}
+      # Public TURN hostname clients dial. Must be a DNS name covered by the
+      # Coturn TLS certificate below; turns:5349 is not advertised for an IP.
+      TURN_HOST: ${TURN_HOST:-${PUBLIC_HOST}}
+      TURN_SERVER: ${TURN_SERVER:-}
       TURN_SECRET: ${TURN_SECRET}
+      TURN_CREDENTIAL_TTL_SECONDS: ${TURN_CREDENTIAL_TTL_SECONDS:-86400}
 
-      FRONTEND_URL: ${FRONTEND_URL}
-      APP_URL: ${APP_URL}
+      # Everything host-specific derives from PUBLIC_HOST (infra/.env); the
+      # explicit variables remain as overrides.
+      FRONTEND_URL: ${FRONTEND_URL:-https://${PUBLIC_HOST}}
+      APP_URL: ${APP_URL:-https://${PUBLIC_HOST}}
       PAGE_SIZE: ${PAGE_SIZE}
       CALL_RING_TIMEOUT_MS: ${CALL_RING_TIMEOUT_MS}
       PLAYGROUND_ENABLED: ${PLAYGROUND_ENABLED:-true}
@@ -79,6 +85,15 @@ services:
     expose:
       - "3005"
 
+    # Observability only: Compose does not restart unhealthy containers.
+    # start_period covers `prisma migrate deploy` on boot.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3005/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+
   # ── Next.js Web App ─────────────────────────────────────────────────────────
   web:
 
@@ -90,15 +105,21 @@ services:
     build:
       context: ..
       dockerfile: apps/web/Dockerfile
+      # Baked into the browser bundle at build time. Only PUBLIC identifiers:
+      # the Google OAuth client ID and the Razorpay key_id are designed to be
+      # sent to browsers, so they default to the server-side values. Never
+      # map a *_SECRET here.
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
-        NEXT_PUBLIC_RAZORPAY_KEY_ID: ${NEXT_PUBLIC_RAZORPAY_KEY_ID}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://${PUBLIC_HOST}/api}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://${PUBLIC_HOST}}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-${GOOGLE_CLIENT_ID}}
+        NEXT_PUBLIC_RAZORPAY_KEY_ID: ${NEXT_PUBLIC_RAZORPAY_KEY_ID:-${RAZORPAY_KEY_ID}}
 
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
-      NEXT_PUBLIC_RAZORPAY_KEY_ID: ${NEXT_PUBLIC_RAZORPAY_KEY_ID}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://${PUBLIC_HOST}/api}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://${PUBLIC_HOST}}
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-${GOOGLE_CLIENT_ID}}
+      NEXT_PUBLIC_RAZORPAY_KEY_ID: ${NEXT_PUBLIC_RAZORPAY_KEY_ID:-${RAZORPAY_KEY_ID}}
 
     networks:
       - purplecallio
@@ -106,8 +127,18 @@ services:
     expose:
       - "5173"
 
+    # Observability only. The image has no curl/wget; Node 20 has fetch.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173/robots.txt').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
   # ── coturn TURN Server ──────────────────────────────────────────────────────
   coturn:
+    # Coturn is not health-checked: it runs with host networking and has no
+    # HTTP endpoint; verify it with turnutils_uclient (see infra/DEPLOYMENT.md).
     # Pin the upstream release tag; validate this image against the deployed
     # configuration before rollout because the live daemon was unavailable
     # during this repository audit.
@@ -123,16 +154,18 @@ services:
     command: >
       -c /etc/coturn/turnserver.conf
       --static-auth-secret=${TURN_SECRET}
-      --external-ip=${TURN_SERVER}
+      --external-ip=${TURN_EXTERNAL_IP:-${TURN_SERVER}}
       --total-quota=${TURN_TOTAL_QUOTA:-64}
       --max-bps=${TURN_MAX_BPS:-4000000}
       --bps-capacity=${TURN_BPS_CAPACITY:-8000000}
       --stale-nonce=600
-      --cert=${TURN_TLS_CERT_FILE:-/etc/letsencrypt/live/purplecallio.serveminecraft.net/fullchain.pem}
-      --pkey=${TURN_TLS_KEY_FILE:-/etc/letsencrypt/live/purplecallio.serveminecraft.net/privkey.pem}
+      --cert=${TURN_TLS_CERT_FILE:-/etc/letsencrypt/live/${TURN_HOST:-${PUBLIC_HOST}}/fullchain.pem}
+      --pkey=${TURN_TLS_KEY_FILE:-/etc/letsencrypt/live/${TURN_HOST:-${PUBLIC_HOST}}/privkey.pem}
 
   # ── Nginx Reverse Proxy ─────────────────────────────────────────────────────
   nginx:
+    # Not health-checked: port 80 only redirects to the public HTTPS host,
+    # which a probe inside the container cannot reach reliably.
     image: nginx:alpine
     restart: unless-stopped
 
@@ -144,9 +177,17 @@ services:
       - "80:80"
       - "443:443"
 
+    # nginx/templates/*.template are rendered into conf.d at start with
+    # PUBLIC_HOST filled in. conf.d is an empty tmpfs so the image's stock
+    # default.conf is not served.
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?set PUBLIC_HOST in infra/.env (see .env.example)}
+      NGINX_ENVSUBST_FILTER: PUBLIC_HOST
+    tmpfs:
+      - /etc/nginx/conf.d
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/templates:/etc/nginx/templates:ro
       - ./ssl:/etc/nginx/ssl:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - nginx_cache:/var/cache/nginx

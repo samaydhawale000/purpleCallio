@@ -27,4 +27,25 @@ import Testing
         #expect(joinCall < names.firstIndex(of: WireEvent.answer)!, "answer after join-call: \(names)")
         #expect(joinCall < names.firstIndex(of: WireEvent.iceCandidate)!, "candidate after join-call: \(names)")
     }
+
+    // join-call completes asynchronously on the gateway (it re-checks the call
+    // in the database first), so an offer sent right after emitting it can be
+    // dropped. Nothing that needs the room goes out before the ack.
+    @Test func callerOfferAndCallStartedWaitForTheJoinCallAck() async throws {
+        let h = Harness()
+        let (_, _) = try await h.join(options: PurpleCallioJoinOptions(microphoneEnabled: false))
+        h.signaling.holdJoinAck = true
+        h.signaling.receive(WireEvent.callAccepted, ["callId": TestIDs.callId])
+        await waitUntil { h.peer.localDescriptions.contains { $0.type == .offer } }
+        await settle()
+        #expect(h.signaling.emittedNames.contains(WireEvent.joinCall))
+        #expect(!h.signaling.emittedNames.contains(WireEvent.offer), "offer held until the ack")
+        #expect(!h.signaling.emittedNames.contains(WireEvent.callStarted), "call.started held until the ack")
+        #expect(!h.signaling.emittedNames.contains(WireEvent.microphoneDisabled), "media correction held until the ack")
+        h.signaling.releaseJoinAck()
+        await waitUntil { h.signaling.emittedNames.contains(WireEvent.callStarted) }
+        let names = h.signaling.emittedNames
+        #expect(names.firstIndex(of: WireEvent.offer)! < names.firstIndex(of: WireEvent.callStarted)!)
+        #expect(names.contains(WireEvent.microphoneDisabled))
+    }
 }

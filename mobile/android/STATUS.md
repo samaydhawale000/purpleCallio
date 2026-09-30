@@ -17,7 +17,7 @@
 
 ## Verified in this environment (JDK 17, Android SDK 35, no device)
 
-- `./gradlew :purplecallio:testDebugUnitTest` passes **37 JVM tests in 7
+- `./gradlew :purplecallio:testDebugUnitTest` passes **41 JVM tests in 8
   classes**: authentication (ack, rejection, timeout, `auth-error`), caller
   and receiver ordering, candidate queueing, toggle semantics, billing-safe
   join with mic/camera off, remote media filtering, reconnect/re-join,
@@ -35,7 +35,10 @@
 - That test found a real race, now fixed: the receiver's answer could be
   sent before its `join-call`, and the hardened gateway silently drops
   signaling from sockets not in the room. Outbound offer/answer/candidates
-  are now held until `join-call` (unit regression test included).
+  are now held until the `join-call` **ack**, including `call.started`
+  (the gateway joins the room only after a database re-check; the real-server
+  test failed without this and passes with it). `baseUrl` is required (no
+  default host); Socket.IO connects to the host without `/api`.
 - `:purplecallio:assembleRelease`, `:sample:assembleDebug` and
   `:purplecallio:publishToMavenLocal` succeed (AAR, sources jar, POM, Gradle
   module metadata). `lintRelease`: 0 errors, 19 warnings (mostly newer

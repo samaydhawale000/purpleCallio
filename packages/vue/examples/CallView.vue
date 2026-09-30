@@ -48,7 +48,9 @@ const {
 } = usePurpleCallio({
   token: props.token,
   callId: props.callId,
-  signalUrl: 'wss://signal.purplecallio.com',
+  // Your PurpleCallio host: Socket.IO origin, and the REST API under /api.
+  signalUrl: 'https://<your-purplecallio-host>',
+  apiUrl: 'https://<your-purplecallio-host>/api',
 });
 
 async function handleJoin() {

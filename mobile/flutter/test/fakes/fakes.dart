@@ -115,15 +115,21 @@ class FakeSignaling implements SignalingChannel {
     timeline.add('emit:$event');
   }
 
-  /// Ack body for `join-call`; null = the server never acks it.
-  Object? joinCallAck;
+  /// Ack body for `join-call`.
+  Object? joinCallAck = const {'success': true, 'participants': 2};
+
+  /// When set, the join-call ack is delivered only once this completes.
+  Completer<void>? joinAckGate;
 
   @override
   Future<Object?> emitWithAck(String event, Object? data,
       {Duration timeout = const Duration(seconds: 10)}) {
     emitted.add((event, data));
     timeline.add('emit:$event');
-    if (event == 'join-call') return Future.value(joinCallAck);
+    if (event == 'join-call') {
+      final gate = joinAckGate;
+      return gate == null ? Future.value(joinCallAck) : gate.future.then((_) => joinCallAck);
+    }
     if (event != 'authenticate') return Future.value(null);
     final c = Completer<Object?>();
     // Server emits `connected` (+ receiver status event) before the ack.

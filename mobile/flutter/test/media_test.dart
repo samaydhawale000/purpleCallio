@@ -107,8 +107,13 @@ void main() {
       await settle();
       expect(h.rtc.cameraTrack, isNull);
       expect(mediaEmits(h), ['camera.disabled']);
-      expect(h.signaling.emittedEvents.indexOf('camera.disabled'),
-          h.signaling.emittedEvents.indexOf('join-call') + 1);
+      // After the join-call ack, and after call.started: the billing segment
+      // builder resets media to call-type defaults at CALL_STARTED.
+      final events = h.signaling.emittedEvents;
+      expect(events.indexOf('camera.disabled'),
+          greaterThan(events.indexOf('join-call')));
+      expect(events.indexOf('camera.disabled'),
+          greaterThan(events.indexOf('call.started')));
       await m.leave();
     });
 

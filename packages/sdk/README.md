@@ -114,20 +114,14 @@ const client = new PurpleCallioClient({
 
 ### `apiUrl` / `baseUrl`
 
-Optional REST API base URL. Use `apiUrl` for new integrations. Existing `baseUrl` configuration remains supported as an alias.
+Required. The REST API base URL of your PurpleCallio deployment. Use `apiUrl` for new integrations; `baseUrl` remains supported as an alias. There is no default host, and the client throws if neither is set.
 
-If omitted, the SDK currently uses:
-
-```text
-https://api.purplecallio.com
-```
-
-You can provide your own API base URL:
+On the hosted PurpleCallio service the API is served under `/api` on the service's host:
 
 ```ts
 const client = new PurpleCallioClient({
   apiKey: process.env.PURPLECALLIO_API_KEY!,
-  baseUrl: "https://api.purplecallio.com"
+  apiUrl: "https://<your-purplecallio-host>/api",
 });
 ```
 
@@ -140,7 +134,7 @@ const client = new PurpleCallioClient({
 });
 ```
 
-For the hosted deployment behind the current Nginx proxy, REST requests use the `/api` prefix (for example `https://purplecallio.serveminecraft.net/api`). The SDK's `signalUrl` is the Socket.IO origin and does not include `/api`.
+For the hosted deployment behind the current Nginx proxy, REST requests use the `/api` prefix (for example `https://<your-purplecallio-host>/api`). The SDK's `signalUrl` is the Socket.IO origin and does not include `/api`.
 
 ## Meeting configuration
 
@@ -150,8 +144,8 @@ For the hosted deployment behind the current Nginx proxy, REST requests use the 
 const meeting = new PurpleCallioMeeting({
   token,
   callId,
-  signalUrl: 'https://purplecallio.serveminecraft.net',
-  apiUrl: 'https://purplecallio.serveminecraft.net/api',
+  signalUrl: 'https://<your-purplecallio-host>',
+  apiUrl: 'https://<your-purplecallio-host>/api',
 });
 ```
 

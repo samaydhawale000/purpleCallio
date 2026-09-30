@@ -3,7 +3,7 @@ import Foundation
 /// Entry point. Holds configuration and creates meetings.
 ///
 /// ```swift
-/// let client = PurpleCallioClient(baseURL: URL(string: "https://api.purplecallio.com")!)
+/// let client = PurpleCallioClient(baseURL: URL(string: "https://<your-purplecallio-host>/api")!)
 /// let meeting = try await client.joinMeeting(token: participantTokenFromYourBackend)
 /// ```
 ///
@@ -11,8 +11,6 @@ import Foundation
 /// `POST /calls` with its project API key. Never ship an API key in an app.
 @MainActor
 public final class PurpleCallioClient {
-    public nonisolated static let defaultBaseURL = URL(string: "https://api.purplecallio.com")!
-
     public let baseURL: URL
     public let logLevel: PurpleCallioLogLevel
     public let iceServers: [PurpleCallioIceServer]
@@ -25,14 +23,15 @@ public final class PurpleCallioClient {
     private var meetings: [PurpleCallioMeeting] = []
 
     /// - Parameters:
-    ///   - baseURL: PurpleCallio API origin, used for REST and Socket.IO.
+    ///   - baseURL: Your PurpleCallio REST API base, e.g. `https://<host>/api`. Required:
+    ///     there is no default host. Socket.IO connects to the same host without `/api`.
     ///   - logLevel: Default `.none`. Logs are redacted (tokens, credentials, SDP ICE passwords).
     ///   - logHandler: Custom sink; defaults to `print`.
     ///   - iceServers: Extra STUN/TURN servers merged with the backend's `/turn/credentials`,
     ///     de-duplicated by URL.
     ///   - overrideIceServers: Use only `iceServers`.
     public convenience init(
-        baseURL: URL = PurpleCallioClient.defaultBaseURL,
+        baseURL: URL,
         logLevel: PurpleCallioLogLevel = .none,
         logHandler: PurpleCallioLogHandler? = nil,
         iceServers: [PurpleCallioIceServer] = [],

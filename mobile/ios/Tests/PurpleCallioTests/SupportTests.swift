@@ -132,3 +132,27 @@ import Testing
         #expect(SessionDescription(wire: ["type": "answer", "sdp": "x"])?.type == .answer)
     }
 }
+
+@Suite struct EndpointTests {
+    @Test func restPathsKeepTheApiPrefix() {
+        let base = URL(string: "https://calls.example.com/api")!
+        #expect(PurpleCallioEndpoints.apiURL(base, "/calls/abc/details")?.absoluteString
+            == "https://calls.example.com/api/calls/abc/details")
+        let slash = URL(string: "https://calls.example.com/api/")!
+        #expect(PurpleCallioEndpoints.apiURL(slash, "/turn/credentials")?.absoluteString
+            == "https://calls.example.com/api/turn/credentials")
+    }
+
+    @Test func socketConnectsToTheHostWithoutApi() {
+        #expect(PurpleCallioEndpoints.signalingURL(from: URL(string: "https://calls.example.com/api")!).absoluteString
+            == "https://calls.example.com")
+        #expect(PurpleCallioEndpoints.signalingURL(from: URL(string: "https://calls.example.com/api/")!).absoluteString
+            == "https://calls.example.com")
+    }
+
+    @Test func baseWithoutApiIsUsedAsIsForBoth() {
+        let local = URL(string: "http://localhost:3005")!
+        #expect(PurpleCallioEndpoints.signalingURL(from: local).absoluteString == "http://localhost:3005")
+        #expect(PurpleCallioEndpoints.apiURL(local, "/calls/x/join")?.absoluteString == "http://localhost:3005/calls/x/join")
+    }
+}

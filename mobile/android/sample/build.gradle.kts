@@ -13,7 +13,13 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        // Your PurpleCallio REST API base: ./gradlew :sample:installDebug -PpurplecallioApiUrl=https://<host>/api
+        // Default: the host machine's local server as seen from the Android emulator.
+        val apiUrl = (project.findProperty("purplecallioApiUrl") as String?) ?: "http://10.0.2.2:3005"
+        buildConfigField("String", "PURPLECALLIO_API_URL", "\"$apiUrl\"")
     }
+
+    buildFeatures { buildConfig = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

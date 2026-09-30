@@ -42,7 +42,8 @@ final class CallModel: ObservableObject {
     @Published private(set) var meeting: PurpleCallioMeeting?
     @Published private(set) var message = ""
 
-    private let client = PurpleCallioClient()
+    // Your PurpleCallio REST API base (Socket.IO uses the same host without /api).
+    private let client = PurpleCallioClient(baseURL: URL(string: "https://<your-purplecallio-host>/api")!)
 
     func join(participantToken: String) async {
         do {

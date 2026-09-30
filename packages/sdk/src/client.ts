@@ -18,7 +18,15 @@ export class PurpleCallioClient {
   constructor(config: PurpleCallioConfig) {
     if (!config.apiKey) throw new Error('PurpleCallio: apiKey is required');
     this.apiKey = config.apiKey;
-    this.apiUrl = (config.apiUrl ?? config.baseUrl ?? 'https://api.purplecallio.com').replace(/\/$/, '');
+    // No default: there is no fixed public API host yet, and a default that
+    // does not resolve fails in a confusing way deep inside fetch().
+    const apiUrl = config.apiUrl ?? config.baseUrl;
+    if (!apiUrl) {
+      throw new Error(
+        'PurpleCallio: apiUrl is required (your PurpleCallio REST API base, e.g. https://<your-purplecallio-host>/api)',
+      );
+    }
+    this.apiUrl = apiUrl.replace(/\/$/, '');
   }
 
   private async request<T>(

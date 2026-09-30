@@ -19,7 +19,7 @@
 - Screen sharing is **not supported**. The SDK intentionally throws
   `screenShareUnavailable`; ReplayKit Broadcast Upload Extension and App Group
   communication are not included.
-- `mobile/ios/scripts/test.sh` passes **85 tests across 11 suites** on the macOS
+- `mobile/ios/scripts/test.sh` passes **89 tests across 12 suites** on the macOS
   target (plus one gated interop participant, skipped unless
   `PURPLECALLIO_TOKEN` is set). With only the Command Line Tools installed,
   plain `swift test` cannot find `Testing.framework`; use the script. This
@@ -37,7 +37,13 @@
   always sends an `Origin` header, which the hardened gateway rejects. The
   SDK now uses Apple's `URLSessionWebSocketTask` engine
   (`.useCustomEngine(false)`), which sends none.
-- Holds outbound `offer`/`answer`/`ice-candidate` until `join-call` has been
+- Holds outbound `offer`/`answer`/`ice-candidate`/`call.started` until the
+  `join-call` **ack** (the gateway joins the room only after a database
+  re-check). `baseURL` is required (no default host); REST keeps the `/api`
+  prefix and Socket.IO connects to the host without it.
+- The SwiftUI sample app described earlier was never written; there is no
+  `Examples/` directory yet.
+- Previously: held them until `join-call` was
   sent. The gateway drops signaling from sockets not yet in the room, and
   the Android real-server test showed the receiver's answer can be ready
   first. A regression test covers it.

@@ -26,10 +26,12 @@ The token is presented two ways:
 
 Tokens must never be logged, persisted to plain storage, or sent to analytics.
 
-## Endpoints (all relative to the API base URL, e.g. `https://api.purplecallio.com`)
+## Endpoints (relative to the REST API base, e.g. `https://<host>/api`)
 
-Socket.IO (v4, `websocket` transport) connects to the same base URL, default
-namespace.
+Socket.IO (v4, `websocket` transport, default namespace) connects to the same
+host **without** `/api`: behind Nginx, `/api/` is the REST API and `/socket.io/`
+is signaling. (Socket.IO clients treat a URL path as a namespace, so passing
+`https://<host>/api` to them would join the wrong namespace.)
 
 | Method | Path | Used for |
 |---|---|---|
@@ -93,15 +95,23 @@ reason to enter `reconnecting`.
 after this socket has emitted `join-call`** (room membership is checked).
 Anything emitted earlier is silently dropped.
 
-**Hold outbound signaling until `join-call`.** The receiver's `POST accept`
-makes the server send `call-accepted` to the caller, so the caller's offer
-can arrive while the receiver is still in `POST join`, before its own
-`join-call`. Answering right away gets the answer and ICE candidates dropped,
-and the call never connects. Queue `offer`/`answer`/`ice-candidate` while the
-socket is not in the room, and flush them right after `join-call` (also after
-a reconnect's re-join). This was observed against the real server with the
-Android SDK. Keep the REST order (`accept` → `join` → `join-call`), because
-billing records `PARTICIPANT_JOINED` at `join-call`.
+**Hold room-scoped messages until the `join-call` ack.** The gateway's
+`join-call` handler re-checks the call in the database *before* adding the
+socket to the room, and acks `{ success: true, participants }` only once the
+socket is in it. `offer`, `answer`, `ice-candidate`, `call.started` and the
+media events are relayed only for sockets in the room, so anything sent
+before that ack can be silently dropped. That includes a caller's offer sent
+right after `join-call`, and a receiver's answer: the receiver's `POST
+accept` makes the server notify the caller, whose offer can arrive before the
+receiver's own join finishes. Emit `join-call` **with an ack**, queue
+room-scoped messages until `{ success: true }` (or a timeout, so a server that
+never acks cannot stall the call), then flush them in order, `call.started`
+included. Send media corrections after `call.started`: the billing segment
+builder resets media to call-type defaults at `CALL_STARTED`. Keep the REST
+order (`accept` → `join` → `join-call`), because billing records
+`PARTICIPANT_JOINED` at `join-call`. These drops were observed against the
+real server with the Android and Flutter SDKs, and the hosted web page
+awaits the same ack.
 
 ## Call setup
 

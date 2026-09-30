@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
+import '../client.dart';
 import '../logging.dart';
 import 'signaling_channel.dart';
 
@@ -15,7 +16,7 @@ class SocketIoSignalingChannel implements SignalingChannel {
     Duration reconnectionDelayMax = const Duration(seconds: 5),
   })  : _logger = logger,
         _socket = io.io(
-          baseUrl.toString(),
+          PurpleCallioClient.signalingUrlFor(baseUrl).toString(),
           io.OptionBuilder()
               .setTransports(['websocket'])
               .disableAutoConnect()
@@ -67,7 +68,19 @@ class SocketIoSignalingChannel implements SignalingChannel {
   @override
   void connect() {
     if (_disposed) return;
-    _socket.connect();
+    // socket_io_client 3.x closes an already-closed WebSocket after a
+    // server-initiated disconnect (the gateway force-disconnects sockets when
+    // a call ends) and that throws WebSocketConnectionClosed as an uncaught
+    // async error. Transport listeners are registered in the zone that calls
+    // connect(), so contain that one known error here. Anything else is
+    // passed on unchanged.
+    runZonedGuarded(_socket.connect, (Object error, StackTrace stack) {
+      if (error.runtimeType.toString() == 'WebSocketConnectionClosed') {
+        _logger.debug('ignored WebSocketConnectionClosed after the socket closed');
+        return;
+      }
+      Zone.current.handleUncaughtError(error, stack);
+    });
   }
 
   /// socket_io_client hands multi-argument payloads over as a List.

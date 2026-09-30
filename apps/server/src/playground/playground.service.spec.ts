@@ -88,4 +88,32 @@ describe('PlaygroundService capacity and abuse controls', () => {
       service.createDemoCall({ userId: 'user-1' }),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
+  it('enforces one active call per IP even for a different identity (409)', async () => {
+    const { service, tx } = build([0, 0, 1, 0, 0]);
+    await expect(
+      service.createDemoCall({ userId: 'someone-else' }, 'VIDEO', '127.0.0.1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tx.call.create).not.toHaveBeenCalled();
+  });
+
+  it('enforces the daily per-IP limit (429)', async () => {
+    const { service, tx } = build([0, 0, 0, 0, 20]);
+    const error = await service
+      .createDemoCall({ userId: 'user-1' }, 'VIDEO', '127.0.0.1')
+      .catch((e: unknown) => e);
+    expect((error as { getStatus?: () => number }).getStatus?.()).toBe(429);
+    expect(tx.call.create).not.toHaveBeenCalled();
+  });
+
+  it('never allows a demo call longer than 60 seconds, whatever the env says', async () => {
+    process.env.PLAYGROUND_CALL_DURATION_SECONDS = '600';
+    try {
+      const { service, tx } = build();
+      await service.createDemoCall({ userId: 'user-1' }, 'VIDEO', '127.0.0.1');
+      const call = tx.call.create.mock.calls[0][0].data;
+      expect(call.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 60_000);
+    } finally {
+      delete process.env.PLAYGROUND_CALL_DURATION_SECONDS;
+    }
+  });
 });

@@ -22,7 +22,7 @@ import 'signaling/socket_io_signaling_channel.dart';
 /// ```
 class PurpleCallioClient {
   PurpleCallioClient({
-    String baseUrl = defaultBaseUrl,
+    required String baseUrl,
     PurpleCallioLogLevel logLevel = PurpleCallioLogLevel.none,
     PurpleCallioLogSink? logSink,
     List<PurpleCallioIceServer> iceServers = const [],
@@ -41,10 +41,19 @@ class PurpleCallioClient {
         _rtcEngine = rtcEngine,
         _timings = timings;
 
-  static const String defaultBaseUrl = 'https://api.purplecallio.com';
-
-  /// PurpleCallio API origin, used for REST and Socket.IO.
+  /// Your PurpleCallio REST API base, e.g. `https://<host>/api`. Required:
+  /// there is no default host. Socket.IO connects to the same host without
+  /// `/api` (see [signalingUrlFor]).
   final Uri baseUrl;
+
+  /// Socket.IO origin for [baseUrl]: the base without a trailing `/api`
+  /// (Nginx serves `/socket.io/` at the host root; socket_io_client would
+  /// treat `/api` as a namespace). Same rule as the hosted web app.
+  static Uri signalingUrlFor(Uri baseUrl) {
+    var s = baseUrl.toString().replaceFirst(RegExp(r'/+$'), '');
+    if (s.endsWith('/api')) s = s.substring(0, s.length - 4);
+    return Uri.parse(s);
+  }
 
   /// Extra STUN/TURN servers (merged with `/turn/credentials`, de-duplicated).
   final List<PurpleCallioIceServer> iceServers;

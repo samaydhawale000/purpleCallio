@@ -50,7 +50,8 @@ code.
 
 ```kotlin
 class CallViewModel(application: Application) : AndroidViewModel(application) {
-    private val client = PurpleCallioClient(application)
+    // Your PurpleCallio REST API base (Socket.IO uses the same host without /api).
+    private val client = PurpleCallioClient(application, baseUrl = "https://<your-purplecallio-host>/api")
     var meeting: PurpleCallioMeeting? = null
         private set
 

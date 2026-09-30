@@ -317,6 +317,11 @@ function CallPageContent() {
    const remoteVideoRef = useRef<HTMLVideoElement>(null);
    const remoteAudioRef = useRef<HTMLAudioElement>(null);
    const pcRef = useRef<RTCPeerConnection | null>(null);
+   // Resolves once the gateway has acked `join-call`. The gateway relays
+   // offer/answer/ICE and media events only from sockets already in the call
+   // room, and `join-call` completes asynchronously (it re-checks the call in
+   // the database first), so anything sent before the ack can be dropped.
+   const roomJoinRef = useRef<{ promise: Promise<void>; resolve: () => void } | null>(null);
    const localStreamRef = useRef<MediaStream | null>(null);
    const remoteStreamRef = useRef<MediaStream | null>(null);
    const screenStreamRef = useRef<MediaStream | null>(null);
@@ -624,6 +629,27 @@ function CallPageContent() {
       [createPeer, attachMedia],
    );
 
+   const expectRoomJoin = useCallback(() => {
+      if (roomJoinRef.current) return;
+      let resolve!: () => void;
+      const promise = new Promise<void>((r) => (resolve = r));
+      roomJoinRef.current = { promise, resolve };
+   }, []);
+
+   // Emits `join-call` and waits for the gateway's ack (bounded, so a server
+   // that never acks cannot stall the call).
+   const joinCallRoom = useCallback(
+      async (callId: string | null) => {
+         expectRoomJoin();
+         await socket
+            .timeout(5000)
+            .emitWithAck("join-call", { callId })
+            .catch(() => undefined);
+         roomJoinRef.current?.resolve();
+      },
+      [expectRoomJoin],
+   );
+
    const createOffer = useCallback(async () => {
       if (!pcRef.current) return;
       const offer = await pcRef.current.createOffer();
@@ -672,6 +698,8 @@ function CallPageContent() {
    }, [attemptIceRestart]);
 
    const cleanup = useCallback(() => {
+      roomJoinRef.current?.resolve();
+      roomJoinRef.current = null;
       screenStreamRef.current?.getTracks().forEach((t) => t.stop());
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       pcRef.current?.close();
@@ -723,7 +751,7 @@ function CallPageContent() {
             // Join the gateway's Socket.IO room for this call — without this,
             // the media-state broadcasts (camera/mic/screen-share toggles,
             // participant.updated) have nowhere to be relayed to.
-            socket.emit("join-call", { callId: urlCallId });
+            await joinCallRoom(urlCallId);
             await createOffer();
             socket.emit("call.started", { callId: urlCallId });
          } catch (err) {
@@ -771,6 +799,9 @@ function CallPageContent() {
                   .catch((err) => setMediaError(classifyMediaError(err)));
             }
 
+            // Answer (and the ICE candidates that follow setLocalDescription)
+            // only once this socket is in the call room.
+            await roomJoinRef.current?.promise;
             await pc.setRemoteDescription(new RTCSessionDescription(offer));
             await flushPendingCandidates(pc);
             const answer = await pc.createAnswer();
@@ -1061,10 +1092,13 @@ function CallPageContent() {
             .catch((err) => setMediaError(classifyMediaError(err)));
 
          // Accept + join the call server-side so the caller is notified.
+         // The caller's offer can arrive as soon as the accept lands, before our
+         // own join-call: hold the answer until the room join is acked.
+         expectRoomJoin();
          await sessionPost(`/calls/${incomingData.callId}/accept`);
          await sessionPost(`/calls/${incomingData.callId}/join`);
          setState("in-call");
-         socket.emit("join-call", { callId: incomingData.callId });
+         await joinCallRoom(incomingData.callId);
          socket.emit("call.started", { callId: incomingData.callId });
       } catch (err) {
          console.error("Failed to accept call", err);
