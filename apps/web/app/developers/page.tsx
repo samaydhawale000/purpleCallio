@@ -114,11 +114,10 @@ export default function DevelopersPage() {
          </section>
          <ContentSection title="Official SDKs for every platform">
             <p>
-               The React path above is one of several client SDKs. Every
-               platform wraps the same call engine — a participant token, a
-               connection-state lifecycle, participants, and camera/
-               microphone/screen-share controls — with an API that feels
-               native to where you&apos;re building.
+               The React path above is one of several client SDKs. Available
+               packages share the same participant-token security and call
+               protocol, with connection state, participants, and platform
+               media controls exposed through idiomatic APIs.
             </p>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                {sdks
@@ -142,7 +141,8 @@ export default function DevelopersPage() {
                   ))}
             </div>
             <p className="text-sm text-[#3D3650]">
-               Flutter, iOS, and Android SDKs are in development — see{" "}
+               Flutter, iOS, and Android SDK implementations are available for
+               preview but have not completed release validation. See{" "}
                <Link href="/sdks" className="text-[#6425C4] hover:text-[#170B2E]">
                   the full SDK list
                </Link>{" "}

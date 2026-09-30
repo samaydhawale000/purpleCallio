@@ -17,6 +17,7 @@ type CallState =
    | "busy"
    | "missed"
    | "ended"
+   | "expired"
    | "connection-failed"
    | "error";
 
@@ -275,6 +276,9 @@ function CallPageContent() {
 
    const [state, setState] = useState<CallState>("connecting");
    const [callType, setCallType] = useState<"AUDIO" | "VIDEO">("VIDEO");
+   const [playgroundExpiresAt, setPlaygroundExpiresAt] = useState<number | null>(null);
+   const [playgroundSecondsLeft, setPlaygroundSecondsLeft] = useState<number | null>(null);
+   const cleanupRef = useRef<(() => void) | null>(null);
    const [incomingData, setIncomingData] = useState<IncomingCallData | null>(
       null,
    );
@@ -349,6 +353,20 @@ function CallPageContent() {
    }, [state, callType, isVideoOff, isScreenSharing]);
 
    const duration = useDurationTimer(state === "in-call");
+   useEffect(() => {
+      if (!playgroundExpiresAt) return;
+      const update = () => {
+         const left = Math.max(0, Math.ceil((playgroundExpiresAt - Date.now()) / 1000));
+         setPlaygroundSecondsLeft(left);
+         if (left === 0) {
+            cleanupRef.current?.();
+            setState("expired");
+         }
+      };
+      update();
+      const id = setInterval(update, 1000);
+      return () => clearInterval(id);
+   }, [playgroundExpiresAt]);
    const isDark = branding.theme === "DARK";
    const primary = branding.primaryColor;
    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
@@ -676,6 +694,7 @@ function CallPageContent() {
       setRemoteMedia({ camera: true, microphone: true, screenShare: false });
       setDeviceNotice(null);
    }, [stopStatsPolling, ringback, ringtone]);
+   cleanupRef.current = cleanup;
 
    useEffect(() => {
       if (!token || !urlCallId) {
@@ -798,14 +817,20 @@ function CallPageContent() {
          setState("ended");
       });
 
+      socket.on("call.expired", () => {
+         cleanup();
+         setState("expired");
+      });
+
       // Carries our own resolved role/participantId — captured so
       // participant.updated (broadcast to the whole room, including us) can
       // tell which updates are about the OTHER participant.
       socket.on(
          "connected",
-         (data: { participantId: string; role: "CALLER" | "RECEIVER" }) => {
+         (data: { participantId: string; role: "CALLER" | "RECEIVER"; source?: string; expiresAt?: string | null }) => {
             selfParticipantIdRef.current = data.participantId;
             selfRoleRef.current = data.role;
+            if (data.source === "PLAYGROUND" && data.expiresAt) setPlaygroundExpiresAt(new Date(data.expiresAt).getTime());
          },
       );
 
@@ -883,6 +908,7 @@ function CallPageContent() {
             "answer",
             "ice-candidate",
             "call-ended",
+            "call.expired",
             "connected",
             "camera.enabled",
             "camera.disabled",
@@ -1505,15 +1531,16 @@ function CallPageContent() {
       );
    }
 
-   if (state === "ended") {
+   if (state === "ended" || state === "expired") {
       return (
          <Screen>
             <p className="font-medium mb-1" style={{ color: textPrimary }}>
-               Call ended
+               {state === "expired" ? "Demo call ended" : "Call ended"}
             </p>
             <p className="text-sm" style={{ color: textSecondary }}>
-               {duration}
+               {state === "expired" ? "Playground calls are limited to 1 minute." : duration}
             </p>
+            {state === "expired" && <a className="mt-4 text-sm underline" style={{ color: primary }} href="/signup">Create a free account to continue testing</a>}
          </Screen>
       );
    }
@@ -1549,7 +1576,9 @@ function CallPageContent() {
                   className="font-mono text-sm tabular-nums"
                   style={{ color: isDark ? "#CBD5E1" : "#334155" }}
                >
-                  {duration}
+                  {playgroundSecondsLeft !== null
+                     ? `Demo time remaining: ${String(Math.floor(playgroundSecondsLeft / 60)).padStart(2, "0")}:${String(playgroundSecondsLeft % 60).padStart(2, "0")}`
+                     : duration}
                </span>
             </span>
          </div>

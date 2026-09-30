@@ -94,6 +94,8 @@ The client accepts the following configuration:
 ```ts
 interface PurpleCallioConfig {
   apiKey: string;
+  apiUrl?: string;
+  /** @deprecated Alias for apiUrl. */
   baseUrl?: string;
 }
 ```
@@ -110,9 +112,9 @@ const client = new PurpleCallioClient({
 });
 ```
 
-### `baseUrl`
+### `apiUrl` / `baseUrl`
 
-Optional API base URL.
+Optional REST API base URL. Use `apiUrl` for new integrations. Existing `baseUrl` configuration remains supported as an alias.
 
 If omitted, the SDK currently uses:
 
@@ -134,9 +136,30 @@ For a custom/self-hosted PurpleCallio deployment:
 ```ts
 const client = new PurpleCallioClient({
   apiKey: process.env.PURPLECALLIO_API_KEY!,
-  baseUrl: "https://your-domain.com/api"
+  apiUrl: "https://your-domain.com/api"
 });
 ```
+
+For the hosted deployment behind the current Nginx proxy, REST requests use the `/api` prefix (for example `https://purplecallio.serveminecraft.net/api`). The SDK's `signalUrl` is the Socket.IO origin and does not include `/api`.
+
+## Meeting configuration
+
+`PurpleCallioMeeting` and `MeetingProvider` accept separate `signalUrl` and `apiUrl` values. `apiUrl` is used for authenticated REST calls such as `/turn/credentials`. For backwards compatibility, omitting it uses `signalUrl` as the REST base; explicitly pass `apiUrl` whenever your proxy routes REST under a prefix.
+
+```ts
+const meeting = new PurpleCallioMeeting({
+  token,
+  callId,
+  signalUrl: 'https://purplecallio.serveminecraft.net',
+  apiUrl: 'https://purplecallio.serveminecraft.net/api',
+});
+```
+
+The meeting engine exposes `setAudioInput(deviceId)`, `setVideoInput(deviceId)`, and `setAudioOutput(deviceId)`. Input switches replace the active WebRTC sender track and keep the old track if acquisition or replacement fails. Speaker switching requires browser support for `HTMLMediaElement.setSinkId`; remote audio playback can also require a user click under browser autoplay policy.
+
+### Signaling lifecycle
+
+The SDK sends the participant token in Socket.IO handshake auth and repeats the existing `authenticate` event for compatibility with older server versions. The gateway authenticates the handshake token before accepting call operations; every signaling event remains scoped to that participant's call. On `join-call`, it returns a canonical `call.state` participant snapshot and continues to emit `participant.joined` / `participant.left` updates. `call.started` is broadcast to the room as a lifecycle notification; it is not the media negotiation trigger. The CALLER role creates one offer after the remote participant is present, while the RECEIVER answers it. This avoids both peers racing to create an offer. ICE candidates received before the remote description are queued until it is set.
 
 ---
 

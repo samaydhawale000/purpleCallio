@@ -1,67 +1,47 @@
-# PurpleCallio native platform foundations (Flutter / iOS / Android)
+# PurpleCallio native SDKs
 
-**Status: architecture foundation only. Not functional. Not built. Not tested.**
+This directory contains native call engines for Flutter/Dart, Swift/iOS, and
+Kotlin/Android. Each uses the same backend participant-token, REST, Socket.IO,
+and WebRTC protocol documented in [PROTOCOL.md](PROTOCOL.md). The apps receive
+participant tokens from their own trusted backend; API keys must never ship in
+mobile applications.
 
-Do not advertise any package in this directory as a supported SDK on the
-website or in marketing copy. Nothing here should be published to pub.dev,
-CocoaPods/SPM, or Maven.
+## Release status
 
-## Why this is foundation-only, not a working SDK
+The implementations, package manifests, protocol tests, and a Flutter example
+are present. Android has a consumer sample app. The packages have **not** met
+the release bar yet: this environment has no Flutter SDK, no Java runtime for
+Gradle, and no full Xcode/iOS SDK. Real-device calls, consumer installation,
+and platform builds have not been validated. Keep Flutter, iOS, and Android in
+the website's **Coming soon** section until those checks pass.
 
-`@purplecallio/sdk` (the core JS engine) is reused unmodified by
-`@purplecallio/react-native` because React Native's JS runtime can load it
-directly once `react-native-webrtc` polyfills the same global WebRTC API
-surface (`RTCPeerConnection`, `mediaDevices`, `MediaStream`, ...) the engine
-already calls. That trick has no equivalent for Flutter, iOS, or Android:
-there is no shared JS runtime to reuse. Each of these requires the meeting
-engine's logic — connection state machine, signaling event handling, peer
-connection lifecycle, media control — to be **reimplemented natively** in
-Dart, Swift, and Kotlin respectively, each wired to a native WebRTC binding
-(`flutter_webrtc` / GoogleWebRTC or `WebRTC.xcframework` / `org.webrtc`).
+| SDK | Source | Current validation boundary |
+| --- | --- | --- |
+| Flutter | [`flutter/`](flutter/) | Dart tests and example exist; Flutter tooling and device media tests unavailable here. Screen sharing is Android-only. |
+| iOS | [`ios/`](ios/) | Swift package and 76 Swift Testing cases pass on the macOS target. No iOS target build or physical iOS test. Screen sharing is unsupported. |
+| Android | [`android/`](android/) | Android library, JVM tests, Gradle wrapper, and sample app exist; Gradle cannot start in this environment (native runtime/JDK unavailable). No instrumentation or physical-device test. |
 
-That is a substantial, independent engineering effort per platform —
-realistically each is its own multi-week native SDK project requiring:
-- a real WebRTC binary dependency (large, fetched via CocoaPods/SPM/Gradle/pub)
-- a real Xcode project + iOS simulator/device to build and test against
-- a real Android Studio project + emulator/device to build and test against
-- a real Flutter SDK + platform channel wiring to native code on both sides
+See each platform README and `STATUS.md` for install/setup, implemented
+features, validation commands, and known limitations. `API.md` describes the
+shared API model; `PROTOCOL.md` is the wire-level contract.
 
-**None of these toolchains are available in the environment this was built
-in** (no Xcode.app — only Command Line Tools, no Android SDK/Gradle/JDK, no
-Flutter SDK installed). Nothing under `mobile/` has been compiled, run, or
-verified. Treat every file here as a design/scaffold artifact, not working
-code.
+## Local validation
 
-## What's actually here
+Run these from the corresponding package directory after installing its native
+toolchain:
 
-For each platform: a real, idiomatic project skeleton (the file layout a
-real SDK would use) and an API surface designed against the same
-conceptual model used by every other PurpleCallio package (client
-config → room/call → participants → connection state → media
-controls → events) — see each platform's own `STATUS.md` for exactly
-what's stubbed vs. designed.
+```sh
+# Flutter
+cd mobile/flutter && flutter pub get && flutter analyze && flutter test
 
-## Consistent conceptual model (mirrors every JS/TS package)
+# iOS (full Xcode required for iOS builds/device validation)
+cd mobile/ios && swift test
 
-- Configuration: participant token (never an API key) + call id + signaling URL.
-- `ConnectionState`: idle → connecting → joining → joined/connected →
-  leaving → disconnected (+ error/reconnecting).
-- `Participant`: id, role (caller/receiver), media flags (camera/mic/screen).
-- Local media controls: camera enable/disable/toggle, microphone
-  enable/disable/toggle. Screen share is out of scope for all three
-  platforms in this foundation (it requires its own native OS integration —
-  Broadcast Upload Extension on iOS, MediaProjection on Android/Flutter —
-  layered on top of a working call engine that doesn't exist yet here).
-- Events: connected, disconnected, reconnected, participant joined/left/updated,
-  remote stream received/ended.
+# Android (JDK 17 and Android SDK required)
+cd mobile/android && ./gradlew test :sample:assembleDebug
+```
 
-## Recommended next step
-
-Hand each platform to an engineer with the matching native toolchain
-(Xcode, Android Studio, Flutter SDK) to implement the WebRTC binding and
-signaling client against the same backend protocol `@purplecallio/sdk`
-uses (`packages/sdk/src/transport/socket.ts` — socket.io events — and
-`packages/sdk/src/signaling/events.ts` for the exact event/payload
-contract), verify against real devices, then publish under the naming
-convention: "PurpleCallio Flutter SDK", "PurpleCallio iOS SDK",
-"PurpleCallio Android SDK".
+The Flutter gated end-to-end test additionally requires a staging PurpleCallio
+server and test project API key in `PURPLECALLIO_E2E_BASE_URL` and
+`PURPLECALLIO_E2E_API_KEY`; that key is test-only and is not embedded in the
+SDK or sample app.

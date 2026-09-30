@@ -67,6 +67,11 @@ export class CallRoomService {
     );
   }
 
+  canJoinRoom(callId: string, socketId: string, maxParticipants: number): boolean {
+    const room = this.rooms.get(callId);
+    return Boolean(room?.has(socketId)) || (room?.size ?? 0) < maxParticipants;
+  }
+
 hasRoom(callId: string) {
     return this.rooms.has(callId);
   }

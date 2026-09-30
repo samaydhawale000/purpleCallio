@@ -33,6 +33,12 @@ export class ParticipantStore {
     this.emit();
   }
 
+  replace(participants: Participant[]): void {
+    this.byId.clear();
+    participants.forEach((participant) => this.byId.set(participant.participantId, participant));
+    this.emit();
+  }
+
   remove(participantId: string): void {
     if (!this.byId.has(participantId)) return;
     this.byId.delete(participantId);

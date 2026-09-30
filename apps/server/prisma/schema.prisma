@@ -28,6 +28,16 @@ enum CallStatus {
   ENDED
 }
 
+enum CallSource {
+  CUSTOMER
+  PLAYGROUND
+}
+
+enum PlaygroundAttemptType {
+  CALL_CREATION
+  TURN_CREDENTIAL
+}
+
 enum UserRole {
   USER
   ADMIN
@@ -489,6 +499,12 @@ model Call {
 
   status CallStatus @default(INITIATED)
 
+  source CallSource @default(CUSTOMER)
+  expiresAt DateTime?
+  maxParticipants Int?
+  creatorIdentity String?
+  creatorIpKey String?
+
   startedAt DateTime?
 
   endedAt DateTime?
@@ -497,9 +513,25 @@ model Call {
 
   updatedAt DateTime @updatedAt
 
+  @@index([source, status, expiresAt])
+  @@index([source, status, createdAt])
+
   events        CallEvent[]
   usageSegments UsageSegment[]
   session       CallSession?
+}
+
+model PlaygroundAttempt {
+  id          String   @id @default(uuid())
+  identityKey String
+  ipKey       String
+  type        PlaygroundAttemptType @default(CALL_CREATION)
+  createdAt   DateTime @default(now())
+
+  @@index([identityKey, createdAt])
+  @@index([ipKey, createdAt])
+  @@index([createdAt])
+  @@index([identityKey, ipKey, type, createdAt])
 }
 
 // A time-bounded interval of a call with a homogeneous media state and a

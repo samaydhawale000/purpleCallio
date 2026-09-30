@@ -4,7 +4,6 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
 import { PrismaModule } from './prisma/prisma.module';
-import { TestController } from './test.controller';
 import { AuthModule } from './auth/auth.module';
 import { ProjectModule } from './project/project.module';
 import { CallModule } from './call/call.module';
@@ -16,7 +15,6 @@ import { WebhookModule } from './webhook/webhook.module';
 import { PlaygroundModule } from './playground/playground.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { BillingModule } from './billing/billing.module';
-import { PaymentModule } from './payment/payment.module';
 import { AdminModule } from './admin/admin.module';
 
 @Module({
@@ -42,13 +40,15 @@ import { AdminModule } from './admin/admin.module';
     ApiKeyModule,
     CallSessionModule,
     TurnModule,
-WebhookModule,
+    WebhookModule,
     PlaygroundModule,
-DashboardModule,
+    DashboardModule,
     BillingModule,
-    AdminModule
+    AdminModule,
   ],
-  controllers: [TestController],
+  // TestController is intentionally not registered in the production app;
+  // its database-count endpoint is only useful in local development.
+  controllers: [],
   providers: [
     {
       provide: APP_GUARD,

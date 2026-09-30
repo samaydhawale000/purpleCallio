@@ -49,10 +49,24 @@ services:
 
       FRONTEND_URL: ${FRONTEND_URL}
       APP_URL: ${APP_URL}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
-
       PAGE_SIZE: ${PAGE_SIZE}
       CALL_RING_TIMEOUT_MS: ${CALL_RING_TIMEOUT_MS}
+      PLAYGROUND_ENABLED: ${PLAYGROUND_ENABLED:-true}
+      PLAYGROUND_CALL_DURATION_SECONDS: ${PLAYGROUND_CALL_DURATION_SECONDS:-60}
+      PLAYGROUND_IDLE_TIMEOUT_SECONDS: ${PLAYGROUND_IDLE_TIMEOUT_SECONDS:-30}
+      PLAYGROUND_MAX_PARTICIPANTS: ${PLAYGROUND_MAX_PARTICIPANTS:-2}
+      PLAYGROUND_MAX_ACTIVE_CALLS_PER_IP: ${PLAYGROUND_MAX_ACTIVE_CALLS_PER_IP:-1}
+      PLAYGROUND_MAX_ACTIVE_CALLS_PER_IDENTITY: ${PLAYGROUND_MAX_ACTIVE_CALLS_PER_IDENTITY:-1}
+      PLAYGROUND_CALL_RATE_LIMIT_MAX: ${PLAYGROUND_CALL_RATE_LIMIT_MAX:-5}
+      PLAYGROUND_CALL_RATE_LIMIT_WINDOW_SECONDS: ${PLAYGROUND_CALL_RATE_LIMIT_WINDOW_SECONDS:-600}
+      PLAYGROUND_DAILY_CALL_LIMIT: ${PLAYGROUND_DAILY_CALL_LIMIT:-20}
+      PLAYGROUND_MAX_ACTIVE_CALLS_GLOBAL: ${PLAYGROUND_MAX_ACTIVE_CALLS_GLOBAL:-5}
+      PLAYGROUND_PARTICIPANT_TOKEN_TTL_SECONDS: ${PLAYGROUND_PARTICIPANT_TOKEN_TTL_SECONDS:-180}
+      PLAYGROUND_TURN_CREDENTIAL_TTL_SECONDS: ${PLAYGROUND_TURN_CREDENTIAL_TTL_SECONDS:-60}
+      PLAYGROUND_TURN_CALLS_PER_MINUTE: ${PLAYGROUND_TURN_CALLS_PER_MINUTE:-3}
+      SOCKET_AUTH_ATTEMPTS_PER_MINUTE: ${SOCKET_AUTH_ATTEMPTS_PER_MINUTE:-20}
+      SOCKET_MAX_UNAUTHENTICATED_CONNECTIONS: ${SOCKET_MAX_UNAUTHENTICATED_CONNECTIONS:-100}
+      PLAYGROUND_SOCKET_EVENTS_PER_MINUTE: ${PLAYGROUND_SOCKET_EVENTS_PER_MINUTE:-120}
       TOPUP_PAISE_PER_MINUTE: ${TOPUP_PAISE_PER_MINUTE}
 
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
@@ -94,18 +108,28 @@ services:
 
   # ── coturn TURN Server ──────────────────────────────────────────────────────
   coturn:
-    image: coturn/coturn:latest
+    # Pin the upstream release tag; validate this image against the deployed
+    # configuration before rollout because the live daemon was unavailable
+    # during this repository audit.
+    image: ${COTURN_IMAGE:-coturn/coturn:4.18.0-r0}
     restart: unless-stopped
 
     network_mode: host
 
     volumes:
       - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
 
     command: >
       -c /etc/coturn/turnserver.conf
       --static-auth-secret=${TURN_SECRET}
       --external-ip=${TURN_SERVER}
+      --total-quota=${TURN_TOTAL_QUOTA:-64}
+      --max-bps=${TURN_MAX_BPS:-4000000}
+      --bps-capacity=${TURN_BPS_CAPACITY:-8000000}
+      --stale-nonce=600
+      --cert=${TURN_TLS_CERT_FILE:-/etc/letsencrypt/live/purplecallio.serveminecraft.net/fullchain.pem}
+      --pkey=${TURN_TLS_KEY_FILE:-/etc/letsencrypt/live/purplecallio.serveminecraft.net/privkey.pem}
 
   # ── Nginx Reverse Proxy ─────────────────────────────────────────────────────
   nginx:

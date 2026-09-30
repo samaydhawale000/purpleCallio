@@ -21,7 +21,7 @@ export default function SdksPage() {
       <PublicPage
          eyebrow="Developer SDKs"
          title="Build real-time communication into your application."
-         intro="Official PurpleCallio SDKs give you the same call engine — connection handling, signaling, and WebRTC media — with an API that feels native to the platform you're already building on."
+         intro="PurpleCallio SDKs use the same participant-token security and call protocol, with an API that feels native to the platform you're already building on."
          crumbs={[
             { label: "Home", href: "/" },
             { label: "SDKs", href: "/sdks" },

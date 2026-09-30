@@ -17,6 +17,7 @@ export class SignalingTransport {
   private readonly events = new SignalingEvents();
   private readonly token: string;
   private readonly signalUrl: string;
+  private socketListeners: Array<() => void> = [];
 
   constructor(signalUrl: string, token: string) {
     this.signalUrl = signalUrl;
@@ -39,13 +40,17 @@ export class SignalingTransport {
   /**
    * Connect and authenticate. Resolves once the server confirms
    * a successful `authenticate` — authentication happens exactly once.
+   *
+   * The gateway replies to `authenticate` through the socket.io
+   * acknowledgement callback (`{ success, role }`), not a separate event.
    */
-  connect(): Promise<void> {
+  connect(timeoutMs = 10_000): Promise<void> {
     if (this.socket?.connected) return Promise.resolve();
 
     this.socket = io(this.signalUrl, {
       autoConnect: false,
       transports: ['websocket'],
+      auth: { token: this.token },
     });
 
     this.attach(this.socket);
@@ -54,36 +59,48 @@ export class SignalingTransport {
       const s = this.socket;
       if (!s) return reject(new Error('Socket not initialized'));
 
-      const onConnectError = (err: Error) => {
-        cleanup();
-        reject(err);
-      };
-
-      const onAuthenticateResult = (res: { success: boolean }) => {
-        if (!res?.success) {
-          cleanup();
-          reject(new Error('Authentication failed: invalid or expired token'));
-          return;
-        }
-        cleanup();
-        resolve();
-      };
-
-      const cleanup = () => {
+      let settled = false;
+      const settle = (err?: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         s.off('connect_error', onConnectError);
-        s.off('authenticate-result', onAuthenticateResult);
+        if (err) reject(err);
+        else resolve();
       };
+
+      const onConnectError = (err: Error) => settle(err);
+
+      const timer = setTimeout(
+        () => settle(new Error('Authentication timed out')),
+        timeoutMs,
+      );
 
       s.once('connect_error', onConnectError);
-      s.once('authenticate-result', onAuthenticateResult);
-
       s.connect();
-      s.emit('authenticate', { token: this.token });
+      s.emit('authenticate', { token: this.token }, (res: { success: boolean }) => {
+        if (!res?.success) {
+          settle(new Error('Authentication failed: invalid or expired token'));
+          return;
+        }
+        settle();
+      });
     });
   }
 
   emit<K extends SignalingEvent>(event: K, payload: SignalingEventMap[K]): void {
     this.socket?.emit(event, payload);
+  }
+
+  emitWithAck<T>(event: string, payload: unknown): Promise<T> {
+    const socket = this.socket;
+    if (!socket?.connected) return Promise.reject(new Error('SIGNAL_CONNECTION_FAILED'));
+    return new Promise<T>((resolve, reject) => {
+      socket.timeout(10_000).emit(event, payload, (error: Error | null, response: T) => {
+        if (error) reject(new Error('SIGNAL_ACK_TIMEOUT'));
+        else resolve(response);
+      });
+    });
   }
 
 /** Subscribe to a raw signaling event that the server emits back to us. */
@@ -98,6 +115,7 @@ export class SignalingTransport {
   }
 
   disconnect(): void {
+    this.socketListeners.splice(0).forEach((off) => off());
     this.socket?.disconnect();
     this.socket = null;
   }
@@ -116,23 +134,42 @@ export class SignalingTransport {
   }
 
   private attach(socket: Socket): void {
+    let hasConnected = false;
+    this.listen(socket, 'connect', () => {
+      if (hasConnected) {
+        // Older gateways authenticate via an event; newer gateways also
+        // validate handshake auth. Sending this on reconnect supports both.
+        socket.emit('authenticate', { token: this.token }, (result: { success?: boolean }) => {
+          if (!result?.success) socket.disconnect();
+        });
+      }
+      hasConnected = true;
+    });
     // Route server-sent signaling events into the typed emitter.
-    socket.on('connected', (p) => this.events.emit('connected', p));
-    socket.on('reconnected', (p) => this.events.emit('reconnected', p));
-    socket.on('disconnect', (reason) => this.events.emit('disconnected', { reason }));
-    socket.on('participant.joined', (p) => this.events.emit('participant.joined', p));
-    socket.on('participant.left', (p) => this.events.emit('participant.left', p));
-    socket.on('participant.updated', (p) => this.events.emit('participant.updated', p));
-    socket.on('camera.enabled', (p) => this.events.emit('camera.enabled', p));
-    socket.on('camera.disabled', (p) => this.events.emit('camera.disabled', p));
-    socket.on('microphone.enabled', (p) => this.events.emit('microphone.enabled', p));
-    socket.on('microphone.disabled', (p) => this.events.emit('microphone.disabled', p));
-    socket.on('screenShare.started', (p) => this.events.emit('screenShare.started', p));
-    socket.on('screenShare.stopped', (p) => this.events.emit('screenShare.stopped', p));
-    socket.on('call.started', (p) => this.events.emit('call.started', p));
-    socket.on('call.ended', (p) => this.events.emit('call.ended', p));
-    socket.on('offer', (p) => this.events.emit('offer', p));
-    socket.on('answer', (p) => this.events.emit('answer', p));
-    socket.on('ice-candidate', (p) => this.events.emit('ice-candidate', p));
+    this.listen(socket, 'connected', (p) => this.events.emit('connected', p));
+    this.listen(socket, 'reconnected', (p) => this.events.emit('reconnected', p));
+    this.listen(socket, 'disconnect', (reason) => this.events.emit('disconnected', { reason }));
+    this.listen(socket, 'participant.joined', (p) => this.events.emit('participant.joined', p));
+    this.listen(socket, 'participant.left', (p) => this.events.emit('participant.left', p));
+    this.listen(socket, 'participant.updated', (p) => this.events.emit('participant.updated', p));
+    this.listen(socket, 'call.state', (p) => this.events.emit('call.state', p));
+    this.listen(socket, 'camera.enabled', (p) => this.events.emit('camera.enabled', p));
+    this.listen(socket, 'camera.disabled', (p) => this.events.emit('camera.disabled', p));
+    this.listen(socket, 'microphone.enabled', (p) => this.events.emit('microphone.enabled', p));
+    this.listen(socket, 'microphone.disabled', (p) => this.events.emit('microphone.disabled', p));
+    this.listen(socket, 'screenShare.started', (p) => this.events.emit('screenShare.started', p));
+    this.listen(socket, 'screenShare.stopped', (p) => this.events.emit('screenShare.stopped', p));
+    this.listen(socket, 'call.started', (p) => this.events.emit('call.started', p));
+    this.listen(socket, 'call.ended', (p) => this.events.emit('call.ended', p));
+    this.listen(socket, 'call.expired', (p) => this.events.emit('call.expired', p));
+    this.listen(socket, 'offer', (p) => this.events.emit('offer', p));
+    this.listen(socket, 'answer', (p) => this.events.emit('answer', p));
+    this.listen(socket, 'ice-candidate', (p) => this.events.emit('ice-candidate', p));
+  }
+
+  private listen(socket: Socket, event: string, handler: (...args: any[]) => void): void {
+    const target = socket as unknown as { on: (e: string, h: (...args: any[]) => void) => void; off: (e: string, h: (...args: any[]) => void) => void };
+    target.on(event, handler);
+    this.socketListeners.push(() => target.off(event, handler));
   }
 }

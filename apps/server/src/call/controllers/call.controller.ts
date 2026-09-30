@@ -17,6 +17,18 @@ import { CreateCallDto } from '../dto/create-call.dto';
 import { WebrtcTransportDto } from '../dto/webrtc-transport.dto';
 import { WebrtcIceDto } from '../dto/webrtc-ice.dto';
 
+interface ApiKeyRequest {
+  project: { id: string };
+}
+
+interface CallSessionRequest {
+  callSession: {
+    callId: string;
+    role?: 'CALLER' | 'RECEIVER';
+    [key: string]: unknown;
+  };
+}
+
 @Controller('calls')
 export class CallController {
   constructor(private callService: CallService) {}
@@ -25,7 +37,7 @@ export class CallController {
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post()
   @UseGuards(ApiKeyGuard, BillingGuard)
-  create(@Req() req: any, @Body() body: CreateCallDto) {
+  create(@Req() req: ApiKeyRequest, @Body() body: CreateCallDto) {
     return this.callService.createCall({
       ...body,
       projectId: req.project.id,
@@ -34,13 +46,13 @@ export class CallController {
 
   @Post(':id/accept')
   @UseGuards(CallSessionGuard)
-  accept(@Req() req: any, @Param('id') id: string) {
+  accept(@Req() req: CallSessionRequest, @Param('id') id: string) {
     return this.callService.acceptCall(id, req.callSession);
   }
 
   @Post(':id/reject')
   @UseGuards(CallSessionGuard)
-  reject(@Req() req: any, @Param('id') id: string) {
+  reject(@Req() req: CallSessionRequest, @Param('id') id: string) {
     return this.callService.rejectCall(id, req.callSession);
   }
 
@@ -48,19 +60,19 @@ export class CallController {
   // RECEIVER declining it.
   @Post(':id/cancel')
   @UseGuards(CallSessionGuard)
-  cancel(@Req() req: any, @Param('id') id: string) {
+  cancel(@Req() req: CallSessionRequest, @Param('id') id: string) {
     return this.callService.cancelCall(id, req.callSession);
   }
 
   @Post(':id/join')
   @UseGuards(CallSessionGuard)
-  join(@Req() req: any, @Param('id') id: string) {
+  join(@Req() req: CallSessionRequest, @Param('id') id: string) {
     return this.callService.joinCall(id, req.callSession);
   }
 
   @Post(':id/leave')
   @UseGuards(CallSessionGuard)
-  leave(@Req() req: any, @Param('id') id: string) {
+  leave(@Req() req: CallSessionRequest, @Param('id') id: string) {
     return this.callService.leaveCall(id, req.callSession);
   }
 
@@ -77,7 +89,7 @@ export class CallController {
   @Post(':id/webrtc-transport')
   @UseGuards(CallSessionGuard)
   reportWebrtcTransport(
-    @Req() req: any,
+    @Req() req: CallSessionRequest,
     @Param('id') id: string,
     @Body() body: WebrtcTransportDto,
   ) {
@@ -95,7 +107,7 @@ export class CallController {
   @Post(':id/webrtc-ice')
   @UseGuards(CallSessionGuard)
   reportWebrtcIce(
-    @Req() req: any,
+    @Req() req: CallSessionRequest,
     @Param('id') id: string,
     @Body() body: WebrtcIceDto,
   ) {
@@ -110,19 +122,19 @@ export class CallController {
 
   @Get(':id/details')
   @UseGuards(CallSessionGuard)
-  getDetails(@Req() req: any, @Param('id') id: string) {
+  getDetails(@Req() req: CallSessionRequest, @Param('id') id: string) {
     return this.callService.getCallDetails(id, req.callSession);
   }
 
   @Get(':id')
   @UseGuards(ApiKeyGuard)
-  getCall(@Param('id') id: string) {
-    return this.callService.getCall(id);
+  getCall(@Req() req: ApiKeyRequest, @Param('id') id: string) {
+    return this.callService.getCall(id, req.project.id);
   }
 
   @Get()
   @UseGuards(ApiKeyGuard)
-  getCalls(@Req() req: any) {
+  getCalls(@Req() req: ApiKeyRequest) {
     return this.callService.getCalls(req.project.id);
   }
 }

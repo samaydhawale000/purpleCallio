@@ -127,7 +127,9 @@ export interface ExchangeResult {
 
 export interface PurpleCallioConfig {
   apiKey: string;
-  /** PurpleCallio API base URL. Default: https://api.purplecallio.com */
+  /** PurpleCallio REST API base URL (include /api when required by your proxy). */
+  apiUrl?: string;
+  /** @deprecated Use apiUrl. Kept as a backwards-compatible REST base URL alias. */
   baseUrl?: string;
   /** Hosted call UI base URL. Default: https://call.purplecallio.com */
   callBaseUrl?: string;
@@ -138,6 +140,8 @@ export interface EngineConfig {
   token: string;
   callId: string;
   signalUrl: string;
+  /** REST API base URL used for authenticated endpoints such as TURN credentials. */
+  apiUrl?: string;
   /** Default: video on. */
   video?: boolean;
   /** Default: audio on. */

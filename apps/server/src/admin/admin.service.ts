@@ -4,8 +4,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CallGateway } from '../socket/gateways/call.gateway';
 import { TurnService } from '../turn/turn.service';
 import { UsageBillingService } from '../billing/usage-billing.service';
-import { CustomerDiscountService, SetDiscountInput } from '../billing/customer-discount.service';
+import {
+  CustomerDiscountService,
+  SetDiscountInput,
+} from '../billing/customer-discount.service';
 import { OciMonitoringService } from '../oci/oci-monitoring.service';
+import { CallService } from '../call/services/call.service';
 
 @Injectable()
 export class AdminService {
@@ -16,6 +20,7 @@ export class AdminService {
     private usageBilling: UsageBillingService,
     private customerDiscounts: CustomerDiscountService,
     private ociMonitoring: OciMonitoringService,
+    private callService: CallService,
   ) {}
 
   // ── Overview ──────────────────────────────────────────
@@ -326,10 +331,7 @@ export class AdminService {
   }
 
   async endCall(callId: string) {
-    return this.prisma.call.update({
-      where: { id: callId },
-      data: { status: 'ENDED', endedAt: new Date() },
-    });
+    return this.callService.endCall(callId);
   }
 
   // ── Usage ────────────────────────────────────────────
@@ -443,13 +445,18 @@ export class AdminService {
   // not-available placeholder for the same reason `server.*` used to be.
   async getMonitoring() {
     const now = new Date();
+    const minuteAgo = new Date(now.getTime() - 60_000);
     const startOfDay = new Date(now);
     startOfDay.setHours(0, 0, 0, 0);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const [
       activeCalls,
+      activePlaygroundCalls,
       callsToday,
       callsMonth,
+      callsCreatedLastMinute,
+      playgroundCreatedLastMinute,
+      playgroundExpiredToday,
       endedMonth,
       dbConnections,
       webrtcStats,
@@ -458,8 +465,26 @@ export class AdminService {
       this.prisma.call.count({
         where: { status: { in: ['RINGING', 'ACCEPTED', 'INITIATED'] } },
       }),
+      this.prisma.call.count({
+        where: {
+          source: 'PLAYGROUND',
+          status: { in: ['RINGING', 'ACCEPTED', 'INITIATED'] },
+          expiresAt: { gt: now },
+        },
+      }),
       this.prisma.call.count({ where: { createdAt: { gte: startOfDay } } }),
       this.prisma.call.count({ where: { createdAt: { gte: startOfMonth } } }),
+      this.prisma.call.count({ where: { createdAt: { gte: minuteAgo } } }),
+      this.prisma.call.count({
+        where: { source: 'PLAYGROUND', createdAt: { gte: minuteAgo } },
+      }),
+      this.prisma.callEvent.count({
+        where: {
+          event: 'CALL_EXPIRED',
+          createdAt: { gte: startOfDay },
+          call: { source: 'PLAYGROUND' },
+        },
+      }),
       this.prisma.call.findMany({
         where: { startedAt: { not: null }, endedAt: { gte: startOfMonth } },
         select: { startedAt: true, endedAt: true },
@@ -498,6 +523,7 @@ export class AdminService {
       },
       calls: {
         active: activeCalls, // measured
+        createdLastMinute: callsCreatedLastMinute,
         // Real concurrent participants from the gateway, not an assumed
         // "2 per call" — matches getOverview's activeParticipants.
         concurrentUsers: ws.inCall, // measured
@@ -505,6 +531,13 @@ export class AdminService {
         month: callsMonth, // measured
         minutesMonth: callMinutesMonth, // calculated (sum of measured durations)
         avgDurationSeconds: avgCallDurationSeconds, // calculated
+      },
+      playground: {
+        activeCalls: activePlaygroundCalls,
+        callsCreatedLastMinute: playgroundCreatedLastMinute,
+        callsExpiredToday: playgroundExpiredToday,
+        enabled:
+          (process.env.PLAYGROUND_ENABLED ?? 'true').toLowerCase() === 'true',
       },
       webrtc: webrtcStats,
       turn: {
@@ -516,7 +549,12 @@ export class AdminService {
         bytesSent: null,
         bandwidthMbps: null,
       },
-      websocket: { clients: ws.clients, inCall: ws.inCall, rooms: ws.rooms },
+      websocket: {
+        clients: ws.clients,
+        inCall: ws.inCall,
+        rooms: ws.rooms,
+        authFailures: ws.authFailures,
+      },
       database: { connections: dbConnections },
     };
   }

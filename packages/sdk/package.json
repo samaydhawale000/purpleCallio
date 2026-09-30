@@ -1,6 +1,6 @@
 {
   "name": "@purplecallio/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Official JavaScript and TypeScript SDK for PurpleCallio, a developer-focused real-time communication infrastructure platform for audio, video, screen sharing and WebRTC applications.",
   "homepage": "https://purplecallio.com",
   "main": "./dist/index.js",
@@ -17,7 +17,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "vitest run"
   },
   "keywords": [
     "purplecallio",
@@ -36,7 +37,9 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "socket.io": "^4.8.3",
+    "vitest": "^2.1.9"
   },
   "author": ""
 }

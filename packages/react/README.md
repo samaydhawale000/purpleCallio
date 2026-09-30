@@ -107,11 +107,11 @@ interface CreateCallResult {
 
 Send each participant **their own** `token` and the shared `callId` to their browser over your own authenticated API — never send one participant's token to a different participant.
 
-## 2. `signalUrl` — currently undocumented by the SDK itself
+## 2. `signalUrl` and `apiUrl`
 
-`MeetingProvider` (and the `PurpleCallioMeeting` engine it wraps) also require a `signalUrl`. As of 0.1.0, **this is not part of `CreateCallResult`, and the SDK's `EngineConfig` type defines no default for it** — this was verified directly against `packages/sdk/src/types/index.ts` and `apps/server`'s call-creation code, neither of which returns or documents this value.
+`MeetingProvider` (and the `PurpleCallioMeeting` engine it wraps) requires a `signalUrl`; it accepts an optional `apiUrl` for REST requests such as TURN credentials. These values are not currently included in `CreateCallResult`, so return them with the call session from your backend.
 
-What we *can* confirm by reading the current backend: the call-signaling gateway (`apps/server/src/socket/gateways/call.gateway.ts`) runs on the same host as the REST API, with no separate signaling service. So in practice, `signalUrl` is typically your project's API base URL (default `https://api.purplecallio.com`). Treat this as an **observed implementation detail, not a guaranteed public contract** — until it's returned explicitly, have your own backend send it to the browser alongside `token`/`callId`.
+Use the Socket.IO origin for `signalUrl` and the REST API base for `apiUrl`. With the current Nginx routing, the hosted deployment uses `signalUrl: 'https://purplecallio.serveminecraft.net'` and `apiUrl: 'https://purplecallio.serveminecraft.net/api'`. If `apiUrl` is omitted for compatibility, the SDK uses `signalUrl` as the REST base; provide it explicitly when REST is mounted under a prefix.
 
 ---
 
@@ -126,6 +126,7 @@ What we *can* confirm by reading the current backend: the call-signaling gateway
 | `token` | `string` | **yes** | Participant token — see "Authentication & Session Setup" above. Never an API key. |
 | `callId` | `string` | **yes** | From `CreateCallResult.callId`. |
 | `signalUrl` | `string` | **yes** | See "Authentication & Session Setup" above. |
+| `apiUrl` | `string` | no | REST API base URL, including any proxy path prefix such as `/api`. |
 | `video` | `boolean` | no | Default `true`. |
 | `audio` | `boolean` | no | Default `true`. |
 | `iceServers` | `RTCIceServer[]` | no | Passed straight through to the engine. |
@@ -143,9 +144,9 @@ What we *can* confirm by reading the current backend: the call-signaling gateway
 import { useEffect } from "react";
 import { MeetingProvider, useMeeting } from "@purplecallio/react";
 
-function Call({ token, callId, signalUrl }: { token: string; callId: string; signalUrl: string }) {
+function Call({ token, callId, signalUrl, apiUrl }: { token: string; callId: string; signalUrl: string; apiUrl: string }) {
   return (
-    <MeetingProvider token={token} callId={callId} signalUrl={signalUrl}>
+    <MeetingProvider token={token} callId={callId} signalUrl={signalUrl} apiUrl={apiUrl}>
       <Room />
     </MeetingProvider>
   );
@@ -404,9 +405,9 @@ import {
   MeetingRoom
 } from "@purplecallio/react";
 
-function App({ token, callId, signalUrl }: { token: string; callId: string; signalUrl: string }) {
+function App({ token, callId, signalUrl, apiUrl }: { token: string; callId: string; signalUrl: string; apiUrl: string }) {
   return (
-    <MeetingProvider token={token} callId={callId} signalUrl={signalUrl}>
+    <MeetingProvider token={token} callId={callId} signalUrl={signalUrl} apiUrl={apiUrl}>
       <MeetingRoom>
         {/* Meeting content */}
       </MeetingRoom>
@@ -897,9 +898,9 @@ import {
   ConnectionStatus
 } from "@purplecallio/react";
 
-export default function Meeting({ token, callId, signalUrl }: { token: string; callId: string; signalUrl: string }) {
+export default function Meeting({ token, callId, signalUrl, apiUrl }: { token: string; callId: string; signalUrl: string; apiUrl: string }) {
   return (
-    <MeetingProvider token={token} callId={callId} signalUrl={signalUrl}>
+    <MeetingProvider token={token} callId={callId} signalUrl={signalUrl} apiUrl={apiUrl}>
       <Room />
     </MeetingProvider>
   );

@@ -187,6 +187,51 @@ const docs = {
          ],
       ],
    },
+   flutter: {
+      title: "PurpleCallio Flutter SDK Preview",
+      meta: "PurpleCallio Flutter SDK | Real-Time Audio & Video",
+      description:
+         "Preview the PurpleCallio Flutter SDK implementation, participant-token security, WebRTC call flow, platform permissions, and validation status.",
+      lead: "The Flutter package contains a native Dart call engine for PurpleCallio's participant-token, REST, Socket.IO, and WebRTC protocol. It is not yet released for production: Android and iOS device calls and consumer installation still need validation.",
+      sections: [
+         ["Release status", "The package source, fake-backed unit tests, Flutter example, and gated real-server signaling test are present. Flutter tooling and physical devices were unavailable for validation in this environment. Keep this SDK in Coming soon until package tests, example builds, consumer installation, and real-device calls pass."],
+         ["Install for local development", "The package is not published to pub.dev. In a local checkout, use the mobile/flutter package path. Do not treat the declared 0.1.0 manifest version as a published release."],
+         ["Use participant tokens", "Create calls from your trusted backend with the project API key, then pass each participant only their own token. PurpleCallioClient joins with that token; never embed an API key or server secret in a Flutter application."],
+         ["Media and platform support", "The engine implements audio/video, microphone and camera controls, camera switching, participant events, reconnection, cleanup, and rendering helpers. Screen sharing is implemented for Android only; iOS sharing is unsupported because the package has no ReplayKit Broadcast Upload Extension."],
+         ["Permissions and lifecycle", "Add camera and microphone permissions to the host application. The SDK surfaces permission and media errors; the application owns its permission explanation and UI. Use PurpleCallioLifecycle to bind the meeting to Flutter app lifecycle changes."],
+         ["Validation required before release", "Run Flutter analyze and tests, build and install the example in a clean consumer app, then test real audio/video, remote rendering, mute, camera toggle/switch, reconnect, leave/rejoin, Android screen capture, and iOS limitations on physical devices against staging."],
+      ],
+   },
+   ios: {
+      title: "PurpleCallio iOS SDK Preview",
+      meta: "PurpleCallio iOS SDK | Native Swift WebRTC",
+      description:
+         "Preview the native PurpleCallio Swift SDK implementation, participant-token authentication, WebRTC call flow, permissions, and device validation status.",
+      lead: "The Swift package contains a native call engine using PurpleCallio REST, Socket.IO, and WebRTC. It is not released for production: a full Xcode consumer build and physical iPhone or iPad validation remain outstanding.",
+      sections: [
+         ["Release status", "The Swift package and 76 Swift Testing cases pass on the macOS target. That does not compile the iOS UIKit, AVFoundation, or device WebRTC path. This environment has no full Xcode installation or physical iOS device, so no iOS target build or device call is claimed."],
+         ["Add the package", "The PurpleCallio SPM package is not published yet. Add mobile/ios as a local Swift package while developing from this repository; use a versioned Git tag only after an official release exists."],
+         ["Use participant tokens", "Your backend creates the call with its project API key and returns a participant-specific token. Pass that token to PurpleCallioClient.joinMeeting(token:). Never include a project API key, API secret, or server credential in the iOS app."],
+         ["Permissions and media", "Add NSCameraUsageDescription and NSMicrophoneUsageDescription to the host app Info.plist. The implementation includes native media capture, camera switching, audio-session handling, state, participant events, remote video rendering, reconnect, and cleanup."],
+         ["Screen sharing is unsupported", "The iOS SDK startScreenShare() call returns screenShareUnavailable. ReplayKit screen broadcast would require a Broadcast Upload Extension and app-group communication, neither of which is included."],
+         ["Validation required before release", "Resolve and build the package from a clean Xcode app, run all XCTest cases, and validate microphone, camera, remote video, audio routes, interruptions, foreground/background, reconnect, cleanup, and leave/rejoin on physical iOS devices."],
+      ],
+   },
+   android: {
+      title: "PurpleCallio Android SDK Preview",
+      meta: "PurpleCallio Android SDK | Native Kotlin WebRTC",
+      description:
+         "Preview the native PurpleCallio Kotlin SDK implementation, participant-token authentication, WebRTC, MediaProjection, permissions, and Android validation status.",
+      lead: "The Android library contains a Kotlin call engine using PurpleCallio REST, Socket.IO, and WebRTC, plus a MediaProjection screen-share path. It is not released for production: builds, consumer installation, instrumentation, and physical-device validation remain outstanding.",
+      sections: [
+         ["Release status", "The Android library, JVM test sources, Gradle publication configuration, and sample app are present. This environment has no usable Java runtime and Gradle could not initialize its native services, so no successful build or test result is claimed."],
+         ["Add the library", "No Maven artifact has been published. Use the local mobile/android/purplecallio project dependency while developing from this repository. The declared 0.1.0 coordinate is not yet a downloadable release."],
+         ["Use participant tokens", "Create calls from your trusted backend using the project API key, then give the app its participant-specific token. PurpleCallioClient.joinMeeting(token) authenticates the participant; never put API keys or server secrets in BuildConfig, resources, or app code."],
+         ["Permissions and media", "Request RECORD_AUDIO and CAMERA at runtime before joining or accepting. The SDK implements native WebRTC audio/video, camera controls and switching, participant state, reconnect, cleanup, audio focus, and SurfaceViewRenderer video output."],
+         ["Android screen sharing", "Screen capture uses MediaProjection. Start a fresh createScreenCaptureIntent consent flow and pass its result to startScreenShare(resultCode, data). The SDK starts its declared non-exported mediaProjection foreground service and restores the camera on stop."],
+         ["Validation required before release", "Run the Gradle JVM suite, instrumentation tests, build/install the sample from a clean consumer project, then test real camera, microphone, remote video, audio routing, permissions, lifecycle, reconnection, MediaProjection start/stop, and repeated join/leave on physical Android devices."],
+      ],
+   },
    "rest-api": {
       title: "REST API for Calls",
       meta: "Video Calling REST API",
@@ -495,6 +540,51 @@ join();
 <PurpleCallioVideo stream={$call.remoteStream} />
 <button on:click={() => call.camera.toggle()}>Toggle camera</button>`,
    },
+   flutter: {
+      title: "Flutter token-only call example",
+      code: `import 'package:purplecallio_flutter/purplecallio_flutter.dart';
+
+final client = PurpleCallioClient();
+final participantToken = await myBackend.fetchParticipantToken();
+final meeting = await client.joinMeeting(
+  participantToken,
+  options: const PurpleCallioJoinOptions(
+    microphoneEnabled: true,
+    cameraEnabled: true,
+  ),
+);
+
+await meeting.toggleMicrophone(); // flips the current state
+await meeting.toggleCamera();
+await meeting.leave();
+await client.dispose();`,
+   },
+   ios: {
+      title: "Swift token-only call example",
+      code: `import PurpleCallio
+
+let client = PurpleCallioClient()
+let participantToken = try await myBackend.fetchParticipantToken()
+let meeting = try await client.joinMeeting(token: participantToken)
+
+try meeting.toggleMicrophone()
+try await meeting.toggleCamera()
+try await meeting.switchCamera()
+await meeting.leave()
+client.dispose()`,
+   },
+   android: {
+      title: "Kotlin token-only call example",
+      code: `val client = PurpleCallioClient(applicationContext)
+val participantToken = myBackend.fetchParticipantToken()
+val meeting = client.joinMeeting(token = participantToken)
+
+meeting.toggleMicrophone()
+meeting.toggleCamera()
+meeting.switchCamera()
+meeting.leave()
+client.dispose()`,
+   },
    "rest-api": {
       title: "Create a call with the REST API",
       code: `curl -X POST https://api.purplecallio.com/calls \\
@@ -696,6 +786,12 @@ export default async function DocPage({
                            ? "request.sh"
                            : slug === "react-native"
                              ? "CallScreen.tsx"
+                             : slug === "flutter"
+                               ? "main.dart"
+                               : slug === "ios"
+                                 ? "CallModel.swift"
+                                 : slug === "android"
+                                   ? "CallViewModel.kt"
                              : slug === "vue"
                                ? "CallView.vue"
                                : slug === "svelte"

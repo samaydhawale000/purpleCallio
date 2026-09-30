@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 
 import { randomBytes, createHash } from 'crypto';
 
@@ -20,22 +24,16 @@ function hashKey(rawKey: string): string {
 
 @Injectable()
 export class ApiKeyService {
-  constructor(
-    private prisma: PrismaService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   /**
    * Creates a key and returns the raw value exactly once — callers must
    * show it to the user immediately ("you won't be able to view this key
    * again") since only its hash is persisted from here on.
    */
-  async createApiKey(
-    projectId: string,
-    name: string,
-  ) {
-    const rawKey =
-      'bj_live_' +
-      randomBytes(32).toString('hex');
+  async createApiKey(userId: string, projectId: string, name: string) {
+    await this.assertOwnership(userId, projectId);
+    const rawKey = 'bj_live_' + randomBytes(32).toString('hex');
 
     const created = await this.prisma.apiKey.create({
       data: {
@@ -50,9 +48,8 @@ export class ApiKeyService {
     return { ...created, key: rawKey };
   }
 
-  async getProjectKeys(
-    projectId: string,
-  ) {
+  async getProjectKeys(userId: string, projectId: string) {
+    await this.assertOwnership(userId, projectId);
     return this.prisma.apiKey.findMany({
       where: {
         projectId,
@@ -67,9 +64,7 @@ export class ApiKeyService {
   /**
    * List all API keys across all projects owned by the user.
    */
-  async getAllKeys(
-    userId: string,
-  ) {
+  async getAllKeys(userId: string) {
     return this.prisma.apiKey.findMany({
       where: {
         project: {
@@ -105,7 +100,9 @@ export class ApiKeyService {
     return this.prisma.apiKey.update({
       where: { id: keyId },
       data: {
-        ...(typeof data.isActive === 'boolean' ? { isActive: data.isActive } : {}),
+        ...(typeof data.isActive === 'boolean'
+          ? { isActive: data.isActive }
+          : {}),
         ...(typeof data.name === 'string' ? { name: data.name } : {}),
       },
       select: MASKED_SELECT,
@@ -115,10 +112,7 @@ export class ApiKeyService {
   /**
    * Revoke (delete) a key. Only the owner of the parent project may do so.
    */
-  async revokeKey(
-    userId: string,
-    keyId: string,
-  ) {
+  async revokeKey(userId: string, keyId: string) {
     const existing = await this.prisma.apiKey.findFirst({
       where: { id: keyId, project: { ownerId: userId } },
     });

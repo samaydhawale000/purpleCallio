@@ -1065,6 +1065,32 @@ meeting.camera.enable();
 meeting.microphone.enable();`} />
           </Section>
 
+          {/* ── Native SDK previews ──────────────────── */}
+          <Section id="native-sdk-previews">
+            <Heading>Native SDK previews</Heading>
+            <p className="text-[#3D3650] text-sm mb-5">
+              Native Flutter, Swift, and Kotlin implementations are available
+              in the repository for evaluation. They are not released for
+              production while platform builds and physical-device validation
+              remain outstanding.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                ["Flutter", "/docs/flutter"],
+                ["iOS", "/docs/ios"],
+                ["Android", "/docs/android"],
+              ].map(([label, href]) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="rounded-xl border border-[#E7DFF5] p-4 text-sm font-semibold text-[#6425C4] hover:border-[#A05DF9]"
+                >
+                  {label} implementation status →
+                </Link>
+              ))}
+            </div>
+          </Section>
+
           {/* ── Errors ───────────────────────────────── */}
           <Section id="errors">
             <Heading>Error Codes</Heading>

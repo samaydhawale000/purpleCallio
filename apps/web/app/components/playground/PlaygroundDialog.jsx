@@ -39,6 +39,7 @@ export default function PlaygroundDialog({
   onOpenReceiver,
 }) {
 const [callStatus, setCallStatus] = useState("RINGING");
+  const [secondsLeft, setSecondsLeft] = useState(null);
   const [firstDeviceOpened, setFirstDeviceOpened] = useState(false);
   // Tracks only "the button was clicked / window was opened" — distinct from
   // firstDeviceOpened, which now means "the call actually started ringing".
@@ -56,6 +57,18 @@ const [callStatus, setCallStatus] = useState("RINGING");
       setFirstDeviceOpened(false);
       setCallWindowOpened(false);
     }
+  }, [open, session]);
+
+  useEffect(() => {
+    if (!open || !session?.expiresAt) return;
+    const update = () => {
+      const left = Math.max(0, Math.ceil((new Date(session.expiresAt).getTime() - Date.now()) / 1000));
+      setSecondsLeft(left);
+      if (left === 0) setCallStatus("EXPIRED");
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
   }, [open, session]);
 
   // The opened call tab lands on its own "Call" lobby and only actually
@@ -97,6 +110,7 @@ const [callStatus, setCallStatus] = useState("RINGING");
           const data = await res.json();
           if (!cancelled && data.status) setCallStatus(data.status);
         }
+        if (res.status === 410) setCallStatus("EXPIRED");
       } catch {
         // Network hiccup — keep polling.
       }
@@ -238,7 +252,13 @@ const connected = callStatus === "ACCEPTED";
                   </div>
 
 {/* STEP CONTENT — only the current step renders */}
-                  {connected ? (
+                  {callStatus === "EXPIRED" ? (
+                    <div className="py-8 text-center">
+                      <h3 className="text-2xl font-bold text-[#170B2E]">Demo call ended</h3>
+                      <p className="mt-2 text-sm text-[#3D3650]">Playground calls are limited to 1 minute.</p>
+                      <a href="/signup" className="mt-5 inline-block text-sm font-semibold underline text-[#6425C4]">Create a free account to continue testing</a>
+                    </div>
+                  ) : connected ? (
                     /* STEP 4 — CONNECTED */
                     <motion.div
                       key="connected"
@@ -250,7 +270,7 @@ const connected = callStatus === "ACCEPTED";
                           <span className="inline-flex items-center gap-2">You're connected <PartyPopper size={22} /></span>
                         </h3>
                         <p className="text-[#3D3650] mt-1.5">
-                          Two devices are now on the same call.
+                            Two devices are now on the same call. {secondsLeft !== null && `Demo time remaining: ${String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:${String(secondsLeft % 60).padStart(2, "0")}`}
                         </p>
                       </div>
 
