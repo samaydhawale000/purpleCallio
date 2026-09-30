@@ -1574,7 +1574,6 @@ function CallPageContent() {
             <p className="text-sm" style={{ color: textSecondary }}>
                {state === "expired" ? "Playground calls are limited to 1 minute." : duration}
             </p>
-            {state === "expired" && <a className="mt-4 text-sm underline" style={{ color: primary }} href="/signup">Create a free account to continue testing</a>}
          </Screen>
       );
    }

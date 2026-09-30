@@ -86,8 +86,8 @@ export class PlaygroundService {
             'The playground is currently at capacity. Please try again shortly.',
         });
       }
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`purplecallio:playground:${identityKey}`}))`;
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`purplecallio:playground:${ipKey}`}))`;
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${`purplecallio:playground:${identityKey}`}))`;
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${`purplecallio:playground:${ipKey}`}))`;
 
       const activeWhere = {
         source: CallSource.PLAYGROUND,

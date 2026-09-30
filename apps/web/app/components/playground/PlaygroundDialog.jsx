@@ -256,7 +256,6 @@ const connected = callStatus === "ACCEPTED";
                     <div className="py-8 text-center">
                       <h3 className="text-2xl font-bold text-[#170B2E]">Demo call ended</h3>
                       <p className="mt-2 text-sm text-[#3D3650]">Playground calls are limited to 1 minute.</p>
-                      <a href="/signup" className="mt-5 inline-block text-sm font-semibold underline text-[#6425C4]">Create a free account to continue testing</a>
                     </div>
                   ) : connected ? (
                     /* STEP 4 — CONNECTED */
