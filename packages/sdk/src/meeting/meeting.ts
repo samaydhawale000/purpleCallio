@@ -44,6 +44,8 @@ export class PurpleCallioMeeting {
    private offerCreated = false;
    private readonly pendingIceCandidates: RTCIceCandidateInit[] = [];
    private readonly seenIceCandidates = new Set<string>();
+   private transportReported = false;
+   private readonly reportedIceOutcomes = new Set<"SUCCESS" | "FAILED">();
    private audioOutputDeviceId = "";
    private readonly audioElements = new Set<HTMLMediaElement>();
 
@@ -441,6 +443,17 @@ export class PurpleCallioMeeting {
          }
       };
 
+      pc.oniceconnectionstatechange = () => {
+         const iceState = pc.iceConnectionState;
+         if (iceState === "connected" || iceState === "completed") {
+            void this.reportWebrtcTransport(pc);
+            void this.reportIceOutcome(pc, "SUCCESS");
+         } else if (iceState === "failed") {
+            // Only a hard 'failed' counts: 'disconnected' often recovers.
+            void this.reportIceOutcome(pc, "FAILED");
+         }
+      };
+
       this.cameraCtrl.sync();
       this.microphoneCtrl.sync();
    }
@@ -465,12 +478,9 @@ export class PurpleCallioMeeting {
 
    private async fetchBackendIceServers(): Promise<RTCIceServer[]> {
       try {
-         const res = await fetch(
-            `${(this.config.apiUrl ?? this.config.signalUrl).replace(/\/$/, "")}/turn/credentials`,
-            {
-               headers: { Authorization: `Bearer ${this.config.token}` },
-            },
-         );
+         const res = await fetch(`${this.apiBase()}/turn/credentials`, {
+            headers: { Authorization: `Bearer ${this.config.token}` },
+         });
          if (!res.ok) throw new Error();
          const data = (await res.json()) as { iceServers: RTCIceServer[] };
          return data.iceServers ?? [];
@@ -487,6 +497,76 @@ export class PurpleCallioMeeting {
             code: "TURN_CREDENTIALS_FAILED",
          });
          return [{ urls: "stun:stun.l.google.com:19302" }];
+      }
+   }
+
+   private apiBase(): string {
+      return (this.config.apiUrl ?? this.config.signalUrl).replace(/\/$/, "");
+   }
+
+   private async reportWebrtcTransport(pc: RTCPeerConnection): Promise<void> {
+      if (this.transportReported) return;
+      this.transportReported = true;
+      try {
+         const stats = await pc.getStats();
+         let selectedPair: any = null;
+         stats.forEach((report: any) => {
+            if (report.type === "candidate-pair" && report.state === "succeeded") {
+               if (report.nominated || !selectedPair) selectedPair = report;
+            }
+         });
+         let candidateType: string | undefined;
+         if (selectedPair) {
+            stats.forEach((report: any) => {
+               if (report.id === selectedPair.localCandidateId)
+                  candidateType = report.candidateType;
+            });
+         }
+         if (!candidateType) {
+            // Stats not settled yet; let a later state change retry.
+            this.transportReported = false;
+            return;
+         }
+         if (this.pc !== pc) return;
+         await this.postTelemetry("webrtc-transport", {
+            transport: candidateType === "relay" ? "TURN" : "P2P",
+            candidateType,
+         });
+      } catch {
+         /* getStats() shape varies across platforms — never block the call */
+      }
+   }
+
+   /** At most once per outcome per peer connection; a FAILED can later recover to SUCCESS. */
+   private async reportIceOutcome(
+      pc: RTCPeerConnection,
+      outcome: "SUCCESS" | "FAILED",
+   ): Promise<void> {
+      if (this.pc !== pc || this.reportedIceOutcomes.has(outcome)) return;
+      this.reportedIceOutcomes.add(outcome);
+      await this.postTelemetry("webrtc-ice", {
+         outcome,
+         iceConnectionState: pc.iceConnectionState,
+         connectionState: pc.connectionState,
+      });
+   }
+
+   private async postTelemetry(path: string, body: unknown): Promise<void> {
+      if (typeof fetch !== "function") return;
+      try {
+         await fetch(
+            `${this.apiBase()}/calls/${encodeURIComponent(this.config.callId)}/${path}`,
+            {
+               method: "POST",
+               headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${this.config.token}`,
+               },
+               body: JSON.stringify(body),
+            },
+         );
+      } catch {
+         /* telemetry is best-effort */
       }
    }
 
@@ -757,6 +837,8 @@ export class PurpleCallioMeeting {
       this.cleanupFns.forEach((f) => f());
       this.cleanupFns = [];
       this.offerCreated = false;
+      this.transportReported = false;
+      this.reportedIceOutcomes.clear();
       this.pendingIceCandidates.length = 0;
       this.seenIceCandidates.clear();
       this.participantRole = null;

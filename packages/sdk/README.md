@@ -155,6 +155,15 @@ The meeting engine exposes `setAudioInput(deviceId)`, `setVideoInput(deviceId)`,
 
 The SDK sends the participant token in Socket.IO handshake auth and repeats the existing `authenticate` event for compatibility with older server versions. The gateway authenticates the handshake token before accepting call operations; every signaling event remains scoped to that participant's call. On `join-call`, it returns a canonical `call.state` participant snapshot and continues to emit `participant.joined` / `participant.left` updates. `call.started` is broadcast to the room as a lifecycle notification; it is not the media negotiation trigger. The CALLER role creates exactly one offer once the call room holds two participants, while the RECEIVER answers it — `join()` completes this flow on its own, with no app-level `connected` or `join-call` handling. This avoids both peers racing to create an offer. ICE candidates received before the remote description are queued until it is set.
 
+### Call-quality telemetry
+
+When ICE connects, the meeting engine posts two small best-effort reports to your PurpleCallio API (`apiUrl`, falling back to `signalUrl`), authenticated with the participant token:
+
+- `POST /calls/:callId/webrtc-transport` — `{ transport: "P2P" | "TURN", candidateType }`, from the selected candidate pair in `getStats()`.
+- `POST /calls/:callId/webrtc-ice` — `{ outcome: "SUCCESS" | "FAILED", iceConnectionState, connectionState }`. Only a hard ICE `failed` counts as a failure; a call that recovers reports both.
+
+Each is sent at most once per peer connection. They contain no media, IP addresses, or candidate details, and a failed report never affects the call. They feed the P2P/TURN and ICE success figures on the PurpleCallio health dashboard.
+
 ---
 
 # Create a Call
@@ -752,7 +761,7 @@ npm install @purplecallio/react
 Current package version:
 
 ```text
-0.2.0
+0.2.1
 ```
 
 ---

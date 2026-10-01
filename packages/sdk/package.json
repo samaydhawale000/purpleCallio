@@ -1,6 +1,6 @@
 {
   "name": "@purplecallio/sdk",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Official JavaScript and TypeScript SDK for PurpleCallio, a developer-focused real-time communication infrastructure platform for audio, video, screen sharing and WebRTC applications.",
   "homepage": "https://purplecallio.com",
   "main": "./dist/index.js",

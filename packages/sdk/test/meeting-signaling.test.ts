@@ -24,6 +24,11 @@ class FakePeerConnection {
   readonly calls: string[] = [];
   ontrack: ((e: unknown) => void) | null = null;
   onicecandidate: ((e: { candidate: RTCIceCandidateInit | null }) => void) | null = null;
+  oniceconnectionstatechange: (() => void) | null = null;
+  iceConnectionState: RTCIceConnectionState = 'new';
+  connectionState: RTCPeerConnectionState = 'new';
+  /** Local candidate type of the selected pair, or null for "no pair yet". */
+  selectedCandidateType: string | null = 'host';
 
   constructor() {
     FakePeerConnection.instances.push(this);
@@ -62,6 +67,21 @@ class FakePeerConnection {
   async addIceCandidate(candidate: RTCIceCandidateInit) {
     this.calls.push('addIceCandidate');
     this.addedCandidates.push({ candidate: candidate.candidate, sdpMid: candidate.sdpMid });
+  }
+
+  async getStats() {
+    const reports = new Map<string, Record<string, unknown>>();
+    if (this.selectedCandidateType) {
+      reports.set('pair', { id: 'pair', type: 'candidate-pair', state: 'succeeded', nominated: true, localCandidateId: 'local' });
+      reports.set('local', { id: 'local', type: 'local-candidate', candidateType: this.selectedCandidateType });
+    }
+    return reports;
+  }
+
+  setIceState(state: RTCIceConnectionState) {
+    this.iceConnectionState = state;
+    this.connectionState = state === 'completed' ? 'connected' : (state as RTCPeerConnectionState);
+    this.oniceconnectionstatechange?.();
   }
 
   close() {
@@ -540,5 +560,154 @@ describe('PurpleCallioMeeting signaling flow', () => {
     await vi.waitFor(() => expect(gateway.count('leave-call', 'CALLER')).toBe(1));
     await vi.waitFor(() => expect(left).toHaveBeenCalledWith(expect.objectContaining({ participantId: 'alice' })));
     expect(gateway.roomSize()).toBe(1);
+  });
+});
+
+describe('PurpleCallioMeeting WebRTC telemetry', () => {
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  let fetchMock: ReturnType<typeof vi.fn>;
+  let meeting: PurpleCallioMeeting;
+
+  const posts = () =>
+    fetchMock.mock.calls.map(([url, init]) => ({
+      url: url as string,
+      auth: (init as RequestInit).headers && ((init as RequestInit).headers as Record<string, string>).Authorization,
+      body: JSON.parse((init as RequestInit).body as string),
+    }));
+
+  /** A meeting with a live fake peer connection, without a signaling server. */
+  const setup = async (config: { apiUrl?: string } = {}) => {
+    meeting = new PurpleCallioMeeting({
+      token: 'session-token',
+      callId: 'call/1',
+      signalUrl: 'https://signal.example',
+      iceServers: [],
+      overrideIceServers: true,
+      ...config,
+    });
+    await (meeting as any).initLocalMedia();
+    return pcOf(meeting);
+  };
+
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  beforeEach(() => {
+    FakePeerConnection.instances = [];
+    vi.stubGlobal('RTCPeerConnection', FakePeerConnection);
+    fetchMock = vi.fn(async () => ({ ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { mediaDevices: { getUserMedia: async () => fakeStream() } },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (originalNavigator) Object.defineProperty(globalThis, 'navigator', originalNavigator);
+    else Reflect.deleteProperty(globalThis, 'navigator');
+  });
+
+  it('reports P2P transport and ICE success once when ICE connects', async () => {
+    const pc = await setup({ apiUrl: 'https://api.example/api/' });
+
+    pc.setIceState('connected');
+    pc.setIceState('completed');
+    pc.setIceState('connected');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(posts()).toEqual(
+      expect.arrayContaining([
+        {
+          url: 'https://api.example/api/calls/call%2F1/webrtc-transport',
+          auth: 'Bearer session-token',
+          body: { transport: 'P2P', candidateType: 'host' },
+        },
+        {
+          url: 'https://api.example/api/calls/call%2F1/webrtc-ice',
+          auth: 'Bearer session-token',
+          body: { outcome: 'SUCCESS', iceConnectionState: 'connected', connectionState: 'connected' },
+        },
+      ]),
+    );
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('POST');
+  });
+
+  it('classifies a relay candidate as TURN and falls back to signalUrl when apiUrl is unset', async () => {
+    const pc = await setup();
+    pc.selectedCandidateType = 'relay';
+
+    pc.setIceState('connected');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    expect(posts()).toContainEqual({
+      url: 'https://signal.example/calls/call%2F1/webrtc-transport',
+      auth: 'Bearer session-token',
+      body: { transport: 'TURN', candidateType: 'relay' },
+    });
+  });
+
+  it('reports a hard failure, then the recovery, but not a transient disconnect', async () => {
+    const pc = await setup();
+
+    pc.setIceState('disconnected');
+    await flush();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    pc.setIceState('failed');
+    pc.setIceState('failed');
+    pc.setIceState('connected');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await flush();
+
+    const ice = posts().filter((p) => p.url.endsWith('/webrtc-ice')).map((p) => p.body.outcome);
+    expect(ice).toEqual(['FAILED', 'SUCCESS']);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries the transport report when no candidate pair has been selected yet', async () => {
+    const pc = await setup();
+    pc.selectedCandidateType = null;
+
+    pc.setIceState('connected');
+    await flush();
+    await flush();
+    expect(posts().filter((p) => p.url.endsWith('/webrtc-transport'))).toHaveLength(0);
+
+    pc.selectedCandidateType = 'srflx';
+    pc.setIceState('completed');
+    await vi.waitFor(() =>
+      expect(posts().filter((p) => p.url.endsWith('/webrtc-transport')).map((p) => p.body)).toEqual([
+        { transport: 'P2P', candidateType: 'srflx' },
+      ]),
+    );
+  });
+
+  it('never lets a telemetry failure surface to the app', async () => {
+    const pc = await setup();
+    fetchMock.mockRejectedValue(new Error('network down'));
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    try {
+      pc.setIceState('connected');
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      await flush();
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off('unhandledRejection', unhandled);
+    }
+  });
+
+  it('does not report for a peer connection that has been torn down', async () => {
+    const pc = await setup();
+    await meeting.leave();
+
+    pc.setIceState('connected');
+    await flush();
+    await flush();
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

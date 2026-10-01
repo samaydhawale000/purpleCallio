@@ -41,7 +41,7 @@
     "rxjs": ">=7.4.0"
   },
   "dependencies": {
-    "@purplecallio/sdk": "^0.2.0"
+    "@purplecallio/sdk": "^0.2.1"
   },
   "devDependencies": {
     "@angular/compiler": "^19.2.0",
