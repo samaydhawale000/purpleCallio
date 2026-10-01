@@ -138,7 +138,7 @@ For the hosted deployment behind the current Nginx proxy, REST requests use the 
 
 ## Meeting configuration
 
-`PurpleCallioMeeting` and `MeetingProvider` accept separate `signalUrl` and `apiUrl` values. `apiUrl` is used for authenticated REST calls such as `/turn/credentials`. For backwards compatibility, omitting it uses `signalUrl` as the REST base; explicitly pass `apiUrl` whenever your proxy routes REST under a prefix.
+`PurpleCallioMeeting` and `MeetingProvider` accept separate `signalUrl` and `apiUrl` values. `apiUrl` is used for authenticated REST calls such as `/turn/credentials`. Passing `apiUrl` is recommended. If you omit it, the SDK tries `signalUrl` as the REST base and, when that origin answers with a non-API 404 (for example the web app in the standard deployment, where REST lives under `/api`), falls through to `signalUrl + "/api"` and remembers whichever base answered. A REST prefix other than `/api` always needs an explicit `apiUrl`.
 
 ```ts
 const meeting = new PurpleCallioMeeting({
@@ -157,7 +157,7 @@ The SDK sends the participant token in Socket.IO handshake auth and repeats the 
 
 ### Call-quality telemetry
 
-When ICE connects, the meeting engine posts two small best-effort reports to your PurpleCallio API (`apiUrl`, falling back to `signalUrl`), authenticated with the participant token:
+When ICE connects, the meeting engine posts two small best-effort reports to your PurpleCallio API (`apiUrl`, or the base resolved from `signalUrl` as described in [Meeting configuration](#meeting-configuration)), authenticated with the participant token:
 
 - `POST /calls/:callId/webrtc-transport` — `{ transport: "P2P" | "TURN", candidateType }`, from the selected candidate pair in `getStats()`.
 - `POST /calls/:callId/webrtc-ice` — `{ outcome: "SUCCESS" | "FAILED", iceConnectionState, connectionState }`. Only a hard ICE `failed` counts as a failure; a call that recovers reports both.
@@ -761,7 +761,7 @@ npm install @purplecallio/react
 Current package version:
 
 ```text
-0.2.1
+0.2.2
 ```
 
 ---

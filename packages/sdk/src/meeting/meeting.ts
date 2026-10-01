@@ -45,6 +45,7 @@ export class PurpleCallioMeeting {
    private readonly pendingIceCandidates: RTCIceCandidateInit[] = [];
    private readonly seenIceCandidates = new Set<string>();
    private transportReported = false;
+   private resolvedApiBase: string | null = null;
    private readonly reportedIceOutcomes = new Set<"SUCCESS" | "FAILED">();
    private audioOutputDeviceId = "";
    private readonly audioElements = new Set<HTMLMediaElement>();
@@ -478,7 +479,7 @@ export class PurpleCallioMeeting {
 
    private async fetchBackendIceServers(): Promise<RTCIceServer[]> {
       try {
-         const res = await fetch(`${this.apiBase()}/turn/credentials`, {
+         const res = await this.apiFetch("/turn/credentials", {
             headers: { Authorization: `Bearer ${this.config.token}` },
          });
          if (!res.ok) throw new Error();
@@ -500,8 +501,29 @@ export class PurpleCallioMeeting {
       }
    }
 
-   private apiBase(): string {
-      return (this.config.apiUrl ?? this.config.signalUrl).replace(/\/$/, "");
+   /**
+    * fetch() against the REST API. An explicit `apiUrl` is used as-is.
+    * Without one, REST may sit at the signaling origin (a bare server) or
+    * under `/api` behind the standard Nginx deployment, where the origin root
+    * is the web app. Try the origin first and fall through to `/api` when it
+    * answers with a non-API (non-JSON) 404, remembering whichever base worked.
+    */
+   private async apiFetch(path: string, init: RequestInit): Promise<Response> {
+      const signal = this.config.signalUrl.replace(/\/$/, "");
+      const bases = this.resolvedApiBase
+         ? [this.resolvedApiBase]
+         : this.config.apiUrl
+           ? [this.config.apiUrl.replace(/\/$/, "")]
+           : [signal, `${signal}/api`];
+      for (let i = 0; ; i++) {
+         const res = await fetch(`${bases[i]}${path}`, init);
+         const isLast = i === bases.length - 1;
+         const contentType = res.headers?.get?.("content-type") ?? "";
+         if (!isLast && res.status === 404 && !contentType.includes("json"))
+            continue;
+         this.resolvedApiBase = bases[i];
+         return res;
+      }
    }
 
    private async reportWebrtcTransport(pc: RTCPeerConnection): Promise<void> {
@@ -554,8 +576,8 @@ export class PurpleCallioMeeting {
    private async postTelemetry(path: string, body: unknown): Promise<void> {
       if (typeof fetch !== "function") return;
       try {
-         await fetch(
-            `${this.apiBase()}/calls/${encodeURIComponent(this.config.callId)}/${path}`,
+         await this.apiFetch(
+            `/calls/${encodeURIComponent(this.config.callId)}/${path}`,
             {
                method: "POST",
                headers: {

@@ -685,6 +685,77 @@ describe('PurpleCallioMeeting WebRTC telemetry', () => {
     );
   });
 
+  it('without apiUrl, falls through to signalUrl + /api when the origin root is the web app', async () => {
+    // Standard Nginx deployment: `/` is the Next.js site (HTML 404 for API
+    // paths), REST is under `/api`, Socket.IO at the origin.
+    fetchMock.mockImplementation(async (url: string) =>
+      url.startsWith('https://signal.example/api/')
+        ? { ok: true, status: 200, headers: new Headers({ 'content-type': 'application/json' }) }
+        : { ok: false, status: 404, headers: new Headers({ 'content-type': 'text/html; charset=utf-8' }) },
+    );
+    const pc = await setup();
+
+    pc.setIceState('connected');
+    await vi.waitFor(() =>
+      expect(posts().filter((p) => p.url.startsWith('https://signal.example/api/'))).toHaveLength(2),
+    );
+    await flush();
+
+    const urls = posts().map((p) => p.url);
+    expect(urls).toContain('https://signal.example/api/calls/call%2F1/webrtc-transport');
+    expect(urls).toContain('https://signal.example/api/calls/call%2F1/webrtc-ice');
+
+    // The working base is remembered: a later report goes straight to /api.
+    fetchMock.mockClear();
+    pc.setIceState('failed');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(posts()[0].url).toBe('https://signal.example/api/calls/call%2F1/webrtc-ice');
+  });
+
+  it('without apiUrl, keeps the origin when it answers as the API (JSON), e.g. a bare local server', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 404, headers: new Headers({ 'content-type': 'application/json' }) });
+    const pc = await setup();
+
+    pc.setIceState('connected');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await flush();
+
+    expect(posts().every((p) => p.url.startsWith('https://signal.example/calls/'))).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('without apiUrl, finds TURN credentials under /api too', async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url === 'https://signal.example/api/turn/credentials'
+        ? {
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({ iceServers: [{ urls: 'turn:turn.example' }] }),
+          }
+        : { ok: false, status: 404, headers: new Headers({ 'content-type': 'text/html' }) },
+    );
+    meeting = new PurpleCallioMeeting({ token: 'session-token', callId: 'call/1', signalUrl: 'https://signal.example/' });
+
+    await expect((meeting as any).fetchBackendIceServers()).resolves.toEqual([{ urls: 'turn:turn.example' }]);
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://signal.example/turn/credentials',
+      'https://signal.example/api/turn/credentials',
+    ]);
+  });
+
+  it('with an explicit apiUrl, never probes another base', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 404, headers: new Headers({ 'content-type': 'text/html' }) });
+    const pc = await setup({ apiUrl: 'https://rest.example/v1' });
+
+    pc.setIceState('connected');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await flush();
+
+    expect(posts().every((p) => p.url.startsWith('https://rest.example/v1/calls/'))).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('never lets a telemetry failure surface to the app', async () => {
     const pc = await setup();
     fetchMock.mockRejectedValue(new Error('network down'));
