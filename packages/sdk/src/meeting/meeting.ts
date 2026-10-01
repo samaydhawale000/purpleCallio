@@ -95,6 +95,7 @@ export class PurpleCallioMeeting {
    async join(): Promise<void> {
       // Idempotent: if already connected/joining, return the same promise.
       if (this.connection.state === "joined") return;
+      if (this.joinedRoom && this.transport) return;
       if (this.callEnded) throw new Error("CALL_ENDED");
       if (this.joinPromise) return this.joinPromise;
 
@@ -503,6 +504,13 @@ export class PurpleCallioMeeting {
       }
    };
 
+   private negotiateIfPeerPresent(roomSize: number | undefined): void {
+      if (typeof roomSize !== "number" || roomSize < 2) return;
+      void this.createOffer().catch(() =>
+         this.emit("connection.diagnostic", { code: "ICE_FAILED" }),
+      );
+   }
+
    private handleOffer = async (payload: {
       offer: RTCSessionDescriptionInit;
    }) => {
@@ -605,26 +613,14 @@ export class PurpleCallioMeeting {
                role: this.resolveRole(p.participantId),
             });
             this.emit("participant.joined", p);
-            if (p.participantId !== this.meetingState.snapshot().participantId)
-               void this.createOffer().catch(() =>
-                  this.emit("connection.diagnostic", { code: "ICE_FAILED" }),
-               );
+            this.negotiateIfPeerPresent(p.participants);
          }),
       );
 
       offs.push(
          raw("call.state", (p) => {
             this.applyParticipantSnapshot(p.participants ?? []);
-            if (
-               (p.participants ?? []).some(
-                  (participant: Participant) =>
-                     participant.participantId !==
-                     this.meetingState.snapshot().participantId,
-               )
-            )
-               void this.createOffer().catch(() =>
-                  this.emit("connection.diagnostic", { code: "ICE_FAILED" }),
-               );
+            this.negotiateIfPeerPresent((p.participants ?? []).length);
          }),
       );
 
