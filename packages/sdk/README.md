@@ -138,7 +138,7 @@ For the hosted deployment behind the current Nginx proxy, REST requests use the 
 
 ## Meeting configuration
 
-`PurpleCallioMeeting` and `MeetingProvider` accept separate `signalUrl` and `apiUrl` values. `apiUrl` is used for authenticated REST calls such as `/turn/credentials`. Passing `apiUrl` is recommended. If you omit it, the SDK tries `signalUrl` as the REST base and, when that origin answers with a non-API 404 (for example the web app in the standard deployment, where REST lives under `/api`), falls through to `signalUrl + "/api"` and remembers whichever base answered. A REST prefix other than `/api` always needs an explicit `apiUrl`.
+`PurpleCallioMeeting` and `MeetingProvider` accept separate `signalUrl` and `apiUrl` values. `apiUrl` is used for authenticated REST calls such as `/turn/credentials`. Passing `apiUrl` is recommended. If you omit it, the SDK tries `signalUrl` as the REST base and, when that origin is not the API — it answers with a non-API 404, or the browser blocks the request because the origin fails the CORS preflight (both happen in the standard deployment, where the origin root is the web app and REST lives under `/api`), falls through to `signalUrl + "/api"` and remembers whichever base answered. A REST prefix other than `/api` always needs an explicit `apiUrl`.
 
 ```ts
 const meeting = new PurpleCallioMeeting({
@@ -761,7 +761,7 @@ npm install @purplecallio/react
 Current package version:
 
 ```text
-0.2.2
+0.2.3
 ```
 
 ---

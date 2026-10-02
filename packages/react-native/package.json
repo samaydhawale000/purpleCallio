@@ -49,7 +49,7 @@
     }
   },
   "dependencies": {
-    "@purplecallio/sdk": "^0.2.2"
+    "@purplecallio/sdk": "^0.2.3"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

@@ -506,7 +506,9 @@ export class PurpleCallioMeeting {
     * Without one, REST may sit at the signaling origin (a bare server) or
     * under `/api` behind the standard Nginx deployment, where the origin root
     * is the web app. Try the origin first and fall through to `/api` when it
-    * answers with a non-API (non-JSON) 404, remembering whichever base worked.
+    * answers with a non-API (non-JSON) 404 — or, in a browser, when fetch()
+    * rejects because the web app fails the CORS preflight — remembering
+    * whichever base worked.
     */
    private async apiFetch(path: string, init: RequestInit): Promise<Response> {
       const signal = this.config.signalUrl.replace(/\/$/, "");
@@ -516,8 +518,14 @@ export class PurpleCallioMeeting {
            ? [this.config.apiUrl.replace(/\/$/, "")]
            : [signal, `${signal}/api`];
       for (let i = 0; ; i++) {
-         const res = await fetch(`${bases[i]}${path}`, init);
          const isLast = i === bases.length - 1;
+         let res: Response;
+         try {
+            res = await fetch(`${bases[i]}${path}`, init);
+         } catch (error) {
+            if (isLast) throw error;
+            continue;
+         }
          const contentType = res.headers?.get?.("content-type") ?? "";
          if (!isLast && res.status === 404 && !contentType.includes("json"))
             continue;

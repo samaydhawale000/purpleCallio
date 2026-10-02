@@ -724,6 +724,54 @@ describe('PurpleCallioMeeting WebRTC telemetry', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('without apiUrl, falls through to /api when the browser rejects the origin root on CORS', async () => {
+    // In a browser the web app's 404 preflight has no CORS headers, so
+    // fetch() rejects with a TypeError instead of resolving to a 404.
+    fetchMock.mockImplementation(async (url: string) => {
+      if (!url.startsWith('https://signal.example/api/')) throw new TypeError('Failed to fetch');
+      return { ok: true, status: 201, headers: new Headers({ 'content-type': 'application/json' }) };
+    });
+    const pc = await setup();
+
+    pc.setIceState('connected');
+    await vi.waitFor(() =>
+      expect(posts().filter((p) => p.url.startsWith('https://signal.example/api/'))).toHaveLength(2),
+    );
+    expect(posts().map((p) => p.url)).toEqual(
+      expect.arrayContaining([
+        'https://signal.example/api/calls/call%2F1/webrtc-transport',
+        'https://signal.example/api/calls/call%2F1/webrtc-ice',
+      ]),
+    );
+  });
+
+  it('without apiUrl, finds TURN credentials under /api when the root fails CORS', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url !== 'https://signal.example/api/turn/credentials') throw new TypeError('Failed to fetch');
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ iceServers: [{ urls: 'turn:turn.example' }] }),
+      };
+    });
+    meeting = new PurpleCallioMeeting({ token: 'session-token', callId: 'call/1', signalUrl: 'https://signal.example' });
+
+    await expect((meeting as any).fetchBackendIceServers()).resolves.toEqual([{ urls: 'turn:turn.example' }]);
+  });
+
+  it('with an explicit apiUrl, a network error is not retried elsewhere', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    const pc = await setup({ apiUrl: 'https://rest.example' });
+
+    pc.setIceState('connected');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await flush();
+
+    expect(fetchMock.mock.calls.every(([url]) => (url as string).startsWith('https://rest.example/calls/'))).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('without apiUrl, finds TURN credentials under /api too', async () => {
     fetchMock.mockImplementation(async (url: string) =>
       url === 'https://signal.example/api/turn/credentials'
@@ -763,7 +811,8 @@ describe('PurpleCallioMeeting WebRTC telemetry', () => {
     process.on('unhandledRejection', unhandled);
     try {
       pc.setIceState('connected');
-      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      // Two reports, each trying the origin and then /api.
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
       await flush();
       expect(unhandled).not.toHaveBeenCalled();
     } finally {
