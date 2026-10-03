@@ -385,8 +385,9 @@ function statusLabel(status: string): string {
       case "ACCEPTED":
          return "Completed";
       case "RINGING":
-      case "INITIATED":
          return "Ringing";
+      case "INITIATED":
+         return "Initiated";
       case "REJECTED":
          return "Rejected";
       case "MISSED":
