@@ -138,7 +138,7 @@ For the hosted deployment behind the current Nginx proxy, REST requests use the 
 
 ## Meeting configuration
 
-`PurpleCallioMeeting` and `MeetingProvider` accept separate `signalUrl` and `apiUrl` values. `apiUrl` is used for authenticated REST calls such as `/turn/credentials`. For backwards compatibility, omitting it uses `signalUrl` as the REST base; explicitly pass `apiUrl` whenever your proxy routes REST under a prefix.
+`PurpleCallioMeeting` and `MeetingProvider` accept separate `signalUrl` and `apiUrl` values. `apiUrl` is used for authenticated REST calls such as `/turn/credentials`. Passing `apiUrl` is recommended. If you omit it, the SDK tries `signalUrl` as the REST base and, when that origin is not the API — it answers with a non-API 404, or the browser blocks the request because the origin fails the CORS preflight (both happen in the standard deployment, where the origin root is the web app and REST lives under `/api`), falls through to `signalUrl + "/api"` and remembers whichever base answered. A REST prefix other than `/api` always needs an explicit `apiUrl`.
 
 ```ts
 const meeting = new PurpleCallioMeeting({
@@ -153,7 +153,16 @@ The meeting engine exposes `setAudioInput(deviceId)`, `setVideoInput(deviceId)`,
 
 ### Signaling lifecycle
 
-The SDK sends the participant token in Socket.IO handshake auth and repeats the existing `authenticate` event for compatibility with older server versions. The gateway authenticates the handshake token before accepting call operations; every signaling event remains scoped to that participant's call. On `join-call`, it returns a canonical `call.state` participant snapshot and continues to emit `participant.joined` / `participant.left` updates. `call.started` is broadcast to the room as a lifecycle notification; it is not the media negotiation trigger. The CALLER role creates one offer after the remote participant is present, while the RECEIVER answers it. This avoids both peers racing to create an offer. ICE candidates received before the remote description are queued until it is set.
+The SDK sends the participant token in Socket.IO handshake auth and repeats the existing `authenticate` event for compatibility with older server versions. The gateway authenticates the handshake token before accepting call operations; every signaling event remains scoped to that participant's call. On `join-call`, it returns a canonical `call.state` participant snapshot and continues to emit `participant.joined` / `participant.left` updates. `call.started` is broadcast to the room as a lifecycle notification; it is not the media negotiation trigger. The CALLER role creates exactly one offer once the call room holds two participants, while the RECEIVER answers it — `join()` completes this flow on its own, with no app-level `connected` or `join-call` handling. This avoids both peers racing to create an offer. ICE candidates received before the remote description are queued until it is set.
+
+### Call-quality telemetry
+
+When ICE connects, the meeting engine posts two small best-effort reports to your PurpleCallio API (`apiUrl`, or the base resolved from `signalUrl` as described in [Meeting configuration](#meeting-configuration)), authenticated with the participant token:
+
+- `POST /calls/:callId/webrtc-transport` — `{ transport: "P2P" | "TURN", candidateType }`, from the selected candidate pair in `getStats()`.
+- `POST /calls/:callId/webrtc-ice` — `{ outcome: "SUCCESS" | "FAILED", iceConnectionState, connectionState }`. Only a hard ICE `failed` counts as a failure; a call that recovers reports both.
+
+Each is sent at most once per peer connection. They contain no media, IP addresses, or candidate details, and a failed report never affects the call. They feed the P2P/TURN and ICE success figures on the PurpleCallio health dashboard.
 
 ---
 
@@ -752,7 +761,7 @@ npm install @purplecallio/react
 Current package version:
 
 ```text
-0.1.0
+0.2.3
 ```
 
 ---

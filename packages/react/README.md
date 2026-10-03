@@ -76,7 +76,7 @@ Your React Application
 
 # Authentication & Session Setup
 
-`MeetingProvider` needs three pieces of information before it can connect a call: a **participant token**, a **call ID**, and a **signaling URL**. This section documents exactly where each one comes from, verified against the current `@purplecallio/sdk` (0.1.0) implementation — nothing here is guessed.
+`MeetingProvider` needs three pieces of information before it can connect a call: a **participant token**, a **call ID**, and a **signaling URL**. This section documents exactly where each one comes from, verified against the current `@purplecallio/sdk` (0.2.3) implementation — nothing here is guessed.
 
 ## 1. Create the call on your server
 
