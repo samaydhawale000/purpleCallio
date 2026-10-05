@@ -803,6 +803,23 @@ export default async function DocPage({
                </ContentSection>
             </section>
          )}
+         <ContentSection title="Still having trouble?">
+            <div className="rounded-xl border border-[#D6C4EE] bg-white p-5">
+               <p className="text-sm text-[#3D3650]">
+                  If you&apos;re having an issue with this integration, our
+                  support team can help.
+               </p>
+               <Link
+                  href={`/dashboard/support/new?doc=${slug}`}
+                  className="mt-4 inline-flex items-center rounded-lg px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
+                  style={{
+                     background: "linear-gradient(135deg, #7F40E8, #410686)",
+                  }}
+               >
+                  Contact Support
+               </Link>
+            </div>
+         </ContentSection>
          <ContentSection title="Related documentation">
             <div className="flex flex-wrap gap-4">
                <Link

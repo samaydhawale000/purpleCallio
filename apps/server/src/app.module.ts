@@ -16,6 +16,7 @@ import { PlaygroundModule } from './playground/playground.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { BillingModule } from './billing/billing.module';
 import { AdminModule } from './admin/admin.module';
+import { SupportModule } from './support/support.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { AdminModule } from './admin/admin.module';
     DashboardModule,
     BillingModule,
     AdminModule,
+    SupportModule,
   ],
   // TestController is intentionally not registered in the production app;
   // its database-count endpoint is only useful in local development.

@@ -17,6 +17,7 @@ import {
   X,
   ShieldCheck,
   CreditCard,
+  Headset,
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 import { useRequireAuth } from '../hooks/useRequireAuth';
@@ -29,6 +30,7 @@ const NAV_ITEMS = [
   { label: 'Usage', href: '/admin/usage', icon: Gauge },
 { label: 'System Health', href: '/admin/health', icon: Activity },
   { label: 'Billing & Revenue', href: '/admin/billing', icon: CreditCard },
+  { label: 'Support', href: '/admin/support', icon: Headset },
   { label: 'Audit Logs', href: '/admin/audit-logs', icon: ScrollText },
   { label: 'Platform Settings', href: '/admin/settings', icon: Settings },
 ];

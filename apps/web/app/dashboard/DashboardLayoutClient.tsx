@@ -13,6 +13,7 @@ import {
   Gauge,
   CreditCard,
   BookOpen,
+  Headset,
   Settings,
   LogOut,
   Menu,
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
   { label: 'Usage', href: '/dashboard/usage', icon: Gauge },
   { label: 'Billing', href: '/dashboard/billing', icon: CreditCard },
   { label: 'Documentation', href: '/docs', icon: BookOpen },
+  { label: 'Support', href: '/dashboard/support', icon: Headset },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 
