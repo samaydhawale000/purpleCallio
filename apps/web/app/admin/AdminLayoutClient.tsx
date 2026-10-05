@@ -14,17 +14,22 @@ import {
   Settings,
   LogOut,
   Menu,
+  Bell,
   X,
   ShieldCheck,
   CreditCard,
   Headset,
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
+import { NotificationBell } from '../components/notifications/NotificationBell';
+import { notifyNotificationsChanged } from '../lib/notifications';
+import { useRealtimeEvent } from '../lib/realtime';
 import { useRequireAuth } from '../hooks/useRequireAuth';
 import logo from '../assets/images/logo.webp';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+  { label: 'Notifications', href: '/admin/notifications', icon: Bell },
   { label: 'Customers', href: '/admin/customers', icon: Users },
   { label: 'Live Calls', href: '/admin/calls', icon: PhoneCall },
   { label: 'Usage', href: '/admin/usage', icon: Gauge },
@@ -47,6 +52,9 @@ export default function AdminLayout({
   useRequireAuth();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // One subscription per layout; the bell(s) and notification page listen
+  // for the resulting window event.
+  useRealtimeEvent('notification:new', notifyNotificationsChanged);
   // Only render the layout UI after auth has been resolved to avoid flash.
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -73,13 +81,16 @@ export default function AdminLayout({
             Admin
           </span>
         </Link>
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="w-10 h-10 flex items-center justify-center rounded-lg border border-[#E7DFF5] text-[#3D3650]"
-          aria-label="Open menu"
-        >
-          <Menu size={20} />
-        </button>
+        <div className="flex items-center gap-2">
+          <NotificationBell area="ADMIN" align="right" />
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="w-10 h-10 flex items-center justify-center rounded-lg border border-[#E7DFF5] text-[#3D3650]"
+            aria-label="Open menu"
+          >
+            <Menu size={20} />
+          </button>
+        </div>
       </div>
 
       {/* Mobile overlay */}
@@ -101,13 +112,16 @@ export default function AdminLayout({
         style={{ background: '#F8F4FD' }}
       >
         {/* Brand */}
-        <div className="flex items-center justify-between px-5 h-16 border-b border-[#E7DFF5]">
-          <Link href="/admin" className="flex items-center gap-2.5">
-            <Image src={logo} alt="PurpleCallio" width={156} height={38} className="h-auto w-[136px] object-contain" />
-            <span className="font-mono font-bold text-[#170B2E] tracking-tight">
+        <div className="flex items-center justify-between gap-2 px-4 h-16 border-b border-[#E7DFF5]">
+          <Link href="/admin" className="flex items-center gap-2 min-w-0">
+            <Image src={logo} alt="PurpleCallio" width={156} height={38} className="h-auto w-[118px] object-contain shrink-0" />
+            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase tracking-wider text-[#6425C4] bg-[#7F40E8]/10 border border-[#7F40E8]/20">
               Admin
             </span>
           </Link>
+          <div className="hidden lg:block">
+            <NotificationBell area="ADMIN" align="left" />
+          </div>
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden w-8 h-8 flex items-center justify-center text-[#3D3650]"

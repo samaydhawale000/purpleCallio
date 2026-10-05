@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { Plus, RefreshCw, Ticket, TriangleAlert } from 'lucide-react';
 import { useRequireAuth } from '../../hooks/useRequireAuth';
 import { api } from '../../lib/api';
+import { useRealtimeEvent } from '../../lib/realtime';
 import type { SupportTicket } from '../../lib/support';
 import { Button } from '../../components/ui/Button';
 import { TicketStatusBadge } from '../../components/support/TicketStatusBadge';
-import { SupportEmptyState } from '../../components/support/SupportEmptyState';
+import { NewMessageTag, UnreadDot } from '../../components/support/UnreadIndicators';
+import { EmptyState } from '../../components/ui/EmptyState';
 
 export default function SupportPage() {
   const { isAuthed } = useRequireAuth();
@@ -16,8 +18,9 @@ export default function SupportPage() {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
+  // `silent` refreshes in place (realtime pushes) without the loading state.
+  const load = useCallback((opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     setFailed(false);
     api
       .get('/support/tickets')
@@ -29,6 +32,8 @@ export default function SupportPage() {
   useEffect(() => {
     if (isAuthed) load();
   }, [isAuthed, load]);
+
+  useRealtimeEvent('support:ticket-updated', () => load({ silent: true }));
 
   if (loading) {
     return (
@@ -61,19 +66,19 @@ export default function SupportPage() {
       </div>
 
       {failed ? (
-        <SupportEmptyState
+        <EmptyState
           icon={TriangleAlert}
           tone="error"
           title="Couldn't load your tickets"
           body="Something went wrong while contacting the support service. Please try again in a moment."
           action={
-            <Button variant="secondary" onClick={load}>
+            <Button variant="secondary" onClick={() => load()}>
               <RefreshCw size={15} className="mr-1.5" /> Try again
             </Button>
           }
         />
       ) : tickets.length === 0 ? (
-        <SupportEmptyState
+        <EmptyState
           icon={Ticket}
           title="No support tickets yet"
           body="Stuck on an integration? Create a ticket and our team will reply right here in your dashboard."
@@ -99,14 +104,25 @@ export default function SupportPage() {
               </thead>
               <tbody>
                 {tickets.map((t) => (
-                  <tr key={t.id} className="border-b border-[#E7DFF5]/60 last:border-0 hover:bg-[#7F40E8]/[0.03]">
+                  <tr
+                    key={t.id}
+                    className="border-b border-[#E7DFF5]/60 last:border-0 hover:bg-[#7F40E8]/[0.03]"
+                    style={t.hasUnread ? { background: 'rgba(127,64,232,0.04)' } : undefined}
+                  >
                     <td className="px-5 py-3 font-mono text-xs text-[#6425C4] whitespace-nowrap">
+                      <UnreadDot unread={t.hasUnread} />
                       <Link href={`/dashboard/support/${t.id}`}>{t.ticketNumber}</Link>
                     </td>
                     <td className="px-5 py-3 text-[#170B2E] max-w-md">
-                      <Link href={`/dashboard/support/${t.id}`} className="hover:text-[#6425C4] line-clamp-1">
-                        {t.subject}
-                      </Link>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Link
+                          href={`/dashboard/support/${t.id}`}
+                          className={`hover:text-[#6425C4] line-clamp-1 ${t.hasUnread ? 'font-semibold' : ''}`}
+                        >
+                          {t.subject}
+                        </Link>
+                        {t.hasUnread && <NewMessageTag label="New" />}
+                      </div>
                     </td>
                     <td className="px-5 py-3"><TicketStatusBadge status={t.status} /></td>
                     <td className="px-5 py-3 text-[#3D3650] whitespace-nowrap">

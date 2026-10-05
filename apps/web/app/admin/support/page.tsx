@@ -4,10 +4,12 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Inbox, RefreshCw, Search, SearchX, TriangleAlert } from 'lucide-react';
 import { api } from '../../lib/api';
+import { useRealtimeEvent } from '../../lib/realtime';
 import { TICKET_STATUSES, type SupportTicket, type TicketStatus } from '../../lib/support';
 import { Pagination } from '../../components/ui/Pagination';
 import { TicketStatusBadge, ticketStatusLabel } from '../../components/support/TicketStatusBadge';
-import { SupportEmptyState } from '../../components/support/SupportEmptyState';
+import { NewMessageTag, UnreadDot } from '../../components/support/UnreadIndicators';
+import { EmptyState } from '../../components/ui/EmptyState';
 import { Button } from '../../components/ui/Button';
 
 type AdminTicket = SupportTicket & {
@@ -26,8 +28,9 @@ export default function AdminSupportPage() {
   const [total, setTotal] = useState(0);
   const [pageCount, setPageCount] = useState(1);
 
-  const load = useCallback(() => {
-    setLoading(true);
+  // `silent` refreshes in place (realtime pushes) without the loading state.
+  const load = useCallback((opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     setFailed(false);
     const params = new URLSearchParams({ page: String(page) });
     if (search) params.set('search', search);
@@ -47,6 +50,8 @@ export default function AdminSupportPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useRealtimeEvent('support:ticket-updated', () => load({ silent: true }));
 
   const filtered = !!search || !!status;
 
@@ -98,20 +103,20 @@ export default function AdminSupportPage() {
       {loading ? (
         <div className="text-[#3D3650] text-sm py-20 text-center">Loading tickets…</div>
       ) : failed ? (
-        <SupportEmptyState
+        <EmptyState
           icon={TriangleAlert}
           tone="error"
           title="Couldn't load tickets"
           body="Something went wrong while contacting the support service. Please try again."
           action={
-            <Button variant="secondary" onClick={load}>
+            <Button variant="secondary" onClick={() => load()}>
               <RefreshCw size={15} className="mr-1.5" /> Try again
             </Button>
           }
         />
       ) : tickets.length === 0 ? (
         filtered ? (
-          <SupportEmptyState
+          <EmptyState
             icon={SearchX}
             title="No matching tickets"
             body="No tickets match your search or status filter."
@@ -122,7 +127,7 @@ export default function AdminSupportPage() {
             }
           />
         ) : (
-          <SupportEmptyState
+          <EmptyState
             icon={Inbox}
             title="No support tickets yet"
             body="When customers create tickets from their dashboard, they'll appear here."
@@ -141,8 +146,13 @@ export default function AdminSupportPage() {
               </thead>
               <tbody>
                 {tickets.map((t) => (
-                  <tr key={t.id} className="border-b border-[#E7DFF5]/60 hover:bg-[#7F40E8]/[0.03]">
+                  <tr
+                    key={t.id}
+                    className="border-b border-[#E7DFF5]/60 hover:bg-[#7F40E8]/[0.03]"
+                    style={t.hasUnread ? { background: 'rgba(127,64,232,0.04)' } : undefined}
+                  >
                     <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">
+                      <UnreadDot unread={t.hasUnread} />
                       <Link href={`/admin/support/${t.id}`} className="text-[#6425C4] hover:text-[#170B2E]">
                         {t.ticketNumber}
                       </Link>
@@ -154,9 +164,15 @@ export default function AdminSupportPage() {
                       </p>
                     </td>
                     <td className="px-4 py-3 text-[#170B2E] max-w-xs">
-                      <Link href={`/admin/support/${t.id}`} className="hover:text-[#6425C4] line-clamp-1">
-                        {t.subject}
-                      </Link>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Link
+                          href={`/admin/support/${t.id}`}
+                          className={`hover:text-[#6425C4] line-clamp-1 ${t.hasUnread ? 'font-semibold' : ''}`}
+                        >
+                          {t.subject}
+                        </Link>
+                        {t.hasUnread && <NewMessageTag label="New" />}
+                      </div>
                     </td>
                     <td className="px-4 py-3"><TicketStatusBadge status={t.status} /></td>
                     <td className="px-4 py-3 text-[#3D3650] whitespace-nowrap">{new Date(t.updatedAt).toLocaleString()}</td>

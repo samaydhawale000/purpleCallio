@@ -72,7 +72,7 @@ function setup(seed: any[] = [], googlePayload?: any) {
 
   const prisma = createFakePrisma(seed);
   const payments = createFakePayments();
-  const billing = new BillingService(prisma as any, payments as any);
+  const billing = new BillingService(prisma as any, payments as any, { createNotification: jest.fn(), notifyAdmins: jest.fn() } as never);
   jest
     .spyOn(billing, 'getOrCreateFreeSubscription')
     .mockResolvedValue(undefined as any);

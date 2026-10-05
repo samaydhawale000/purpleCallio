@@ -10,7 +10,7 @@ describe('ApiKeyService project ownership', () => {
       findMany: jest.fn(),
     },
   };
-  const service = new ApiKeyService(prisma as unknown as PrismaService);
+  const service = new ApiKeyService(prisma as unknown as PrismaService, { createNotification: jest.fn(), notifyAdmins: jest.fn() } as never);
 
   beforeEach(() => jest.clearAllMocks());
 

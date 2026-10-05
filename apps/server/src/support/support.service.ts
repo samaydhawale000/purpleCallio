@@ -1,13 +1,27 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, SupportSenderType, SupportTicketStatus } from '@prisma/client';
+import {
+  NotificationType,
+  Prisma,
+  SupportSenderType,
+  SupportTicketStatus,
+} from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import { NotificationService } from '../notification/notification.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 const TICKET_PREFIX = 'PC-';
 
+const STATUS_LABELS: Record<SupportTicketStatus, string> = {
+  OPEN: 'open',
+  PENDING: 'pending',
+  RESOLVED: 'resolved',
+};
+
 type TicketRow = {
   id: string;
+  userId: string;
   ticketNumber: number;
   subject: string;
   documentationId: string | null;
@@ -16,9 +30,24 @@ type TicketRow = {
   updatedAt: Date;
 };
 
+/** The other side posted after this side last opened the ticket. */
+function isUnread(
+  otherSideLastMessageAt: Date | null,
+  lastReadAt: Date | null,
+) {
+  return (
+    !!otherSideLastMessageAt &&
+    (!lastReadAt || otherSideLastMessageAt > lastReadAt)
+  );
+}
+
 @Injectable()
 export class SupportService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationService,
+    private realtime: RealtimeGateway,
+  ) {}
 
   // ── Customer ─────────────────────────────────────────
   async createTicket(userId: string, dto: CreateTicketDto) {
@@ -29,6 +58,8 @@ export class SupportService {
         userId,
         subject: dto.subject.trim(),
         documentationId: dto.documentationId || null,
+        lastCustomerMessageAt: new Date(),
+        customerLastReadAt: new Date(),
         messages: {
           create: {
             senderId: userId,
@@ -37,8 +68,28 @@ export class SupportService {
           },
         },
       },
+      include: { user: { select: { name: true, email: true } } },
     });
-    return this.toSummary(ticket);
+    const summary = this.toSummary(ticket);
+
+    await this.notifications.createNotification({
+      userId,
+      type: NotificationType.SUPPORT_TICKET_CREATED,
+      title: 'Ticket created',
+      message: `Your support ticket ${summary.ticketNumber} has been created.`,
+      metadata: { ticketId: ticket.id },
+      dedupeKey: `ticket-created:${ticket.id}`,
+    });
+    await this.notifications.notifyAdmins({
+      type: NotificationType.SUPPORT_TICKET_CREATED,
+      title: 'New support ticket',
+      message: `${ticket.user.name || ticket.user.email} created a new support ticket: "${summary.subject}"`,
+      metadata: { ticketId: ticket.id },
+      dedupeKey: `admin:ticket-created:${ticket.id}`,
+    });
+    this.broadcast(ticket.id, userId);
+
+    return summary;
   }
 
   async listCustomerTickets(userId: string) {
@@ -46,7 +97,10 @@ export class SupportService {
       where: { userId },
       orderBy: { updatedAt: 'desc' },
     });
-    return tickets.map((t) => this.toSummary(t));
+    return tickets.map((t) => ({
+      ...this.toSummary(t),
+      hasUnread: isUnread(t.lastAdminMessageAt, t.customerLastReadAt),
+    }));
   }
 
   async getCustomerTicket(userId: string, ticketId: string) {
@@ -57,6 +111,9 @@ export class SupportService {
       include: { messages: { orderBy: { createdAt: 'asc' } } },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
+    if (isUnread(ticket.lastAdminMessageAt, ticket.customerLastReadAt)) {
+      await this.markRead(ticket.id, 'customerLastReadAt', ticket.updatedAt);
+    }
 
     return {
       ...this.toSummary(ticket),
@@ -72,13 +129,18 @@ export class SupportService {
   async addCustomerMessage(userId: string, ticketId: string, message: string) {
     const ticket = await this.prisma.supportTicket.findFirst({
       where: { id: ticketId, userId },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        ticketNumber: true,
+        user: { select: { name: true, email: true } },
+      },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
 
     // A customer reply means the ticket needs attention again, so it
     // returns to OPEN. This is the only way a customer affects status.
-    return this.addMessage(
+    const created = await this.addMessage(
       ticket.id,
       userId,
       SupportSenderType.CUSTOMER,
@@ -87,6 +149,15 @@ export class SupportService {
         ? undefined
         : SupportTicketStatus.OPEN,
     );
+    await this.notifications.notifyAdmins({
+      type: NotificationType.SUPPORT_TICKET_REPLY,
+      title: 'New customer reply',
+      message: `${ticket.user.name || ticket.user.email} replied to ticket ${TICKET_PREFIX}${ticket.ticketNumber}.`,
+      metadata: { ticketId: ticket.id },
+      dedupeKey: `admin:ticket-reply:${created.id}`,
+    });
+    this.broadcast(ticket.id, userId);
+    return created;
   }
 
   // ── Admin ────────────────────────────────────────────
@@ -144,6 +215,7 @@ export class SupportService {
       data: tickets.map((t) => ({
         ...this.toSummary(t),
         customer: t.user,
+        hasUnread: isUnread(t.lastCustomerMessageAt, t.adminLastReadAt),
       })),
       total,
       page,
@@ -177,6 +249,9 @@ export class SupportService {
       },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
+    if (isUnread(ticket.lastCustomerMessageAt, ticket.adminLastReadAt)) {
+      await this.markRead(ticket.id, 'adminLastReadAt', ticket.updatedAt);
+    }
 
     return {
       ...this.toSummary(ticket),
@@ -194,22 +269,32 @@ export class SupportService {
   async addAdminMessage(adminId: string, ticketId: string, message: string) {
     const ticket = await this.prisma.supportTicket.findUnique({
       where: { id: ticketId },
-      select: { id: true },
+      select: { id: true, userId: true, ticketNumber: true },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
 
-    return this.addMessage(
+    const created = await this.addMessage(
       ticket.id,
       adminId,
       SupportSenderType.ADMIN,
       message,
     );
+    await this.notifications.createNotification({
+      userId: ticket.userId,
+      type: NotificationType.SUPPORT_TICKET_REPLY,
+      title: 'Support ticket updated',
+      message: `Our support team replied to ticket ${TICKET_PREFIX}${ticket.ticketNumber}.`,
+      metadata: { ticketId: ticket.id },
+      dedupeKey: `ticket-reply:${created.id}`,
+    });
+    this.broadcast(ticket.id, ticket.userId);
+    return created;
   }
 
   async updateStatus(ticketId: string, status: SupportTicketStatus) {
     const existing = await this.prisma.supportTicket.findUnique({
       where: { id: ticketId },
-      select: { id: true },
+      select: { id: true, status: true },
     });
     if (!existing) throw new NotFoundException('Ticket not found');
 
@@ -217,7 +302,20 @@ export class SupportService {
       where: { id: ticketId },
       data: { status },
     });
-    return this.toSummary(ticket);
+    const summary = this.toSummary(ticket);
+
+    // Only a real change is worth telling the customer about.
+    if (existing.status !== status) {
+      await this.notifications.createNotification({
+        userId: ticket.userId,
+        type: NotificationType.SUPPORT_TICKET_STATUS_CHANGED,
+        title: 'Support ticket updated',
+        message: `Ticket ${summary.ticketNumber} has been marked as ${STATUS_LABELS[status]}.`,
+        metadata: { ticketId: ticket.id },
+      });
+    }
+    this.broadcast(ticket.id, ticket.userId);
+    return summary;
   }
 
   // ── Helpers ──────────────────────────────────────────
@@ -233,13 +331,21 @@ export class SupportService {
     message: string,
     status?: SupportTicketStatus,
   ) {
+    const now = new Date();
     const [created] = await this.prisma.$transaction([
       this.prisma.supportMessage.create({
         data: { ticketId, senderId, senderType, message: message.trim() },
       }),
       this.prisma.supportTicket.update({
         where: { id: ticketId },
-        data: { updatedAt: new Date(), ...(status ? { status } : {}) },
+        data: {
+          updatedAt: now,
+          // Posting implies the sender has seen everything before it.
+          ...(senderType === SupportSenderType.CUSTOMER
+            ? { lastCustomerMessageAt: now, customerLastReadAt: now }
+            : { lastAdminMessageAt: now, adminLastReadAt: now }),
+          ...(status ? { status } : {}),
+        },
       }),
     ]);
     return {
@@ -248,6 +354,27 @@ export class SupportService {
       message: created.message,
       createdAt: created.createdAt,
     };
+  }
+
+  /**
+   * Record that one side opened the ticket. updatedAt is passed through
+   * unchanged so merely viewing a ticket doesn't reorder "last updated".
+   */
+  private async markRead(
+    ticketId: string,
+    field: 'customerLastReadAt' | 'adminLastReadAt',
+    updatedAt: Date,
+  ) {
+    await this.prisma.supportTicket.update({
+      where: { id: ticketId },
+      data: { [field]: new Date(), updatedAt },
+    });
+  }
+
+  /** Tell the ticket owner's and admins' open dashboards to refetch. */
+  private broadcast(ticketId: string, ownerId: string) {
+    this.realtime.emitToUser(ownerId, 'support:ticket-updated', { ticketId });
+    this.realtime.emitToAdmins('support:ticket-updated', { ticketId });
   }
 
   private toSummary(t: TicketRow) {

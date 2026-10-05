@@ -6,7 +6,10 @@ import {
 
 import { randomBytes, createHash } from 'crypto';
 
+import { NotificationType } from '@prisma/client';
+
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationService } from '../../notification/notification.service';
 
 // Fields safe to return from listing endpoints — never the hash, and never
 // the raw key (which only ever exists in the createApiKey() response, once).
@@ -24,7 +27,10 @@ function hashKey(rawKey: string): string {
 
 @Injectable()
 export class ApiKeyService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationService,
+  ) {}
 
   /**
    * Creates a key and returns the raw value exactly once — callers must
@@ -32,7 +38,7 @@ export class ApiKeyService {
    * again") since only its hash is persisted from here on.
    */
   async createApiKey(userId: string, projectId: string, name: string) {
-    await this.assertOwnership(userId, projectId);
+    const project = await this.assertOwnership(userId, projectId);
     const rawKey = 'bj_live_' + randomBytes(32).toString('hex');
 
     const created = await this.prisma.apiKey.create({
@@ -43,6 +49,15 @@ export class ApiKeyService {
         projectId,
       },
       select: MASKED_SELECT,
+    });
+
+    // Security-relevant: lets the owner spot a key they didn't create.
+    await this.notifications.createNotification({
+      userId,
+      type: NotificationType.API_KEY_CREATED,
+      title: 'API key created',
+      message: `A new API key "${name}" was created for project "${project.name}".`,
+      metadata: { projectId, apiKeyId: created.id },
     });
 
     return { ...created, key: rawKey };
@@ -115,10 +130,18 @@ export class ApiKeyService {
   async revokeKey(userId: string, keyId: string) {
     const existing = await this.prisma.apiKey.findFirst({
       where: { id: keyId, project: { ownerId: userId } },
+      include: { project: { select: { name: true } } },
     });
     if (!existing) throw new NotFoundException('API key not found');
 
     await this.prisma.apiKey.delete({ where: { id: keyId } });
+    await this.notifications.createNotification({
+      userId,
+      type: NotificationType.API_KEY_REVOKED,
+      title: 'API key revoked',
+      message: `The API key "${existing.name}" was revoked from project "${existing.project.name}".`,
+      metadata: { projectId: existing.projectId },
+    });
     return { success: true };
   }
 

@@ -9,8 +9,8 @@ interface Props {
   action?: ReactNode;
 }
 
-/** Centered card used for the support pages' empty, no-match and error states. */
-export function SupportEmptyState({ icon: Icon, title, body, tone = 'default', action }: Props) {
+/** Centered card for a page's empty, no-match and error states. */
+export function EmptyState({ icon: Icon, title, body, tone = 'default', action }: Props) {
   const error = tone === 'error';
   return (
     <div

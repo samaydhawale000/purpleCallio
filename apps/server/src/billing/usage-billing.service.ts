@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 import { BillingService } from './billing.service';
 import { CustomerDiscountService } from './customer-discount.service';
 import { calculateDiscountPaise } from './discount.util';
@@ -51,6 +53,7 @@ export class UsageBillingService {
     private prisma: PrismaService,
     private billingService: BillingService,
     private customerDiscounts: CustomerDiscountService,
+    private notifications: NotificationService,
   ) {}
 
   /** Fetch the default billing rates (fall back to defaults if not seeded). */
@@ -229,7 +232,52 @@ export class UsageBillingService {
     this.logger.log(
       `Recorded call ${callId} for user ${userId}: ${data.audioMinutes}a/${data.videoMinutes}v/${data.screenShareMinutes}ss mins, ${cost.totalPaise} paise`,
     );
+    await this.notifyAllowanceThresholds(userId, updated, data);
     return updated;
+  }
+
+  /**
+   * Notify when THIS call pushed the cycle's audio/video usage across 80% or
+   * 100% of the free allowance. Comparing before/after (rather than "is it
+   * over 80%?") means later calls in the same cycle never re-notify; the
+   * per-cycle dedupe key is the backstop for a retried recording. If one
+   * call jumps past both thresholds, only the 100% notice is sent.
+   */
+  private async notifyAllowanceThresholds(
+    userId: string,
+    usage: { id: string; audioMinutes: number; videoMinutes: number },
+    added: { audioMinutes: number; videoMinutes: number },
+  ) {
+    try {
+      const rates = await this.getRates();
+      const media = [
+        { name: 'audio', used: usage.audioMinutes, added: added.audioMinutes, free: rates.freeAudioMins },
+        { name: 'video', used: usage.videoMinutes, added: added.videoMinutes, free: rates.freeVideoMins },
+      ];
+      for (const m of media) {
+        if (m.free <= 0 || m.added <= 0) continue;
+        const before = (m.used - m.added) / m.free;
+        const after = m.used / m.free;
+        const crossed = [1, 0.8].find((t) => before < t && after >= t);
+        if (!crossed) continue;
+
+        const reached = crossed === 1;
+        await this.notifications.createNotification({
+          userId,
+          type: reached
+            ? NotificationType.USAGE_LIMIT_REACHED
+            : NotificationType.USAGE_LIMIT_APPROACHING,
+          title: reached ? 'Usage limit reached' : 'Usage approaching limit',
+          message: reached
+            ? `You've reached your free ${m.name} allowance for this billing cycle. Additional ${m.name} usage is billed at your standard rates.`
+            : `You've used 80% of your free ${m.name} allowance for this billing cycle.`,
+          metadata: { usageId: usage.id, media: m.name },
+          dedupeKey: `usage:${usage.id}:${m.name}:${reached ? 100 : 80}`,
+        });
+      }
+    } catch (err) {
+      this.logger.warn(`Usage threshold check failed for ${userId}: ${String(err)}`);
+    }
   }
 
   private async getAggregatedCallUsage(usageId: string) {

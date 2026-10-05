@@ -7,6 +7,7 @@ import { ArrowLeft, BookOpen } from 'lucide-react';
 import { useRequireAuth } from '../../../hooks/useRequireAuth';
 import { useAuthStore } from '../../../store/auth.store';
 import { api } from '../../../lib/api';
+import { useRealtimeEvent } from '../../../lib/realtime';
 import {
   apiErrorMessage,
   docLabel,
@@ -50,6 +51,11 @@ function TicketConversation() {
   useEffect(() => {
     if (isAuthed) load();
   }, [isAuthed, load]);
+
+  // New messages / status changes from the other side appear without a refresh.
+  useRealtimeEvent<{ ticketId?: string }>('support:ticket-updated', (e) => {
+    if (e.ticketId === id) load();
+  });
 
   // Arriving from the create form: confirm, then drop the flag from the URL.
   useEffect(() => {

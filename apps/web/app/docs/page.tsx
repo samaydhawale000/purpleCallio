@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Atom, Blocks, BookOpen, Cable, CreditCard, Gauge, Headset, KeyRound, Lightbulb, Monitor, RotateCw, Server, Smartphone, UserRound, Webhook, Zap } from 'lucide-react';
+import { Atom, Bell, Blocks, BookOpen, Cable, CreditCard, Gauge, Headset, KeyRound, Lightbulb, Monitor, RotateCw, Server, Smartphone, UserRound, Webhook, Zap } from 'lucide-react';
 import { api } from '../lib/api';
 import { PURPLECALLIO_API_URL, PURPLECALLIO_SIGNAL_URL, PURPLECALLIO_URL } from '../lib/brand';
 
@@ -13,7 +13,7 @@ const NAV = [
   { group: 'REST API', items: [{ id: 'api-create', label: 'POST /calls' }, { id: 'api-join', label: 'POST /calls/:id/join' }, { id: 'api-leave', label: 'POST /calls/:id/leave' }, { id: 'api-accept', label: 'POST /calls/:id/accept' }, { id: 'api-reject', label: 'POST /calls/:id/reject' }, { id: 'api-end', label: 'POST /calls/:id/end' }, { id: 'api-get', label: 'GET /calls/:id' }] },
 { group: 'Real-time', items: [{ id: 'websocket', label: 'WebSocket Events', icon: Cable }, { id: 'webhooks', label: 'Webhooks', icon: Webhook }] },
   { group: 'Billing', items: [{ id: 'usage-billing', label: 'Usage & Billing', icon: CreditCard }] },
-  { group: 'Reference', items: [{ id: 'examples', label: 'Examples', icon: Lightbulb }, { id: 'errors', label: 'Errors', icon: Gauge }, { id: 'faq', label: 'FAQ', icon: BookOpen }, { id: 'support', label: 'Contact Support', icon: Headset }] },
+  { group: 'Reference', items: [{ id: 'examples', label: 'Examples', icon: Lightbulb }, { id: 'errors', label: 'Errors', icon: Gauge }, { id: 'faq', label: 'FAQ', icon: BookOpen }, { id: 'notifications', label: 'Notifications', icon: Bell }, { id: 'support', label: 'Contact Support', icon: Headset }] },
 ];
 
 // ── Tiny primitives ───────────────────────────────────────────────────────────
@@ -1206,6 +1206,41 @@ meeting.microphone.enable();`} />
                 </Link>
               </div>
             </div>
+          </Section>
+
+          {/* ── Notifications ─────────────────────────── */}
+          <Section id="notifications">
+            <Heading>Notifications</Heading>
+            <p className="text-[#3D3650] text-sm mb-5">
+              PurpleCallio keeps important account, usage, billing, and support
+              updates in your notification center. You can access notifications
+              from the notification bell in the dashboard.
+            </p>
+
+            <p className="text-sm font-semibold text-[#170B2E] mb-3">Notifications may include</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+              {[
+                'Support ticket updates',
+                'Usage alerts',
+                'Billing and invoice updates',
+                'Payment updates',
+                'Important account activity',
+                'Other important product events',
+              ].map((item) => (
+                <div key={item} className="flex items-center gap-3 rounded-xl border border-[#E7DFF5] px-4 py-3" style={{ background: '#FFFFFF' }}>
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#7F40E8' }} />
+                  <p className="text-sm text-[#3D3650]">{item}</p>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-[#3D3650] text-sm mb-2">
+              Unread notifications are shown with a notification badge.
+            </p>
+            <p className="text-[#3D3650] text-sm">
+              You can open a notification to go directly to the related section
+              of your dashboard.
+            </p>
           </Section>
 
           {/* ── Contact Support ───────────────────────── */}

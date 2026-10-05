@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { useRealtimeEvent } from '../../../lib/realtime';
 import {
   apiErrorMessage,
   docLabel,
@@ -60,6 +61,11 @@ export default function AdminTicketPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // New messages / status changes from the other side appear without a refresh.
+  useRealtimeEvent<{ ticketId?: string }>('support:ticket-updated', (e) => {
+    if (e.ticketId === id) load();
+  });
 
   async function reply(message: string) {
     try {

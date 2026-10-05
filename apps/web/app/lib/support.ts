@@ -9,6 +9,8 @@ export interface SupportTicket {
   status: TicketStatus;
   createdAt: string;
   updatedAt: string;
+  /** The other side has posted since this viewer last opened the ticket. */
+  hasUnread?: boolean;
 }
 
 export interface SupportMessage {

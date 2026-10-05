@@ -17,6 +17,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { BillingModule } from './billing/billing.module';
 import { AdminModule } from './admin/admin.module';
 import { SupportModule } from './support/support.module';
+import { NotificationModule } from './notification/notification.module';
+import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
   imports: [
@@ -34,6 +36,8 @@ import { SupportModule } from './support/support.module';
       },
     ]),
     PrismaModule,
+    RealtimeModule,
+    NotificationModule,
     AuthModule,
     ProjectModule,
     CallModule,
