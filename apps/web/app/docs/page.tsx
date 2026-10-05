@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Atom, Blocks, BookOpen, Cable, CreditCard, Gauge, KeyRound, Lightbulb, Monitor, RotateCw, Server, Smartphone, UserRound, Webhook, Zap } from 'lucide-react';
+import { Atom, Bell, Blocks, BookOpen, Cable, CreditCard, Gauge, Headset, KeyRound, Lightbulb, Monitor, RotateCw, Server, Smartphone, UserRound, Webhook, Zap } from 'lucide-react';
 import { api } from '../lib/api';
 import { PURPLECALLIO_API_URL, PURPLECALLIO_SIGNAL_URL, PURPLECALLIO_URL } from '../lib/brand';
 
@@ -13,7 +13,7 @@ const NAV = [
   { group: 'REST API', items: [{ id: 'api-create', label: 'POST /calls' }, { id: 'api-join', label: 'POST /calls/:id/join' }, { id: 'api-leave', label: 'POST /calls/:id/leave' }, { id: 'api-accept', label: 'POST /calls/:id/accept' }, { id: 'api-reject', label: 'POST /calls/:id/reject' }, { id: 'api-end', label: 'POST /calls/:id/end' }, { id: 'api-get', label: 'GET /calls/:id' }] },
 { group: 'Real-time', items: [{ id: 'websocket', label: 'WebSocket Events', icon: Cable }, { id: 'webhooks', label: 'Webhooks', icon: Webhook }] },
   { group: 'Billing', items: [{ id: 'usage-billing', label: 'Usage & Billing', icon: CreditCard }] },
-  { group: 'Reference', items: [{ id: 'examples', label: 'Examples', icon: Lightbulb }, { id: 'errors', label: 'Errors', icon: Gauge }, { id: 'faq', label: 'FAQ', icon: BookOpen }] },
+  { group: 'Reference', items: [{ id: 'examples', label: 'Examples', icon: Lightbulb }, { id: 'errors', label: 'Errors', icon: Gauge }, { id: 'faq', label: 'FAQ', icon: BookOpen }, { id: 'notifications', label: 'Notifications', icon: Bell }, { id: 'support', label: 'Contact Support', icon: Headset }] },
 ];
 
 // ── Tiny primitives ───────────────────────────────────────────────────────────
@@ -1206,6 +1206,79 @@ meeting.microphone.enable();`} />
                 </Link>
               </div>
             </div>
+          </Section>
+
+          {/* ── Notifications ─────────────────────────── */}
+          <Section id="notifications">
+            <Heading>Notifications</Heading>
+            <p className="text-[#3D3650] text-sm mb-5">
+              PurpleCallio keeps important account, usage, billing, and support
+              updates in your notification center. You can access notifications
+              from the notification bell in the dashboard.
+            </p>
+
+            <p className="text-sm font-semibold text-[#170B2E] mb-3">Notifications may include</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+              {[
+                'Support ticket updates',
+                'Usage alerts',
+                'Billing and invoice updates',
+                'Payment updates',
+                'Important account activity',
+                'Other important product events',
+              ].map((item) => (
+                <div key={item} className="flex items-center gap-3 rounded-xl border border-[#E7DFF5] px-4 py-3" style={{ background: '#FFFFFF' }}>
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#7F40E8' }} />
+                  <p className="text-sm text-[#3D3650]">{item}</p>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-[#3D3650] text-sm mb-2">
+              Unread notifications are shown with a notification badge.
+            </p>
+            <p className="text-[#3D3650] text-sm">
+              You can open a notification to go directly to the related section
+              of your dashboard.
+            </p>
+          </Section>
+
+          {/* ── Contact Support ───────────────────────── */}
+          <Section id="support">
+            <Heading>Contact Support</Heading>
+            <p className="text-[#3D3650] text-sm mb-5">
+              If you experience an issue while integrating PurpleCallio, you can
+              contact our support team directly from your dashboard.
+            </p>
+
+            <p className="text-sm font-semibold text-[#170B2E] mb-3">Create a support ticket</p>
+            <div className="space-y-3 mb-6">
+              {[
+                <>Open <strong>Support</strong> from your dashboard.</>,
+                <>Click <strong>Create Ticket</strong>.</>,
+                <>Enter a short subject describing the issue.</>,
+                <>Describe the problem and include any relevant error message.</>,
+                <>Optionally select the related documentation.</>,
+                <>Click <strong>Create Ticket</strong> to submit it.</>,
+              ].map((step, i) => (
+                <div key={i} className="flex gap-3 rounded-xl border border-[#E7DFF5] p-4" style={{ background: '#FFFFFF' }}>
+                  <span className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center font-mono text-xs font-bold" style={{ background: 'linear-gradient(135deg, rgba(127,64,232,0.2), rgba(65,6,134,0.2))', color: '#6425C4', border: '1px solid rgba(127,64,232,0.25)' }}>{i + 1}</span>
+                  <p className="text-sm text-[#3D3650]">{step}</p>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-[#3D3650] text-sm mb-2">
+              Our team will review the request and respond directly through the ticket.
+            </p>
+            <p className="text-[#3D3650] text-sm mb-5">
+              You can view the response and continue the conversation from{' '}
+              <strong className="text-[#170B2E]">Dashboard → Support</strong>.
+            </p>
+
+            <Link href="/dashboard/support/new" className="inline-flex items-center gap-2 text-white font-medium text-sm px-6 py-2.5 rounded-lg transition-all hover:opacity-90" style={{ background: 'linear-gradient(135deg, #7F40E8, #410686)' }}>
+              Contact Support
+            </Link>
           </Section>
 
         </main>

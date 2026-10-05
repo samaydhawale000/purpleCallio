@@ -16,6 +16,9 @@ import { PlaygroundModule } from './playground/playground.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { BillingModule } from './billing/billing.module';
 import { AdminModule } from './admin/admin.module';
+import { SupportModule } from './support/support.module';
+import { NotificationModule } from './notification/notification.module';
+import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
   imports: [
@@ -33,6 +36,8 @@ import { AdminModule } from './admin/admin.module';
       },
     ]),
     PrismaModule,
+    RealtimeModule,
+    NotificationModule,
     AuthModule,
     ProjectModule,
     CallModule,
@@ -45,6 +50,7 @@ import { AdminModule } from './admin/admin.module';
     DashboardModule,
     BillingModule,
     AdminModule,
+    SupportModule,
   ],
   // TestController is intentionally not registered in the production app;
   // its database-count endpoint is only useful in local development.

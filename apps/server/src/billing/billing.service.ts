@@ -5,7 +5,9 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 import { PAYMENT_SERVICE } from '../payment/payment.service';
 import type { PaymentService } from '../payment/payment.service';
 
@@ -32,6 +34,7 @@ export class BillingService {
   constructor(
     private prisma: PrismaService,
     @Inject(PAYMENT_SERVICE) private payments: PaymentService,
+    private notifications: NotificationService,
   ) {}
 
   // ── Subscriptions (billing-cycle anchor) ────────────
@@ -545,10 +548,34 @@ export class BillingService {
         type: 'topup',
         razorpayPaymentId: payment.id,
       });
-      return;
+    } else {
+      await this.logAudit(userId, 'PAYMENT_RECEIVED', { amount: payment.amount, razorpayPaymentId: payment.id });
     }
+    await this.notifyPaymentOutcome(userId, payment, true);
+  }
 
-    await this.logAudit(userId, 'PAYMENT_RECEIVED', { amount: payment.amount, razorpayPaymentId: payment.id });
+  /**
+   * Webhook payment notification. An invoice auto-charge carries its
+   * invoiceId in the Razorpay notes, so it shares InvoiceBillingService's
+   * per-invoice dedupe key — the customer hears about that payment once,
+   * whichever path processes it first.
+   */
+  private async notifyPaymentOutcome(userId: string, payment: any, succeeded: boolean) {
+    const invoiceId: string | undefined = payment.notes?.invoiceId;
+    await this.notifications.createNotification({
+      userId,
+      type: succeeded
+        ? NotificationType.INVOICE_PAYMENT_SUCCESS
+        : NotificationType.INVOICE_PAYMENT_FAILED,
+      title: succeeded ? 'Payment successful' : 'Payment failed',
+      message: succeeded
+        ? 'Your payment was successfully processed.'
+        : "We couldn't process your latest payment. Please check your billing information.",
+      metadata: invoiceId ? { invoiceId } : undefined,
+      dedupeKey: invoiceId
+        ? `${succeeded ? 'invoice-paid' : 'invoice-payment-failed'}:${invoiceId}`
+        : `payment-${succeeded ? 'success' : 'failed'}:${payment.id}`,
+    });
   }
 
   private async handlePaymentFailedEvent(payment: any) {
@@ -599,6 +626,7 @@ export class BillingService {
       amount: payment.amount,
       razorpayPaymentId: payment.id,
     });
+    await this.notifyPaymentOutcome(sub.companyId, payment, false);
   }
 
   private async logAudit(actorId: any, action: any, metadata: any) {

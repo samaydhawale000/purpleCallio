@@ -1,10 +1,12 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
+import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PAYMENT_SERVICE } from '../payment/payment.service';
 import type { PaymentService } from '../payment/payment.service';
 import { UsageBillingService, BillingRates } from './usage-billing.service';
 import { CustomerDiscountService } from './customer-discount.service';
 import { calculateInvoiceAmounts } from './discount.util';
+import { NotificationService } from '../notification/notification.service';
 
 /** Fixed dunning retry schedule: days after dunningStartedAt to retry. */
 const DUNNING_RETRY_SCHEDULE_DAYS = [1, 3, 7];
@@ -31,6 +33,7 @@ export class InvoiceBillingService {
     @Inject(PAYMENT_SERVICE) private payments: PaymentService,
     private usageBilling: UsageBillingService,
     private customerDiscounts: CustomerDiscountService,
+    private notifications: NotificationService,
   ) {}
 
   /**
@@ -203,6 +206,19 @@ export class InvoiceBillingService {
     this.logger.log(
       `Generated invoice ${invoice.invoiceNumber} for user ${userId}: ${totalPaise} paise`,
     );
+    // A ₹0 invoice (usage fully inside the free allowance) needs no action.
+    if (totalPaise > 0) {
+      await this.notifications.createNotification({
+        userId,
+        type: NotificationType.INVOICE_GENERATED,
+        title: 'Invoice generated',
+        message: invoice.invoiceNumber
+          ? `Your usage invoice ${invoice.invoiceNumber} is now available.`
+          : 'Your usage invoice is now available.',
+        metadata: { invoiceId: invoice.id },
+        dedupeKey: `invoice-generated:${invoice.id}`,
+      });
+    }
 
     return this.prisma.usageInvoice.findUnique({
       where: { id: invoice.id },
@@ -338,6 +354,14 @@ export class InvoiceBillingService {
           },
         });
         this.logger.log(`Charged invoice ${invoice.id}: ${invoice.totalPaise} paise`);
+        await this.notifications.createNotification({
+          userId,
+          type: NotificationType.INVOICE_PAYMENT_SUCCESS,
+          title: 'Payment successful',
+          message: 'Your invoice payment was successfully processed.',
+          metadata: { invoiceId: invoice.id },
+          dedupeKey: `invoice-paid:${invoice.id}`,
+        });
         return updated;
       }
 
@@ -390,6 +414,23 @@ export class InvoiceBillingService {
     });
 
     this.logger.log(`Invoice ${invoiceId} entered dunning (grace until ${grace.toISOString()})`);
+    // Keyed per invoice: scheduled retries re-enter dunning, but the customer
+    // (and admins) only need to hear about a failing invoice once.
+    await this.notifications.createNotification({
+      userId,
+      type: NotificationType.INVOICE_PAYMENT_FAILED,
+      title: 'Payment failed',
+      message: "We couldn't process your latest payment. Please check your billing information.",
+      metadata: { invoiceId },
+      dedupeKey: `invoice-payment-failed:${invoiceId}`,
+    });
+    await this.notifications.notifyAdmins({
+      type: NotificationType.INVOICE_PAYMENT_FAILED,
+      title: 'Payment issue',
+      message: `A customer payment failed for invoice ${invoice.invoiceNumber ?? invoiceId}.`,
+      metadata: { invoiceId, customerId: userId },
+      dedupeKey: `admin:invoice-payment-failed:${invoiceId}`,
+    });
     return invoice;
   }
 

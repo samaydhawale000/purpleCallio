@@ -149,6 +149,9 @@ model User {
   usageInvoices        UsageInvoice[]
   prorationAdjustments ProrationAdjustment[]
   customerDiscounts    CustomerDiscount[]
+  supportTickets       SupportTicket[]
+  supportMessages      SupportMessage[]
+  notifications        Notification[]
 }
 
 model Subscription {
@@ -597,4 +600,106 @@ model CallSession {
   expiresAt DateTime
 
   createdAt DateTime @default(now())
+}
+
+enum SupportTicketStatus {
+  OPEN
+  PENDING
+  RESOLVED
+}
+
+enum SupportSenderType {
+  CUSTOMER
+  ADMIN
+}
+
+// Customer-raised integration/development support request. Deliberately
+// minimal: no priority, assignment, tags or SLA.
+model SupportTicket {
+  id                    String              @id @default(uuid())
+  // Human-friendly number shown as "PC-<ticketNumber>". Backed by a Postgres
+  // sequence (starts at 1001, see migration) so concurrent creates can never
+  // collide — no read-then-increment race.
+  ticketNumber          Int                 @unique @default(autoincrement())
+  userId                String
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject               String
+  // Slug of the related public docs page (e.g. "react" -> /docs/react).
+  documentationId       String?
+  status                SupportTicketStatus @default(OPEN)
+  // Unread tracking: each side's newest message vs. when that side last
+  // opened the ticket. The admin side is shared by all admins — any admin
+  // opening the ticket marks it read for the support team.
+  lastCustomerMessageAt DateTime?
+  lastAdminMessageAt    DateTime?
+  customerLastReadAt    DateTime?
+  adminLastReadAt       DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  messages SupportMessage[]
+
+  @@index([userId, updatedAt])
+  @@index([status, updatedAt])
+}
+
+model SupportMessage {
+  id         String            @id @default(uuid())
+  ticketId   String
+  ticket     SupportTicket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderId   String?
+  sender     User?             @relation(fields: [senderId], references: [id], onDelete: SetNull)
+  senderType SupportSenderType
+  message    String
+  createdAt  DateTime          @default(now())
+
+  @@index([ticketId, createdAt])
+}
+
+// Only events PurpleCallio actually emits today — add a value here when a
+// new feature starts calling NotificationService.createNotification.
+enum NotificationType {
+  SUPPORT_TICKET_CREATED
+  SUPPORT_TICKET_REPLY
+  SUPPORT_TICKET_STATUS_CHANGED
+  USAGE_LIMIT_APPROACHING
+  USAGE_LIMIT_REACHED
+  INVOICE_GENERATED
+  INVOICE_PAYMENT_SUCCESS
+  INVOICE_PAYMENT_FAILED
+  API_KEY_CREATED
+  API_KEY_REVOKED
+  PROJECT_CREATED
+}
+
+// Which area a notification belongs to: the customer dashboard or the admin
+// portal. Keeps admin operational alerts out of an admin's own customer
+// notifications (and vice versa).
+enum NotificationAudience {
+  CUSTOMER
+  ADMIN
+}
+
+// In-app notification. Created only via NotificationService.
+model Notification {
+  id        String               @id @default(uuid())
+  userId    String
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  audience  NotificationAudience @default(CUSTOMER)
+  type      NotificationType
+  title     String
+  message   String
+  read      Boolean              @default(false)
+  // Small context for click-through navigation (ticketId, invoiceId, ...).
+  metadata  Json?
+  // Stable identity of the underlying event (e.g. "invoice-generated:<id>",
+  // "usage:<usageId>:video:80"). Unique per user so an event processed
+  // twice (webhook retry, cron overlap) can never notify twice. Null for
+  // events that are inherently one-off.
+  dedupeKey String?
+  createdAt DateTime             @default(now())
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, audience, createdAt])
+  @@index([userId, audience, read])
 }

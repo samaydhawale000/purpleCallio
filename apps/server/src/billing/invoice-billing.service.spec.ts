@@ -178,6 +178,7 @@ describe('InvoiceBillingService — generateInvoiceForCycle', () => {
       payments as never,
       usageBilling as never,
       discounts as never,
+      { createNotification: jest.fn(), notifyAdmins: jest.fn() } as never,
     );
     return { service, fake, usageBilling, discounts, payments };
   }
@@ -289,6 +290,7 @@ describe('InvoiceBillingService — generateInvoiceForCycle', () => {
       makePaymentsStub() as never,
       usageBilling as never,
       discounts as never,
+      { createNotification: jest.fn(), notifyAdmins: jest.fn() } as never,
     );
 
     const inv1 = (await service.generateInvoiceForCycle(USER_ID, cycle1))!;
@@ -327,6 +329,7 @@ describe('InvoiceBillingService — generateInvoiceForCycle', () => {
       makePaymentsStub() as never,
       usageBilling as never,
       { getActiveDiscount } as never,
+      { createNotification: jest.fn(), notifyAdmins: jest.fn() } as never,
     );
 
     const inv1 = (await service.generateInvoiceForCycle(USER_ID, cycle1))!;
@@ -350,6 +353,7 @@ describe('InvoiceBillingService — generateInvoiceForCycle', () => {
       makePaymentsStub() as never,
       usageBilling as never,
       { getActiveDiscount } as never,
+      { createNotification: jest.fn(), notifyAdmins: jest.fn() } as never,
     );
 
     const firstGeneration = (await service.generateInvoiceForCycle(USER_ID, CYCLE_START))!;
@@ -411,6 +415,7 @@ describe('InvoiceBillingService — chargeInvoice (Razorpay amount + dunning)', 
       payments as never,
       makeUsageBillingStub() as never,
       makeDiscountStub(null) as never,
+      { createNotification: jest.fn(), notifyAdmins: jest.fn() } as never,
     );
 
     await service.chargeInvoice(USER_ID, invoice.id);
@@ -433,6 +438,7 @@ describe('InvoiceBillingService — chargeInvoice (Razorpay amount + dunning)', 
       payments as never,
       makeUsageBillingStub() as never,
       makeDiscountStub(null) as never,
+      { createNotification: jest.fn(), notifyAdmins: jest.fn() } as never,
     );
 
     const result = (await service.chargeInvoice(USER_ID, invoice.id))!;

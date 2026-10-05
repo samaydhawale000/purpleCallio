@@ -26,6 +26,7 @@ describe('UsageBillingService — checkSpendingLimit with a customer discount', 
       prisma as never,
       {} as never, // BillingService — unused by checkSpendingLimit
       discounts as never,
+      { createNotification: jest.fn(), notifyAdmins: jest.fn() } as never,
     );
     jest.spyOn(service, 'getCurrentUsage').mockResolvedValue({
       cost: { totalPaise: opts.rawBillableCostPaise },
@@ -110,6 +111,7 @@ describe('UsageBillingService — free allowance and per-call usage are in parti
       prisma as never,
       {} as never,
       {} as never,
+      { createNotification: jest.fn(), notifyAdmins: jest.fn() } as never,
     );
     jest
       .spyOn(service, 'getOrCreateUsage')
