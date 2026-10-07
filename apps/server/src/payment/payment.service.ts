@@ -87,6 +87,13 @@ export interface PaymentIntentResult {
 
 export interface PaymentService {
   createCustomer(input: CreateCustomerInput): Promise<string>;
+  /**
+   * False only when the provider definitively reports the customer doesn't
+   * exist on the current account (e.g. a test-mode id after switching to
+   * live keys). Transient/network errors are re-thrown, never reported as
+   * "missing", so a blip can't wipe a valid customer.
+   */
+  customerExists(customerId: string): Promise<boolean>;
   createSetupIntent(customerId: string): Promise<SetupIntentResult>;
   attachPaymentMethod(input: {
     customerId: string;

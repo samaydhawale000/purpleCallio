@@ -84,7 +84,8 @@ export class BillingService {
    * entirely in mock mode, where there is no provider list to fetch).
    */
   async getPaymentMethods(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const found = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = found ? await this.clearStaleRazorpayCustomer(found) : found;
 
     let methods: Awaited<ReturnType<PaymentService['getPaymentMethods']>> = [];
     if (user?.razorpayCustomerId && this.payments.isConfigured()) {
@@ -190,11 +191,46 @@ export class BillingService {
    * Ensure a Razorpay customer exists for the user, creating one if needed,
    * and persist the customer id on the user.
    */
+  /**
+   * A stored customer id can belong to a different Razorpay account or mode
+   * than the current keys (e.g. test-mode customers after switching to live,
+   * or `cus_mock_` ids from a run without credentials). Razorpay rejects
+   * those at Checkout, so drop the id — and the card token saved against it,
+   * which can't be charged on this account either — so a fresh customer is
+   * created on the next card setup.
+   */
+  private async clearStaleRazorpayCustomer<T extends {
+    id: string;
+    razorpayCustomerId: string | null;
+  }>(user: T): Promise<T> {
+    const customerId = user.razorpayCustomerId;
+    if (!customerId || !this.payments.isConfigured()) return user;
+
+    const stale = customerId.startsWith('cus_mock_')
+      || !(await this.payments.customerExists(customerId));
+    if (!stale) return user;
+
+    this.logger.warn(
+      `Razorpay customer ${customerId} for user ${user.id} doesn't exist on the current account — clearing it and its saved card.`,
+    );
+    const cleared = {
+      razorpayCustomerId: null,
+      razorpayTokenId: null,
+      cardBrand: null,
+      cardLast4: null,
+      cardExpMonth: null,
+      cardExpYear: null,
+    };
+    await this.prisma.user.update({ where: { id: user.id }, data: cleared });
+    return { ...user, ...cleared };
+  }
+
   async ensureRazorpayCustomer(userId: string): Promise<string> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
-    if (user.razorpayCustomerId) return user.razorpayCustomerId;
+    const current = await this.clearStaleRazorpayCustomer(user);
+    if (current.razorpayCustomerId) return current.razorpayCustomerId;
 
     // Payment provider not configured (local/dev/demo) — use a synthetic
     // customer id so the rest of the flow (card save, auto-charge bookkeeping)
@@ -259,10 +295,11 @@ export class BillingService {
       );
     }
 
-    const user = await this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data: { phone: trimmed },
     });
+    const user = await this.clearStaleRazorpayCustomer(updated);
 
     if (user.razorpayCustomerId && this.payments.isConfigured()) {
       await this.payments.updateCustomerContact(user.razorpayCustomerId, trimmed);
