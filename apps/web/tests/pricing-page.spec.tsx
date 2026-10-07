@@ -108,7 +108,8 @@ describe('public pricing page', () => {
 
     await screen.findByTestId('plan-card-growth');
     const cards = screen.getAllByTestId(/^plan-card-/).map((el) => el.getAttribute('data-testid'));
-    expect(cards).toEqual(['plan-card-free', 'plan-card-starter', 'plan-card-growth', 'plan-card-custom']);
+    // Priced plans form the main row; Free and Custom follow as wide cards.
+    expect(cards).toEqual(['plan-card-starter', 'plan-card-growth', 'plan-card-free', 'plan-card-custom']);
 
     const free = screen.getByTestId('plan-card-free');
     expect(within(free).getByText('₹0')).toBeTruthy();
@@ -136,6 +137,25 @@ describe('public pricing page', () => {
     const table = screen.getByRole('table', { name: 'Plan comparison' });
     expect(within(table).getByText('Hosted meeting UI')).toBeTruthy();
     expect(within(table).queryByText(/Participants per call|Concurrent calls|On request/)).toBeNull();
+  });
+
+  it('lists features shared by every plan once instead of on each card', async () => {
+    const shared = {
+      ...pricing,
+      plans: pricing.plans.map((p) => ({
+        ...p,
+        version: p.version && { ...p.version, features: Array.from(new Set(['HOSTED_UI', ...p.version.features])) },
+      })),
+    };
+    api.get.mockResolvedValue({ data: shared });
+    render(<PricingPage />);
+    const panel = await screen.findByTestId('included-in-every-plan');
+    expect(within(panel).getByText('Hosted meeting UI')).toBeTruthy();
+    expect(within(screen.getByTestId('plan-card-starter')).queryByText('Hosted meeting UI')).toBeNull();
+    // Growth's extra feature still shows on its card and in the comparison table.
+    expect(within(screen.getByTestId('plan-card-growth')).getByText('Webhook events')).toBeTruthy();
+    const table = screen.getByRole('table', { name: 'Plan comparison' });
+    expect(within(table).queryByText('Hosted meeting UI')).toBeNull();
   });
 
   it('sends logged-in visitors to the dashboard plan and custom-plan flows', async () => {
