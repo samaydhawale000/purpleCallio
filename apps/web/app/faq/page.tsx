@@ -1,8 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
-import { api } from '../lib/api';
+import { useState } from 'react';
 import { PURPLECALLIO_HOST } from '../lib/brand';
 import { PricingAuthority } from '../components/PricingAuthority';
 
@@ -98,10 +97,25 @@ const FAQ_GROUPS = [
 ];
 
 
+const PRICING_FAQ = [
+  { q: 'How does PurpleCallio pricing work?', a: 'PurpleCallio uses simple prepaid plans. You choose a plan, pay upfront, and the plan adds usage credits to your account. Audio, video, and screen sharing are measured in participant-minutes and consume credits at the current credit rates shown on the pricing page. Nothing is billed after the fact — no surprise usage bills.' },
+  { q: 'What is a participant-minute?', a: 'One connected participant for one minute. Two participants in a ten-minute video call use twenty video participant-minutes. Audio, video, and screen sharing each have their own credit rate; screen sharing is its own category, not a surcharge on video.' },
+  { q: 'Is there a Free plan?', a: 'Yes. The Free plan includes a monthly amount of usage credits so you can build, test, and prototype. The current included credits are shown on the pricing page. Every account can use the full developer platform; plan features and limits are listed for each plan.' },
+  { q: 'What happens when I run out of credits?', a: 'New calls cannot start until you add credits — buy a top-up, renew, or upgrade your plan. Calls that are already in progress are never cut off. You receive notifications as your balance runs low.' },
+  { q: 'Do paid plans renew automatically?', a: 'No. Paid plans do not auto-renew and your card is never charged automatically. When a plan period ends you choose whether to renew and pay for the next period from the Billing page. If you do not renew, your account returns to the Free plan.' },
+  { q: 'Do credits expire?', a: 'Plan credits expire at the end of the plan period they belong to. Top-up credits expire according to the top-up policy shown at the time of purchase. Your Billing page shows when each set of credits expires.' },
+  { q: 'What are top-ups?', a: 'Top-ups are one-time credit packages you can buy from your dashboard whenever you need more credits, without changing your plan.' },
+  { q: 'How do upgrades, downgrades, and cancellations work?', a: 'Upgrading starts the new plan immediately: you pay the new plan price and receive its credits, and any remaining credits from your previous plan stay usable until they expire. Downgrades take effect at the end of your current paid period. Cancelling takes effect at the end of the period: your plan remains active until the end of the period you already paid for.' },
+  { q: 'Is GST included in plan prices?', a: 'Prices are shown excluding GST. GST at the applicable rate is added at checkout and shown on your receipt.' },
+  { q: 'Do you offer custom plans?', a: 'Yes. For higher volumes or specific requirements, choose "Talk to us" on the pricing page. We open a conversation with our team, and once terms are agreed we send you a private custom-plan offer that you can review, accept, and pay from your dashboard.' },
+  { q: 'Can I get a refund?', a: 'Plan and top-up payments are not refunded automatically. Refunds are issued where required by law, for duplicate or erroneous charges, or at PurpleCallio\'s discretion. See the Refund & Cancellation Policy for details.' },
+  { q: 'What about my old pay-as-you-go invoices?', a: 'Usage invoices issued before PurpleCallio moved to prepaid plans remain valid historical records. You can still view and download them as legacy usage invoices from the Billing page.' },
+];
+
 const FAQ_SCHEMA = {
   '@context': 'https://schema.org',
   '@type': 'FAQPage',
-  mainEntity: FAQ_GROUPS.flatMap((group) => group.items).map((item) => ({
+  mainEntity: [...FAQ_GROUPS.flatMap((group) => group.items), ...PRICING_FAQ].map((item) => ({
     '@type': 'Question',
     name: item.q,
     acceptedAnswer: { '@type': 'Answer', text: item.a },
@@ -137,43 +151,6 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 }
 
 export default function FaqPage() {
-  const [rates, setRates] = useState<{
-    audioPaise: number;
-    videoPaise: number;
-    screenSharePaise: number;
-    freeAudioMins: number;
-    freeVideoMins: number;
-    taxPercent: number;
-  } | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    api
-      .get('/billing/rates')
-      .then((res) => { if (active) setRates(res.data); })
-      .catch(() => {});
-    return () => { active = false; };
-  }, []);
-
-  const paiseToINR = (p: number) => `₹${((p ?? 0) / 100).toFixed(2)}`;
-  const freeAudio = rates?.freeAudioMins;
-  const freeVideo = rates?.freeVideoMins;
-  const gst = rates?.taxPercent;
-  const audioRate = rates ? paiseToINR(rates.audioPaise) : null;
-  const videoRate = rates ? paiseToINR(rates.videoPaise) : null;
-  const screenRate = rates ? paiseToINR(rates.screenSharePaise) : null;
-
-  const pricingItems = [
-    { q: 'Is there a free tier?', a: freeAudio === undefined || freeVideo === undefined ? 'Current free allowances are loading from the billing service.' : `Yes. You get ${freeAudio} audio and ${freeVideo} video participant-minutes free every month, plus unlimited projects and developers. No credit card is required to start.` },
-    { q: 'How does usage-based pricing work?', a: !audioRate || !videoRate || !screenRate ? 'Current rates are loading from the billing service.' : `There are no subscriptions or up-front fees. Audio (${audioRate}/min), video (${videoRate}/min), and screen sharing (${screenRate}/min) are separate participant-minute usage categories. Free allowances apply to audio and video; screen sharing has no free allowance.` },
-    { q: 'Is screen sharing billable separately?', a: !screenRate ? 'Current screen-sharing pricing is loading from the billing service.' : `Yes. Screen sharing is tracked as its own usage category at ${screenRate} per participant-minute. It is not automatically added as a surcharge to video minutes and has no free allowance.` },
-    { q: 'Do I need to add a payment method to start?', a: 'No. Your free allowance covers development and prototyping. You only add a payment method when you go to production and exceed the free minutes.' },
-    { q: 'When and how am I charged?', a: gst === undefined ? 'Current tax information is loading from the billing service.' : `At the end of each billing cycle (monthly, anchored to the date you started your plan) we generate an invoice for your billable usage and charge your saved card automatically. A GST of ${gst}% applies on billable usage.` },
-    { q: 'What happens if a payment fails?', a: 'We retry, notify you, and enter a 7-day grace period. During grace you can keep existing calls, but you cannot start new ones until the payment succeeds. Active calls are never interrupted.' },
-    { q: 'Can I see my usage and invoices?', a: 'Yes. The dashboard Usage page shows per-type minutes and estimated month-end cost, and the Billing page lists your payment methods and past invoices.' },
-    { q: 'Is every feature included on the free tier?', a: 'Yes. Hosted UI, React Components, Headless SDK, REST API, WebSocket signaling, and the developer dashboard are all available. You only pay for minutes beyond the free allowance.' },
-  ];
-
   return (
     <div style={{ background: '#FFFFFF', color: '#170B2E', minHeight: '100vh' }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_SCHEMA).replace(/</g, '\\u003c') }} />
@@ -210,14 +187,14 @@ export default function FaqPage() {
             </div>
           ))}
 
-          {/* Pricing & Billing (dynamic rates) */}
+          {/* Plans & Billing (current plans and credit rates from the API) */}
           <div id="pricing" className="scroll-mt-24">
             <h2 className="font-semibold text-[#170B2E] mb-4" style={{ fontSize: '1.1rem' }}>
-              <span className="gradient-text font-mono text-xs tracking-widest uppercase mr-3">Pricing &amp; Billing</span>
+              <span className="gradient-text font-mono text-xs tracking-widest uppercase mr-3">Plans, Credits &amp; Billing</span>
             </h2>
             <div className="flex flex-col gap-3">
               <PricingAuthority />
-              {pricingItems.map((item) => (
+              {PRICING_FAQ.map((item) => (
                 <FaqItem key={item.q} q={item.q} a={item.a} />
               ))}
             </div>

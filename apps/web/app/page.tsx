@@ -67,7 +67,7 @@ const USE_CASES = [
 const FEATURES = [
    {
       title: "Audio & Video Calls",
-      body: "Browser audio and video communication built on WebRTC, with usage-based pricing and no fixed platform subscription.",
+      body: "Browser audio and video communication built on WebRTC, with simple prepaid plans and included usage credits — no surprise usage bills.",
    },
    {
       title: "Screen Sharing",
@@ -272,7 +272,7 @@ export default function LandingPage() {
             <div className="relative max-w-6xl mx-auto">
                <div className="hero-badge inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono mb-8 border">
                   <span className="hero-badge-dot w-1.5 h-1.5 rounded-full animate-pulse" />
-                  Start free &nbsp;·&nbsp; Usage-based pricing
+                  Simple prepaid plans &nbsp;·&nbsp; No surprise usage bills
                </div>
 
                <h1 className="lp-h1 font-bold text-[#170B2E] leading-tight mb-6">
@@ -289,6 +289,12 @@ export default function LandingPage() {
                   interfaces from scratch, developers can integrate PurpleCallio
                   through hosted UI, React components, a headless SDK, or REST
                   APIs.
+               </p>
+
+               <p className="text-balance text-[#170B2E] text-base font-medium leading-relaxed mb-6">
+                  Build real-time communication without unpredictable billing.
+                  Choose a plan. Pay upfront. Get usage credits. Build and
+                  scale with confidence.
                </p>
 
                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
@@ -423,7 +429,7 @@ export default function LandingPage() {
                            "Hosted UI, React components, or a headless SDK",
                            "WebSocket signaling and TURN relay around browser WebRTC",
                            "Documentation and copyable integration examples",
-                           "Usage and billing tools in the developer dashboard",
+                           "Prepaid plans, credit balance and usage tracking in the dashboard",
                         ].map((item) => (
                            <div key={item} className="flex items-start gap-3">
                               <span className="text-green-700 mt-0.5 text-sm">

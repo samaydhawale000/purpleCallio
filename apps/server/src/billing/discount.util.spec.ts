@@ -62,9 +62,7 @@ describe('discount.util', () => {
       expect(withoutDiscount.taxableAmountPaise).toBe(61000);
       // Exactly the old (pre-discount-feature) calculation: subtotal * tax%.
       expect(withoutDiscount.taxPaise).toBe(Math.round(61000 * 0.18));
-      expect(withoutDiscount.totalPaise).toBe(
-        61000 + Math.round(61000 * 0.18),
-      );
+      expect(withoutDiscount.totalPaise).toBe(61000 + Math.round(61000 * 0.18));
     });
 
     it('applies tax on the DISCOUNTED amount, not the raw subtotal', () => {
@@ -97,11 +95,20 @@ describe('discount.util', () => {
       expect(isValidDiscountPercentage(v)).toBe(true);
     });
 
-    it.each([-1, -10, 101, 1000, NaN, Infinity, -Infinity, 12.5, '15', null, undefined])(
-      'rejects %p as invalid',
-      (v) => {
-        expect(isValidDiscountPercentage(v)).toBe(false);
-      },
-    );
+    it.each([
+      -1,
+      -10,
+      101,
+      1000,
+      NaN,
+      Infinity,
+      -Infinity,
+      12.5,
+      '15',
+      null,
+      undefined,
+    ])('rejects %p as invalid', (v) => {
+      expect(isValidDiscountPercentage(v)).toBe(false);
+    });
   });
 });

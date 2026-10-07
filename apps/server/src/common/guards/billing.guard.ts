@@ -9,17 +9,16 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UsageBillingService } from '../../billing/usage-billing.service';
 
 /**
- * Billing middleware guard (PurpleCallio v2 — usage-based).
+ * Billing guard for call creation (prepaid credits).
  *
  * Runs after the ApiKeyGuard (which sets `request.project`). Verifies the
- * project owner's account is not suspended, and — for call-creation requests
- * carrying a media `type` — that the free allowance/payment-method rule
- * (UsageBillingService.canStartCall) is satisfied for that specific media
- * type. Active calls are never interrupted, only new ones.
+ * project owner's account is not suspended and — for call-creation
+ * requests carrying a media `type` — that their plan and credit balance
+ * allow a new call (EntitlementService.canStartCall via UsageBillingService).
+ * Active calls are never interrupted, only new ones.
  *
- * The eligibility check itself lives in UsageBillingService.canStartCall so
- * this guard and CallService (which also creates calls outside the guarded
- * HTTP path, e.g. the playground) can never disagree on the rule.
+ * CallService applies the same rule for calls created outside this guarded
+ * HTTP path (e.g. the playground), so the two can never disagree.
  */
 @Injectable()
 export class BillingGuard implements CanActivate {
@@ -51,21 +50,20 @@ export class BillingGuard implements CanActivate {
       );
     }
 
-    // 2. Free allowance / payment-method eligibility, per media type.
+    // 2. Plan + credit eligibility, per media type.
     const type = request.body?.type;
     if (type === 'AUDIO' || type === 'VIDEO') {
       const eligibility = await this.usageBilling.canStartCall(ownerId, type);
       if (!eligibility.allowed) {
         throw new ForbiddenException(eligibility.reason);
       }
+      request.billing = {
+        ownerId,
+        availableCredits: eligibility.availableCredits ?? null,
+      };
+    } else {
+      request.billing = { ownerId };
     }
-
-    const status = await this.usageBilling.getFreeAllowanceStatus(ownerId);
-    request.billing = {
-      ownerId,
-      freeAudioRemaining: status.audioRemaining,
-      freeVideoRemaining: status.videoRemaining,
-    };
     return true;
   }
 }

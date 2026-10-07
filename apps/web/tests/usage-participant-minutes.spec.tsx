@@ -33,8 +33,7 @@ const call = {
   videoMinutes: 20,
   screenShareMinutes: 0,
   participants: 2,
-  costPaise: 1600,
-  billedCostPaise: 0,
+  creditsCharged: 40,
   startedAt: t0,
   endedAt: t10,
   createdAt: t10,
@@ -52,7 +51,6 @@ const segment = {
   audioMinutes: 0,
   videoMinutes: 20,
   screenShareMinutes: 0,
-  costPaise: 1600,
 };
 
 beforeEach(() => {
@@ -64,11 +62,10 @@ beforeEach(() => {
         data: {
           cycle: { start: t0, end: t10 },
           usage: { audioMinutes: 0, videoMinutes: 20, screenShareMinutes: 0, participants: 2, callsCreated: 1, callsCompleted: 1 },
-          freeAllowance: { audioMinutes: 500, videoMinutes: 200 },
-          rates: { audioPaise: 20, videoPaise: 80, screenSharePaise: 10 },
-          cost: { audioPaise: 0, videoPaise: 0, screenSharePaise: 0, totalPaise: 0 },
-          estimatedMonthEndPaise: 0,
-          isFreeTier: true,
+          credits: { audio: 0, video: 40, screenShare: 0, total: 40, charged: 40 },
+          creditRates: { audioCreditsPerMinute: 1, videoCreditsPerMinute: 2, screenShareCreditsPerMinute: 1 },
+          wallet: { balance: 960, reserved: 0, available: 960, granted: 1000, used: 40, usedPercent: 4, buckets: [] },
+          subscription: { planName: 'Free', planType: 'FREE' },
         },
       };
     }
@@ -76,7 +73,15 @@ beforeEach(() => {
     if (url.startsWith('/billing/call-usage')) {
       return { data: { data: [call], total: 1, page: 1, pageSize: 10, pageCount: 1 } };
     }
-    if (url.includes('/segments')) return { data: { callId: call.callId, segments: [segment] } };
+    if (url.includes('/segments')) {
+      return {
+        data: {
+          callId: call.callId,
+          segments: [segment],
+          totals: { audioMins: 0, videoMins: 20, screenShareMins: 0, credits: { audioCredits: 0, videoCredits: 40, screenShareCredits: 0, totalCredits: 40 } },
+        },
+      };
+    }
     throw new Error(`unexpected GET ${url}`);
   });
 });
@@ -91,7 +96,10 @@ describe('Usage page — call analytics in participant-minutes', () => {
     expect(screen.getByTestId('call-audio').textContent).toBe('0.00 participant-min');
     expect(screen.getByTestId('call-screen').textContent).toBe('0.00 participant-min');
     expect(screen.getByText(/Usage is shown in participant-minutes/)).toBeTruthy();
-    expect(screen.getByText(/500 audio \+ 200 video participant-min/)).toBeTruthy();
+    // Money is gone: credits per call and credit rates per participant-minute.
+    expect(screen.getByTestId('call-credits').textContent).toBe('40');
+    expect(screen.getByText('1 video participant-minute = 2 credits')).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/₹|free tier|free allowance|spending limit/i);
   });
 
   it('expanded row still shows wall-clock duration, participant count and the rated participant-minutes', async () => {
@@ -107,5 +115,6 @@ describe('Usage page — call analytics in participant-minutes', () => {
     await waitFor(() => expect(screen.getByTestId('segment-participant-minutes')).toBeTruthy());
     expect(screen.getByTestId('segment-participant-minutes').textContent).toBe('Video 20.00 participant-min');
     expect(screen.getByText(/10 min wall-clock · 2 participants/)).toBeTruthy();
+    expect(screen.getByTestId('segment-total-credits').textContent).toBe('40 credits');
   });
 });

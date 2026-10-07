@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
@@ -26,6 +26,7 @@ import { notifyNotificationsChanged } from '../lib/notifications';
 import { useRealtimeEvent } from '../lib/realtime';
 import { useRequireAuth } from '../hooks/useRequireAuth';
 import logo from '../assets/images/logo.webp';
+import { BILLING_NAV } from './billing/_components/tabs';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -34,7 +35,7 @@ const NAV_ITEMS = [
   { label: 'Live Calls', href: '/admin/calls', icon: PhoneCall },
   { label: 'Usage', href: '/admin/usage', icon: Gauge },
 { label: 'System Health', href: '/admin/health', icon: Activity },
-  { label: 'Billing & Revenue', href: '/admin/billing', icon: CreditCard },
+  { label: 'Billing', href: '/admin/billing', icon: CreditCard },
   { label: 'Support', href: '/admin/support', icon: Headset },
   { label: 'Audit Logs', href: '/admin/audit-logs', icon: ScrollText },
   { label: 'Platform Settings', href: '/admin/settings', icon: Settings },
@@ -143,8 +144,8 @@ export default function AdminLayout({
                 pathname === item.href ||
                 (item.href !== '/admin' && pathname?.startsWith(item.href));
               return (
+                <div key={item.label}>
                 <Link
-                  key={item.label}
                   href={item.href}
                   className={`
                     flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all
@@ -163,6 +164,12 @@ export default function AdminLayout({
                   <Icon size={17} style={{ color: active ? '#6425C4' : undefined }} />
                   {item.label}
                 </Link>
+                {item.href === '/admin/billing' && pathname?.startsWith('/admin/billing') && (
+                  <Suspense fallback={null}>
+                    <BillingSubNav pathname={pathname} />
+                  </Suspense>
+                )}
+                </div>
               );
             })}
           </div>
@@ -211,6 +218,32 @@ export default function AdminLayout({
           {ready && children}
         </main>
       </div>
+    </div>
+  );
+}
+
+function BillingSubNav({ pathname }: { pathname: string }) {
+  const params = useSearchParams();
+  const current = pathname === '/admin/billing' ? params.get('tab') : null;
+  return (
+    <div className="ml-9 mt-0.5 mb-1 flex flex-col border-l border-[#E7DFF5]">
+      {BILLING_NAV.map((sub) => {
+        const active =
+          current === sub.tab ||
+          (sub.tab === 'plans' && pathname.startsWith('/admin/billing/plans')) ||
+          (sub.tab === 'custom-plans' && pathname.startsWith('/admin/billing/custom-plans'));
+        return (
+          <Link
+            key={sub.tab}
+            href={`/admin/billing?tab=${sub.tab}`}
+            className={`pl-3 py-1.5 text-[13px] -ml-px border-l transition-colors ${
+              active ? 'border-[#7F40E8] text-[#170B2E] font-medium' : 'border-transparent text-[#3D3650] hover:text-[#170B2E]'
+            }`}
+          >
+            {sub.label}
+          </Link>
+        );
+      })}
     </div>
   );
 }

@@ -69,10 +69,16 @@ enum PrimaryUseCase {
   OTHER
 }
 
+// Subscription lifecycle. PAST_DUE is only ever set on legacy (pre-prepaid)
+// rows by the retired dunning flow — prepaid subscriptions never owe money.
 enum BillingStatus {
+  DRAFT
+  PENDING_PAYMENT
   ACTIVE
   PAST_DUE
+  EXPIRED
   CANCELED
+  SUSPENDED
 }
 
 enum PaymentStatus {
@@ -80,6 +86,91 @@ enum PaymentStatus {
   FAILED
   PENDING
   REFUNDED
+  CANCELLED
+  EXPIRED
+}
+
+// What a Payment buys. LEGACY = rows created by the retired pay-as-you-go
+// flow (card-mandate setup, old minute top-ups).
+enum PaymentPurpose {
+  SUBSCRIPTION_PURCHASE
+  SUBSCRIPTION_RENEWAL
+  SUBSCRIPTION_UPGRADE
+  TOPUP
+  CUSTOM_PLAN
+  LEGACY
+}
+
+enum PlanType {
+  FREE
+  PAID
+  CUSTOM
+}
+
+enum PlanStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum BillingInterval {
+  MONTH
+  YEAR
+  CUSTOM
+}
+
+enum PlanCtaAction {
+  SIGNUP
+  CHECKOUT
+  CONTACT_SALES
+}
+
+enum CreditTransactionType {
+  SUBSCRIPTION_ALLOCATION
+  USAGE_DEBIT
+  TOPUP_PURCHASE
+  ADMIN_ADJUSTMENT
+  REFUND
+  EXPIRATION
+  PROMOTION
+  MIGRATION
+}
+
+enum CreditBucketSource {
+  SUBSCRIPTION
+  TOPUP
+  PROMOTION
+  ADMIN
+  MIGRATION
+}
+
+enum TopUpStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum TopUpExpiryPolicy {
+  NEVER
+  DAYS
+  SUBSCRIPTION_END
+}
+
+enum CustomPlanRequestStatus {
+  NEW
+  CONTACTED
+  NEGOTIATING
+  PROPOSAL_SENT
+  ACCEPTED
+  REJECTED
+  CLOSED
+}
+
+enum CustomPlanOfferStatus {
+  SENT
+  ACCEPTED
+  WITHDRAWN
+  EXPIRED
 }
 
 enum AuditAction {
@@ -99,6 +190,25 @@ enum AuditAction {
   DISCOUNT_CREATED
   DISCOUNT_UPDATED
   DISCOUNT_DISABLED
+  PLAN_CREATED
+  PLAN_UPDATED
+  PLAN_ARCHIVED
+  TOPUP_PACKAGE_CREATED
+  TOPUP_PACKAGE_UPDATED
+  FEATURE_UPDATED
+  BILLING_CONFIG_UPDATED
+  CREDITS_ADJUSTED
+  SUBSCRIPTION_ACTIVATED
+  SUBSCRIPTION_RENEWED
+  SUBSCRIPTION_EXPIRED
+  SUBSCRIPTION_DOWNGRADE_SCHEDULED
+  PAYMENT_REFUNDED
+  TOPUP_PURCHASED
+  CUSTOM_PLAN_REQUESTED
+  CUSTOM_PLAN_REQUEST_UPDATED
+  CUSTOM_PLAN_OFFER_CREATED
+  CUSTOM_PLAN_OFFER_WITHDRAWN
+  LEGACY_BILLING_MIGRATED
 }
 
 model User {
@@ -127,14 +237,20 @@ model User {
   // Backend-controlled gate: false until the required onboarding fields
   // have been submitted and validated. Login routes to the dashboard only
   // once this is true.
-  profileCompleted   Boolean            @default(false)
+  profileCompleted   Boolean             @default(false)
 
+  // Razorpay customer (also lets Checkout offer the customer's saved cards).
   razorpayCustomerId String?
+  // LEGACY (pay-as-you-go): card-mandate token from the retired monthly
+  // auto-charge. Kept until the customer removes it — never charged by the
+  // prepaid billing flow.
   razorpayTokenId    String?
   cardBrand          String?
   cardLast4          String?
   cardExpMonth       Int?
   cardExpYear        Int?
+  // LEGACY: post-paid spending cap. Retained for history, no longer enforced
+  // (prepaid credits are the usage control now).
   spendingLimitPaise Int?
 
   lastActiveAt DateTime?
@@ -152,8 +268,23 @@ model User {
   supportTickets       SupportTicket[]
   supportMessages      SupportMessage[]
   notifications        Notification[]
+  creditWallet         CreditWallet?
+  creditTransactions   CreditTransaction[]
+  payments             Payment[]
+  customPlanRequests   CustomPlanRequest[]   @relation("CustomPlanRequestCustomer")
+  assignedPlanRequests CustomPlanRequest[]   @relation("CustomPlanRequestAssignee")
+  customPlanOffers     CustomPlanOffer[]
+  privatePlans         Plan[]                @relation("PrivatePlanAssignee")
 }
 
+// A customer's plan subscription. Prepaid: a paid row only becomes ACTIVE
+// once its Payment is verified (see BillingFulfillmentService). Commercial
+// terms are snapshotted here at purchase time so later admin edits to the
+// Plan never change what this customer bought.
+//
+// Rows created before the prepaid migration were billing-cycle anchors for
+// the retired pay-as-you-go model (planId null until migrated); their
+// dunning fields are kept for history only.
 model Subscription {
   id                 String        @id @default(uuid())
   companyId          String
@@ -161,41 +292,135 @@ model Subscription {
   status             BillingStatus @default(ACTIVE)
   currentPeriodStart DateTime?
   currentPeriodEnd   DateTime?
-  // Fixed day-of-month (1-31) this customer bills on, captured once at
-  // signup. Immutable across month-length clamping so a Jan-31 signup rolls
-  // Feb 28 -> Mar 31, not Feb 28 -> Mar 28 (see billing-cycle.util.ts).
+  // LEGACY: fixed day-of-month of the retired pay-as-you-go cycle.
   billingAnchorDay   Int?
   cancelAtPeriodEnd  Boolean       @default(false)
+  // LEGACY dunning state (pay-as-you-go). Never set by prepaid billing.
   gracePeriodEndsAt  DateTime?
   dunningAttempts    Int           @default(0)
   paymentFailedAt    DateTime?
 
+  // ── Purchased terms (snapshot) ──
+  planId               String?
+  plan                 Plan?            @relation(fields: [planId], references: [id])
+  planVersionId        String?
+  planVersion          PlanVersion?     @relation(fields: [planVersionId], references: [id])
+  planName             String?
+  planType             PlanType?
+  pricePaise           Int              @default(0)
+  currency             String           @default("INR")
+  includedCredits      Int              @default(0)
+  billingInterval      BillingInterval?
+  intervalCount        Int              @default(1)
+  // { features: string[], mediaCredits: {...} } at purchase.
+  entitlementsSnapshot Json?
+
+  activatedAt              DateTime?
+  expiredAt                DateTime?
+  canceledAt               DateTime?
+  // Downgrade chosen by the customer: applies when the current period ends.
+  scheduledPlanId          String?
+  // Upgrade chain: the subscription this one replaced, and vice versa.
+  previousSubscriptionId   String?
+  replacedBySubscriptionId String?
+  // Set by the one-off prepaid migration (e.g. "legacy_payg").
+  migrationSource          String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  payments Payment[]
-  invoices Invoices[]
-  usage    Usage[]
+  payments      Payment[]
+  invoices      Invoices[]
+  usage         Usage[]
+  creditBuckets CreditBucket[]
 
   @@index([companyId])
+  @@index([companyId, status])
+  @@index([status, currentPeriodEnd])
 }
 
+// One checkout: a plan purchase/renewal/upgrade, a credit top-up or a custom
+// plan purchase. Amounts are computed server-side from the database — never
+// taken from the browser. Paid rows double as receipts (receiptNumber).
 model Payment {
-  id                String        @id @default(uuid())
-  subscriptionId    String
-  subscription      Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  // Unique so a retried Razorpay webhook can never credit the same payment
-  // twice — BillingService checks this before insert; this is the backstop.
-  razorpayPaymentId String?       @unique
-  razorpayOrderId   String?
-  amount            Int           @default(0)
-  currency          String        @default("INR")
-  paymentStatus     PaymentStatus @default(PENDING)
-  paymentMethod     String?
+  id             String         @id @default(uuid())
+  // Null for top-ups and legacy rows without a subscription.
+  subscriptionId String?
+  subscription   Subscription?  @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  userId         String?
+  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  purpose        PaymentPurpose @default(LEGACY)
 
-  paidAt DateTime?
+  provider          String  @default("razorpay")
+  // Unique so a retried webhook / duplicate callback can never fulfill twice.
+  providerOrderId   String? @unique
+  providerPaymentId String? @unique
 
-  createdAt DateTime @default(now())
+  // Totals (paise). `amount` = what the customer pays (incl. tax).
+  amount          Int           @default(0)
+  subtotalPaise   Int           @default(0)
+  discountPaise   Int           @default(0)
+  discountPercent Int?
+  taxPercent      Int           @default(0)
+  taxPaise        Int           @default(0)
+  currency        String        @default("INR")
+  paymentStatus   PaymentStatus @default(PENDING)
+  paymentMethod   String?
+
+  // What was bought (snapshot).
+  planVersionId  String?
+  topUpPackageId String?
+  customOfferId  String?
+  credits        Int     @default(0)
+  description    String?
+  // [{ label, amountPaise, credits? }] as shown at checkout.
+  lineItems      Json?
+
+  receiptNumber Int?      @unique
+  failureReason String?
+  refundedPaise Int       @default(0)
+  refundedAt    DateTime?
+
+  paidAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+
+  attempts PaymentAttempt[]
+
+  @@index([userId, createdAt])
+  @@index([paymentStatus, createdAt])
+}
+
+// Each provider payment attempt against a Payment's order (a customer can
+// fail once and retry inside the same Checkout).
+model PaymentAttempt {
+  id                String   @id @default(uuid())
+  paymentId         String
+  payment           Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  providerPaymentId String   @unique
+  status            String // captured | authorized | failed
+  method            String?
+  errorCode         String?
+  errorDescription  String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([paymentId])
+}
+
+// Every verified provider webhook, keyed by the provider's event id so a
+// redelivered event is processed exactly once.
+model PaymentWebhookEvent {
+  id          String    @id @default(uuid())
+  provider    String
+  eventId     String
+  eventType   String
+  payload     Json
+  processedAt DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([provider, eventId])
 }
 
 model Usage {
@@ -213,14 +438,16 @@ model Usage {
   participants      Int           @default(0)
   apiRequests       Int           @default(0)
 
-  // ── Usage-based billing (fractional participant-minutes by media type) ──
-  // Stored as Float (not rounded) so free-allowance exhaustion and billing
-  // stay accurate to the second; round only when displaying to users.
+  // ── Metered participant-minutes by media type ──
+  // Stored as Float (not rounded) so credit consumption stays accurate to
+  // the second; round only when displaying to users.
   audioMinutes       Float @default(0)
   videoMinutes       Float @default(0)
   screenShareMinutes Float @default(0)
-  // Estimated cost in paise for the current cycle (computed from line items)
+  // LEGACY: rated cost in paise from the pay-as-you-go model.
   usageCostPaise     Int   @default(0)
+  // Credits consumed in this period (prepaid model).
+  creditsUsed        Int   @default(0)
 
   createdAt DateTime @default(now())
 
@@ -229,8 +456,9 @@ model Usage {
   @@unique([companyId, billingCycleStart])
 }
 
-// Editable billing rates + free allowances (per-minute pricing).
-// Stored in DB so admins can change them from the admin portal.
+// LEGACY: pay-as-you-go per-minute rates + free allowances. Still read to
+// render historical usage invoices and as the internal cost basis in admin
+// analytics; customer-facing billing uses BillingConfig credit rates.
 model BillingRate {
   id               String   @id @default(uuid())
   key              String   @unique // e.g. "default"
@@ -283,7 +511,10 @@ model CallUsage {
   videoMinutes       Float     @default(0)
   screenShareMinutes Float     @default(0)
   participants       Int       @default(0)
+  // LEGACY: rated paise cost (internal cost basis).
   costPaise          Int       @default(0)
+  // Credits charged for this call (prepaid model).
+  creditsCharged     Int       @default(0)
   startedAt          DateTime?
   endedAt            DateTime?
   createdAt          DateTime  @default(now())
@@ -314,7 +545,8 @@ model Invoices {
   createdAt DateTime @default(now())
 }
 
-// Month-end usage invoice (usage-based billing v2).
+// LEGACY: month-end post-paid usage invoice from the retired pay-as-you-go
+// model. No new rows are created; kept so historical invoices keep rendering.
 model UsageInvoice {
   id                 String    @id @default(uuid())
   userId             String
@@ -502,11 +734,11 @@ model Call {
 
   status CallStatus @default(INITIATED)
 
-  source CallSource @default(CUSTOMER)
-  expiresAt DateTime?
+  source          CallSource @default(CUSTOMER)
+  expiresAt       DateTime?
   maxParticipants Int?
   creatorIdentity String?
-  creatorIpKey String?
+  creatorIpKey    String?
 
   startedAt DateTime?
 
@@ -516,20 +748,20 @@ model Call {
 
   updatedAt DateTime @updatedAt
 
-  @@index([source, status, expiresAt])
-  @@index([source, status, createdAt])
-
   events        CallEvent[]
   usageSegments UsageSegment[]
   session       CallSession?
+
+  @@index([source, status, expiresAt])
+  @@index([source, status, createdAt])
 }
 
 model PlaygroundAttempt {
-  id          String   @id @default(uuid())
+  id          String                @id @default(uuid())
   identityKey String
   ipKey       String
   type        PlaygroundAttemptType @default(CALL_CREATION)
-  createdAt   DateTime @default(now())
+  createdAt   DateTime              @default(now())
 
   @@index([identityKey, createdAt])
   @@index([ipKey, createdAt])
@@ -608,6 +840,11 @@ enum SupportTicketStatus {
   RESOLVED
 }
 
+enum SupportTicketType {
+  GENERAL
+  CUSTOM_PLAN
+}
+
 enum SupportSenderType {
   CUSTOMER
   ADMIN
@@ -624,6 +861,7 @@ model SupportTicket {
   userId                String
   user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   subject               String
+  type                  SupportTicketType   @default(GENERAL)
   // Slug of the related public docs page (e.g. "react" -> /docs/react).
   documentationId       String?
   status                SupportTicketStatus @default(OPEN)
@@ -637,7 +875,8 @@ model SupportTicket {
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
-  messages SupportMessage[]
+  messages          SupportMessage[]
+  customPlanRequest CustomPlanRequest?
 
   @@index([userId, updatedAt])
   @@index([status, updatedAt])
@@ -662,11 +901,23 @@ enum NotificationType {
   SUPPORT_TICKET_CREATED
   SUPPORT_TICKET_REPLY
   SUPPORT_TICKET_STATUS_CHANGED
+  // LEGACY (pay-as-you-go) — kept so existing rows stay valid.
   USAGE_LIMIT_APPROACHING
   USAGE_LIMIT_REACHED
   INVOICE_GENERATED
   INVOICE_PAYMENT_SUCCESS
   INVOICE_PAYMENT_FAILED
+  // Prepaid billing
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  PLAN_ACTIVATED
+  PLAN_EXPIRING
+  PLAN_EXPIRED
+  CREDITS_LOW
+  CREDITS_EXHAUSTED
+  TOPUP_SUCCESS
+  CUSTOM_PLAN_REQUEST_CREATED
+  CUSTOM_PLAN_OFFER_RECEIVED
   API_KEY_CREATED
   API_KEY_REVOKED
   PROJECT_CREATED
@@ -702,4 +953,233 @@ model Notification {
   @@unique([userId, dedupeKey])
   @@index([userId, audience, createdAt])
   @@index([userId, audience, read])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Prepaid billing: plans, credits, top-ups, custom plans
+// ─────────────────────────────────────────────────────────────────────────
+
+// A sellable plan. Display fields live here and may be edited freely;
+// commercial terms (price, credits, media caps, features) live on immutable
+// PlanVersion rows so editing a plan never changes an existing purchase.
+model Plan {
+  id               String        @id @default(uuid())
+  slug             String        @unique
+  name             String
+  description      String?
+  badge            String?
+  type             PlanType
+  status           PlanStatus    @default(ACTIVE)
+  displayOrder     Int           @default(0)
+  isPopular        Boolean       @default(false)
+  isPublic         Boolean       @default(true)
+  // Private custom plans are offered to exactly one customer.
+  assignedUserId   String?
+  assignedUser     User?         @relation("PrivatePlanAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  ctaLabel         String?
+  ctaAction        PlanCtaAction @default(CHECKOUT)
+  currentVersionId String?       @unique
+  currentVersion   PlanVersion?  @relation("PlanCurrentVersion", fields: [currentVersionId], references: [id])
+  archivedAt       DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  versions      PlanVersion[]     @relation("PlanVersions")
+  subscriptions Subscription[]
+  offers        CustomPlanOffer[]
+
+  @@index([status, isPublic, displayOrder])
+}
+
+// Immutable commercial terms of a plan at a point in time.
+model PlanVersion {
+  id                         String          @id @default(uuid())
+  planId                     String
+  plan                       Plan            @relation("PlanVersions", fields: [planId], references: [id], onDelete: Cascade)
+  version                    Int
+  pricePaise                 Int             @default(0)
+  currency                   String          @default("INR")
+  billingInterval            BillingInterval @default(MONTH)
+  // Interval multiplier; for CUSTOM it is the number of days.
+  intervalCount              Int             @default(1)
+  // Credits granted per billing period.
+  includedCredits            Int             @default(0)
+  // Optional per-media caps within includedCredits (null = no cap).
+  includedAudioCredits       Int?
+  includedVideoCredits       Int?
+  includedScreenShareCredits Int?
+  // Feature registry keys (see Feature).
+  features                   String[]        @default([])
+  createdById                String?
+  createdAt                  DateTime        @default(now())
+
+  currentOf     Plan?             @relation("PlanCurrentVersion")
+  subscriptions Subscription[]
+  offers        CustomPlanOffer[]
+
+  @@unique([planId, version])
+}
+
+// Central feature registry. Code checks entitlements by `key` (see
+// EntitlementService); admins manage labels/visibility here.
+model Feature {
+  id           String   @id @default(uuid())
+  key          String   @unique
+  name         String
+  description  String?
+  category     String?
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  // Shown in the public comparison table.
+  isPublic     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// Singleton (key = "default") billing configuration, editable by admins.
+model BillingConfig {
+  id                          String            @id @default(uuid())
+  key                         String            @unique @default("default")
+  // Credits per participant-minute, by media type.
+  audioCreditsPerMinute       Int               @default(1)
+  videoCreditsPerMinute       Int               @default(4)
+  screenShareCreditsPerMinute Int               @default(1)
+  // GST applied on top of plan / top-up prices at checkout.
+  taxPercent                  Int               @default(18)
+  // % of period credits used that trigger a notification.
+  lowCreditThresholds         Int[]             @default([80, 90, 100])
+  // New calls need at least this many available credits.
+  minimumCreditsToStartCall   Int               @default(1)
+  topUpExpiryPolicy           TopUpExpiryPolicy @default(NEVER)
+  topUpExpiryDays             Int?
+  // Days before expiry to remind the customer to renew.
+  renewalReminderDays         Int               @default(7)
+  // Unpaid checkouts are abandoned after this many hours.
+  pendingCheckoutTtlHours     Int               @default(24)
+  updatedById                 String?
+  createdAt                   DateTime          @default(now())
+  updatedAt                   DateTime          @updatedAt
+}
+
+model CreditWallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Sum of all non-expired buckets' remaining credits. Only ever changed by
+  // CreditService inside a transaction holding this row's lock.
+  balance   Int      @default(0)
+  // Held for in-flight operations (available = balance - reserved).
+  reserved  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  buckets      CreditBucket[]
+  transactions CreditTransaction[]
+}
+
+// A grant of credits with its own expiry, so expiring one grant can never
+// take credits from another.
+model CreditBucket {
+  id             String             @id @default(uuid())
+  walletId       String
+  wallet         CreditWallet       @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  userId         String
+  source         CreditBucketSource
+  initialAmount  Int
+  remaining      Int
+  expiresAt      DateTime?
+  expiredAt      DateTime?
+  subscriptionId String?
+  subscription   Subscription?      @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  referenceType  String?
+  referenceId    String?
+  createdAt      DateTime           @default(now())
+
+  @@index([walletId, remaining])
+  @@index([expiresAt, remaining])
+  @@index([subscriptionId])
+}
+
+// Immutable ledger: one row per credit change.
+model CreditTransaction {
+  id             String                @id @default(uuid())
+  walletId       String
+  wallet         CreditWallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           CreditTransactionType
+  // Signed: positive = credit, negative = debit.
+  amount         Int
+  balanceBefore  Int
+  balanceAfter   Int
+  bucketId       String?
+  referenceType  String?
+  referenceId    String?
+  // Unique per logical event (e.g. "usage:<callId>") — the double-apply guard.
+  idempotencyKey String?               @unique
+  metadata       Json?
+  actorId        String?
+  createdAt      DateTime              @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, type, createdAt])
+}
+
+model TopUpPackage {
+  id           String      @id @default(uuid())
+  name         String
+  description  String?
+  pricePaise   Int
+  currency     String      @default("INR")
+  credits      Int
+  status       TopUpStatus @default(ACTIVE)
+  displayOrder Int         @default(0)
+  isPopular    Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model CustomPlanRequest {
+  id                      String                  @id @default(uuid())
+  userId                  String
+  user                    User                    @relation("CustomPlanRequestCustomer", fields: [userId], references: [id], onDelete: Cascade)
+  ticketId                String                  @unique
+  ticket                  SupportTicket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  status                  CustomPlanRequestStatus @default(NEW)
+  assignedAdminId         String?
+  assignedAdmin           User?                   @relation("CustomPlanRequestAssignee", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  // Admin's working notes, e.g. estimated monthly usage.
+  notes                   String?
+  estimatedMonthlyCredits Int?
+  requestedAt             DateTime                @default(now())
+  closedAt                DateTime?
+  updatedAt               DateTime                @updatedAt
+
+  offers CustomPlanOffer[]
+
+  @@index([userId, status])
+  @@index([status, requestedAt])
+}
+
+// A private custom plan offered to one customer. Accepting it starts a
+// normal checkout; the plan activates only after verified payment.
+model CustomPlanOffer {
+  id            String                @id @default(uuid())
+  requestId     String?
+  request       CustomPlanRequest?    @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  userId        String
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId        String
+  plan          Plan                  @relation(fields: [planId], references: [id])
+  planVersionId String
+  planVersion   PlanVersion           @relation(fields: [planVersionId], references: [id])
+  status        CustomPlanOfferStatus @default(SENT)
+  message       String?
+  expiresAt     DateTime?
+  acceptedAt    DateTime?
+  createdById   String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@index([userId, status])
 }

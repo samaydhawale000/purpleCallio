@@ -11,10 +11,11 @@ import { Button } from '../../components/ui/Button';
 import { TicketStatusBadge } from '../../components/support/TicketStatusBadge';
 import { NewMessageTag, UnreadDot } from '../../components/support/UnreadIndicators';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { CustomPlanBadge } from '../../components/support/CustomPlanBadge';
 
 export default function SupportPage() {
   const { isAuthed } = useRequireAuth();
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [tickets, setTickets] = useState<(SupportTicket & { type?: 'GENERAL' | 'CUSTOM_PLAN' })[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
@@ -121,6 +122,7 @@ export default function SupportPage() {
                         >
                           {t.subject}
                         </Link>
+                        {t.type === 'CUSTOM_PLAN' && <CustomPlanBadge />}
                         {t.hasUnread && <NewMessageTag label="New" />}
                       </div>
                     </td>

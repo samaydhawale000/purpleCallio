@@ -1,768 +1,496 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
-  Wallet,
-  PhoneCall,
-  Video,
-  Monitor,
-  Receipt,
-  CreditCard,
-  Loader2,
-  Clock,
   AlertTriangle,
+  ArrowUpRight,
   CalendarClock,
-  ShieldCheck,
-  Download,
+  Clock,
+  Coins,
+  MessageSquare,
+  Monitor,
+  PhoneCall,
+  Sparkles,
+  Video,
 } from 'lucide-react';
-import { useAuthStore } from '../../store/auth.store';
 import { useRequireAuth } from '../../hooks/useRequireAuth';
-import { api } from '../../lib/api';
 import { Badge } from '../../components/ui/Badge';
-import { Pagination } from '../../components/ui/Pagination';
-import PaymentMethodCard, { PaymentMethod } from './PaymentMethodCard';
-import BillingTimeline from './BillingTimeline';
-import { ToastHost, ToastState } from './Toast';
+import { Button } from '../../components/ui/Button';
+import {
+  cancelSubscription,
+  CREDIT_SOURCE_LABEL,
+  describeCreditTransaction,
+  formatCredits,
+  formatDate,
+  formatMoney,
+  getBillingOverview,
+  getCreditHistory,
+  intervalLabel,
+  resumeSubscription,
+  billingErrorMessage,
+  SUBSCRIPTION_STATUS_LABEL,
+  usageBreakdown,
+  type BillingOverview,
+  type CreditTransactionRow,
+  type SubscriptionStatus,
+} from '../../lib/billing';
+import { BillingHeader, ConfirmDialog, ErrorBanner, PageLoader, SectionCard, useAuthErrorHandler } from './BillingShell';
+import PrepaidExplainer from './PrepaidExplainer';
+import { ToastHost, type ToastState } from './Toast';
 
-interface CurrentUsage {
-  cycle: { start: string; end: string };
-  usage: {
-    audioMinutes: number;
-    videoMinutes: number;
-    screenShareMinutes: number;
-    participants: number;
-    callsCreated: number;
-    callsCompleted: number;
-  };
-  freeAllowance: { audioMinutes: number; videoMinutes: number };
-  rates: { audioPaise: number; videoPaise: number; screenSharePaise: number };
-  cost: {
-    audioPaise: number;
-    videoPaise: number;
-    screenSharePaise: number;
-    totalPaise: number;
-  };
-  estimatedMonthEndPaise: number;
-  nextBillingDate: string;
-  isFreeTier?: boolean;
-  hasPaymentMethod?: boolean;
-  freeUsagePercent?: number;
-}
-
-interface UsageInvoice {
-  id: string;
-  invoiceNumber: string;
-  cycleStart: string;
-  cycleEnd: string;
-  audioMinutes: number;
-  videoMinutes: number;
-  screenShareMinutes: number;
-  audioPaise: number;
-  videoPaise: number;
-  screenSharePaise: number;
-  subtotalPaise: number;
-  discountPercent: number | null;
-  discountPaise: number;
-  taxPaise: number;
-  totalPaise: number;
-  currency: string;
-  status: string;
-  paidAt: string | null;
-  lineItems?: any[];
-}
-
-interface UsageHistoryRow {
-  id: string;
-  billingCycleStart: string;
-  billingCycleEnd: string;
-  audioMinutes: number;
-  videoMinutes: number;
-  screenShareMinutes: number;
-  usageCostPaise: number;
-}
-
-const paiseToINR = (paise: number) => `₹${(paise / 100).toFixed(2)}`;
-
-const statusVariant: Record<string, 'default' | 'success' | 'warning' | 'error' | 'info'> = {
-  open: 'info',
-  paid: 'success',
-  dunning: 'warning',
-  failed: 'error',
+const STATUS_VARIANT: Record<SubscriptionStatus, 'default' | 'success' | 'warning' | 'error' | 'info' | 'purple'> = {
+  DRAFT: 'default',
+  PENDING_PAYMENT: 'warning',
+  ACTIVE: 'success',
+  PAST_DUE: 'warning',
+  EXPIRED: 'error',
+  CANCELED: 'default',
+  SUSPENDED: 'error',
 };
 
-export default function BillingPage() {
-  const { token, logout } = useAuthStore();
+export default function BillingOverviewPage() {
   const router = useRouter();
-  const { isReady } = useRequireAuth();
+  const { isReady, isAuthed } = useRequireAuth();
+  const handleAuthError = useAuthErrorHandler();
 
-  const [usage, setUsage] = useState<CurrentUsage | null>(null);
-  const [invoices, setInvoices] = useState<UsageInvoice[]>([]);
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [data, setData] = useState<BillingOverview | null>(null);
+  const [history, setHistory] = useState<CreditTransactionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [spendingLimitPaise, setSpendingLimitPaise] = useState<number | null>(null);
-  const [invoicePage, setInvoicePage] = useState(1);
-  const [invoicePageSize, setInvoicePageSize] = useState(10);
-  const [invoiceTotal, setInvoiceTotal] = useState(0);
-  const [invoicePageCount, setInvoicePageCount] = useState(1);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const [usageHistory, setUsageHistory] = useState<UsageHistoryRow[]>([]);
-  const [usageHistoryPage, setUsageHistoryPage] = useState(1);
-  const [usageHistoryPageSize, setUsageHistoryPageSize] = useState(10);
-  const [usageHistoryTotal, setUsageHistoryTotal] = useState(0);
-  const [usageHistoryPageCount, setUsageHistoryPageCount] = useState(1);
-
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
-
-  const showToast = useCallback((type: 'success' | 'error', message: string) => {
-    setToast({ id: Date.now(), type, message });
-  }, []);
-
-  const downloadInvoicePdf = useCallback(async (invoice: UsageInvoice) => {
-    setDownloadingId(invoice.id);
+  const load = useCallback(async () => {
     try {
-      const res = await api.get(`/billing/usage-invoices/${invoice.id}/pdf`, {
-        responseType: 'blob',
-      });
-      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${invoice.invoiceNumber ?? invoice.id}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch {
-      showToast('error', 'Could not download the invoice PDF. Please try again.');
-    } finally {
-      setDownloadingId(null);
-    }
-  }, [showToast]);
-
-  const fetchAll = useCallback(async () => {
-    try {
-      const [usageRes, invoiceRes, pmRes, limitRes, historyRes] = await Promise.all([
-        api.get('/billing/current-usage'),
-        api.get(`/billing/usage-invoices?page=${invoicePage}`),
-        api.get('/billing/payment-methods'),
-        api.get('/billing/spending-limit'),
-        api.get(`/billing/usage-history?page=${usageHistoryPage}`),
+      const [overview, usage] = await Promise.all([
+        getBillingOverview(),
+        getCreditHistory(1, 'USAGE_DEBIT').catch(() => null),
       ]);
-      setUsage(usageRes.data);
-      setInvoices(invoiceRes.data.data ?? []);
-      setInvoiceTotal(invoiceRes.data.total ?? 0);
-      setInvoicePageCount(invoiceRes.data.pageCount ?? 1);
-      setInvoicePageSize(invoiceRes.data.pageSize ?? 10);
-      const paymentMethodData = Array.isArray(pmRes.data)
-        ? pmRes.data
-        : pmRes.data?.data ?? pmRes.data?.items ?? [];
-      setPaymentMethods(paymentMethodData.map((pm: any) => ({
-        id: pm.id ?? pm.token ?? pm.tokenId,
-        brand: pm.brand ?? pm.network ?? pm.cardBrand ?? null,
-        last4: pm.last4 ?? pm.last_4 ?? pm.cardLast4 ?? null,
-        expMonth: pm.expMonth ?? pm.expirymonth ?? pm.expiry_month ?? pm.cardExpMonth ?? null,
-        expYear: pm.expYear ?? pm.expiryyear ?? pm.expiry_year ?? pm.cardExpYear ?? null,
-        default: Boolean(pm.default ?? pm.isDefault),
-      })));
-      setSpendingLimitPaise(limitRes.data?.spendingLimitPaise ?? null);
-      setUsageHistory(historyRes.data.data ?? []);
-      setUsageHistoryTotal(historyRes.data.total ?? 0);
-      setUsageHistoryPageCount(historyRes.data.pageCount ?? 1);
-      setUsageHistoryPageSize(historyRes.data.pageSize ?? 10);
+      setData(overview);
+      setHistory(usage?.data ?? []);
       setError(null);
-    } catch (e: any) {
-      if (e?.response?.status === 401) {
-        logout();
-        router.push('/login');
-      } else {
-        setError('Failed to load billing details. Please try again.');
-      }
+    } catch (e) {
+      if (!handleAuthError(e)) setError(billingErrorMessage(e, 'Failed to load billing details. Please try again.'));
     } finally {
       setLoading(false);
     }
-  }, [invoicePage, usageHistoryPage, logout, router]);
+  }, [handleAuthError]);
 
   useEffect(() => {
-    if (!isReady) return;
-    if (!token) { router.push('/login'); return; }
-    fetchAll();
-  }, [isReady, token, fetchAll, router]);
+    if (isReady && isAuthed) load();
+  }, [isReady, isAuthed, load]);
+
+  const act = async (fn: () => Promise<unknown>, success: string) => {
+    setBusy(true);
+    try {
+      await fn();
+      setToast({ id: Date.now(), type: 'success', message: success });
+      await load();
+    } catch (e) {
+      if (!handleAuthError(e)) setToast({ id: Date.now(), type: 'error', message: billingErrorMessage(e) });
+    } finally {
+      setBusy(false);
+      setConfirmCancel(false);
+    }
+  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="animate-spin h-6 w-6 text-[#7F40E8]" />
-          <span className="text-sm text-[#3D3650]">Loading billing…</span>
-        </div>
+      <div className="flex flex-col gap-6">
+        <BillingHeader title="Billing" subtitle="Your plan, credit balance and usage." />
+        <PageLoader />
       </div>
     );
   }
 
-const u = usage?.usage;
-  const cost = usage?.cost;
-  const free = usage?.freeAllowance;
-  const rates = usage?.rates;
-  const paiseToINRShort = (p: number) => `₹${(p / 100).toFixed(2)}`;
+  if (error || !data) {
+    return (
+      <div className="flex flex-col gap-6">
+        <BillingHeader title="Billing" subtitle="Your plan, credit balance and usage." />
+        <ErrorBanner message={error ?? 'Billing details are unavailable.'} onRetry={() => { setLoading(true); load(); }} />
+      </div>
+    );
+  }
 
-  const hasDefaultCard = paymentMethods.some((pm) => pm.default);
-  const hasBillableUsage = (cost?.totalPaise ?? 0) > 0 || (usage?.estimatedMonthEndPaise ?? 0) > 0;
-  const latestInvoiceStatus = invoices[0]?.status;
-  const billingAtRisk = latestInvoiceStatus === 'failed' || latestInvoiceStatus === 'dunning';
-
-  const billingStatus: { label: string; variant: 'success' | 'warning' | 'error'; icon: typeof ShieldCheck } =
-    billingAtRisk
-      ? { label: 'Action needed', variant: 'error', icon: AlertTriangle }
-      : !hasDefaultCard && hasBillableUsage
-        ? { label: 'Add a card', variant: 'warning', icon: AlertTriangle }
-        : { label: 'Healthy', variant: 'success', icon: ShieldCheck };
-
-  const defaultCard = paymentMethods.find((pm) => pm.default);
+  const sub = data.subscription;
+  const isFree = sub.planType === 'FREE';
+  const planName = data.plan?.name ?? sub.planName ?? 'Free';
+  const periodEnd = formatDate(sub.currentPeriodEnd);
+  const scheduledFree = data.scheduledPlan?.type === 'FREE';
+  const scheduledPaid = data.scheduledPlan && !scheduledFree ? data.scheduledPlan : null;
+  const cancelling = !isFree && (sub.cancelAtPeriodEnd || scheduledFree);
+  const wallet = data.wallet;
+  const exhausted = wallet.available <= 0;
+  const low = !exhausted && wallet.usedPercent >= 80;
+  const usage = data.usage;
+  const sentOffer = data.customPlan?.offers?.find((o) => o.status === 'SENT');
+  const openRequest = data.customPlan?.request?.open ? data.customPlan.request : null;
+  const ended = data.lastEndedPaidSubscription;
 
   return (
     <div className="flex flex-col gap-6">
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
+      <BillingHeader title="Billing" subtitle="Your plan, credit balance and usage." />
 
-      <div>
-        <h1 className="text-2xl font-bold text-[#170B2E]">Billing &amp; Usage</h1>
-        <p className="text-sm text-[#3D3650] mt-1">
-          Pay only for what you use. Add a card and we&apos;ll auto-charge you at the end of each billing cycle.
-        </p>
-      </div>
-
-      {error && (
-        <div
-          className="rounded-lg border border-red-500/30 px-4 py-3 text-sm text-red-600"
-          style={{ background: 'rgba(239,68,68,0.06)' }}
-        >
-          {error}
-        </div>
+      {/* ── Notices ── */}
+      {isFree && ended && (
+        <Notice tone="warning" icon={<CalendarClock size={16} />}>
+          <span>
+            Your {ended.planName ?? 'paid'} plan ended on {formatDate(ended.currentPeriodEnd ?? ended.expiredAt)}.
+          </span>
+          <Link href="/dashboard/billing/checkout?renew=1" className="font-semibold text-[#6425C4] hover:underline">
+            Renew
+          </Link>
+        </Notice>
+      )}
+      {data.pendingCheckout && (
+        <Notice tone="info" icon={<Clock size={16} />}>
+          <span>
+            A checkout{data.pendingCheckout.planName ? ` for ${data.pendingCheckout.planName}` : ''} started on{' '}
+            {formatDate(data.pendingCheckout.createdAt)} hasn’t been completed. Your plan changes only after payment is confirmed.
+          </span>
+        </Notice>
+      )}
+      {(exhausted || low) && (
+        <Notice tone={exhausted ? 'error' : 'warning'} icon={<AlertTriangle size={16} />} testId="credit-alert">
+          <span>
+            {exhausted
+              ? 'You’re out of credits. New calls are paused until you add credits. Calls already in progress are not cut off.'
+              : `You’ve used ${wallet.usedPercent}% of your credits this period.`}
+          </span>
+          <span className="flex gap-3">
+            <Link href="/dashboard/billing/credits#topups" className="font-semibold text-[#6425C4] hover:underline">
+              Buy more credits
+            </Link>
+            <Link href="/dashboard/billing/plans" className="font-semibold text-[#6425C4] hover:underline">
+              Upgrade
+            </Link>
+          </span>
+        </Notice>
       )}
 
-      <UsageAlertBanner
-        freeUsagePercent={usage?.freeUsagePercent}
-        hasPaymentMethod={hasDefaultCard}
-        audioRemaining={Math.max(0, (free?.audioMinutes ?? 0) - (u?.audioMinutes ?? 0))}
-        videoRemaining={Math.max(0, (free?.videoMinutes ?? 0) - (u?.videoMinutes ?? 0))}
-      />
-
-      {/* ── Current balance / usage ── */}
-      <div
-        className="rounded-2xl border border-[#D6C4EE] p-6"
-        style={{ background: 'linear-gradient(135deg, rgba(127,64,232,0.08), rgba(65,6,134,0.04))' }}
-      >
-        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-white"
-              style={{ background: 'linear-gradient(135deg, #7F40E8, #410686)' }}
-            >
-              <Wallet size={22} />
-            </div>
-            <div>
-              <p className="text-lg font-bold text-[#170B2E]">{usage?.isFreeTier ? 'Free Tier' : 'Pay as you go'}</p>
-<p className="text-sm text-[#3D3650] mt-0.5">
-                {free?.audioMinutes ?? 500} audio + {free?.videoMinutes ?? 200} video participant-min / month free · screen share always paid
-              </p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-[#3D3650] mb-1">Current balance (this cycle)</p>
-            <p className="text-2xl font-bold text-[#170B2E]">{paiseToINR(cost?.totalPaise ?? 0)}</p>
-            <p
-              className="text-[11px] text-[#3D3650] mt-0.5"
-              title="Projected total for the full cycle, based on your usage so far."
-            >
-              est. month-end {paiseToINR(usage?.estimatedMonthEndPaise ?? 0)}
+      {/* ── Custom plan ── */}
+      {sentOffer ? (
+        <div
+          className="rounded-2xl border p-5 flex flex-col sm:flex-row sm:items-center gap-4"
+          style={{ background: 'linear-gradient(135deg, rgba(127,64,232,0.10), rgba(65,6,134,0.06))', borderColor: '#C4AEE8' }}
+          data-testid="custom-offer-card"
+        >
+          <Sparkles size={22} className="text-[#6425C4] shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-[#170B2E]">Your custom plan is ready</p>
+            <p className="text-xs text-[#3D3650] mt-0.5">
+              {sentOffer.plan.name}
+              {sentOffer.plan.version ? ` · ${formatMoney(sentOffer.plan.version.pricePaise, sentOffer.plan.version.currency)} / ${intervalLabel(sentOffer.plan.version)}` : ''}
+              {sentOffer.expiresAt ? ` · offer valid until ${formatDate(sentOffer.expiresAt)}` : ''}
             </p>
           </div>
+          <Link href={`/dashboard/billing/offers/${sentOffer.id}`}>
+            <Button size="sm">Review offer</Button>
+          </Link>
         </div>
+      ) : openRequest ? (
+        <Notice tone="info" icon={<MessageSquare size={16} />}>
+          <span>Custom plan conversation in progress ({openRequest.ticketNumber}).</span>
+          <Link href={`/dashboard/support/${openRequest.ticketId}`} className="font-semibold text-[#6425C4] hover:underline">
+            Open conversation
+          </Link>
+        </Notice>
+      ) : null}
 
-        {/* Per-type breakdown */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-<TypeRow
-            icon={<PhoneCall size={16} style={{ color: '#7F40E8' }} />}
-            label="Audio"
-            minutes={u?.audioMinutes ?? 0}
-            costPaise={cost?.audioPaise ?? 0}
-            freeOf={free?.audioMinutes ?? 0}
-            rate={rates ? `${paiseToINRShort(rates.audioPaise)} / participant-min` : 'Loading rate…'}
-            color="#7F40E8"
-          />
-          <TypeRow
-            icon={<Video size={16} style={{ color: '#A05DF9' }} />}
-            label="Video"
-            minutes={u?.videoMinutes ?? 0}
-            costPaise={cost?.videoPaise ?? 0}
-            freeOf={free?.videoMinutes ?? 0}
-            rate={rates ? `${paiseToINRShort(rates.videoPaise)} / participant-min` : 'Loading rate…'}
-            color="#A05DF9"
-          />
-          <TypeRow
-            icon={<Monitor size={16} style={{ color: '#34D399' }} />}
-            label="Screen Share"
-            minutes={u?.screenShareMinutes ?? 0}
-            costPaise={cost?.screenSharePaise ?? 0}
-            freeOf={0}
-                rate={rates ? `${paiseToINRShort(rates.screenSharePaise)} / participant-min` : 'Loading rate…'}
-            color="#34D399"
-          />
-        </div>
-
-        {/* Billing summary strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-white/5">
-          <SummaryTile
-            label="Est. end-of-month"
-            value={paiseToINR(usage?.estimatedMonthEndPaise ?? 0)}
-            hint="Projected total for the full cycle, based on your usage so far — not an additional charge."
-          />
-          <SummaryTile
-            label="Next billing date"
-            value={
-              usage?.nextBillingDate
-                ? new Date(usage.nextBillingDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-                : '—'
-            }
-            icon={<CalendarClock size={13} style={{ color: '#7F40E8' }} />}
-          />
-          <SummaryTile
-            label="Payment method"
-            value={defaultCard ? `${(defaultCard.brand || 'Card').toUpperCase()} •••• ${defaultCard.last4 ?? '····'}` : 'Not added'}
-            icon={<CreditCard size={13} style={{ color: '#6425C4' }} />}
-          />
-          <SummaryTile
-            label="Billing status"
-            value={billingStatus.label}
-            valueColor={
-              billingStatus.variant === 'success' ? '#34D399' : billingStatus.variant === 'warning' ? '#FBBF24' : '#F87171'
-            }
-            icon={<billingStatus.icon size={13} style={{ color: '#7F40E8' }} />}
-          />
-        </div>
-      </div>
-
-      {/* ── How billing works ── */}
-<BillingTimeline
-        hasUsage={(u?.callsCompleted ?? 0) > 0 || (u?.audioMinutes ?? 0) > 0 || (u?.videoMinutes ?? 0) > 0}
-        hasBillableUsage={hasBillableUsage}
-        hasPaymentMethod={hasDefaultCard}
-        nextBillingDate={usage?.nextBillingDate ?? null}
-        hasInvoices={invoices.length > 0}
-        freeAllowance={usage?.freeAllowance}
-      />
-
-      {/* ── Payment method ── */}
-      <PaymentMethodCard
-        paymentMethods={paymentMethods}
-        onChanged={fetchAll}
-        showToast={showToast}
-      />
-
-      {/* ── Spending protection ── */}
-      <SpendingLimitCard
-        spendingLimitPaise={spendingLimitPaise}
-        onSaved={(paise) => {
-          setSpendingLimitPaise(paise);
-          showToast('success', paise == null ? 'Spending limit removed.' : 'Spending limit updated.');
-        }}
-        showToast={showToast}
-      />
-
-      {/* ── Usage invoices ── */}
-      <div className="rounded-2xl border border-[#E7DFF5] p-6" style={{ background: '#FFFFFF' }}>
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-semibold text-[#170B2E]">Invoices</p>
-          <span className="text-xs text-[#3D3650]">{invoices.length} total</span>
-        </div>
-
-        {invoices.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-8 text-center">
-            <Receipt size={24} className="text-[#3D3650]" />
-            <p className="text-sm text-[#3D3650]">
-              No invoices yet. You&apos;ll be billed at the end of each billing cycle for usage beyond the free tier.
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* ── Current plan ── */}
+        <SectionCard
+          title="Current plan"
+          actions={<Badge variant={STATUS_VARIANT[sub.status] ?? 'default'}>{SUBSCRIPTION_STATUS_LABEL[sub.status] ?? sub.status}</Badge>}
+        >
+          <div data-testid="current-plan">
+            <p className="text-2xl font-bold text-[#170B2E]">{planName}</p>
+            <p className="text-sm text-[#3D3650] mt-1">
+              {isFree || sub.pricePaise === 0
+                ? 'Free'
+                : `${formatMoney(sub.pricePaise, sub.currency)}${sub.billingInterval ? ` / ${intervalLabel({ billingInterval: sub.billingInterval, intervalCount: sub.intervalCount })}` : ''}`}
+              {' · '}
+              {formatCredits(sub.includedCredits)} credits included
             </p>
+
+            <div className="mt-3 text-sm text-[#3D3650] space-y-1">
+              {isFree ? (
+                <p>Current period ends {periodEnd}. Your Free plan credits refresh each period.</p>
+              ) : cancelling ? (
+                <p className="text-amber-700">
+                  Your plan remains active until {periodEnd}. After that you’ll move to the Free plan.
+                </p>
+              ) : scheduledPaid ? (
+                <p className="text-amber-700">
+                  Switches to {scheduledPaid.name} at the end of this period ({periodEnd}). You’ll pay for {scheduledPaid.name} when you renew.
+                </p>
+              ) : (
+                <p>
+                  Active until {periodEnd}. Paid plans don’t renew automatically — renew before then to keep your plan.
+                </p>
+              )}
+              {!isFree && data.renewal && !cancelling && !scheduledPaid && (
+                <p className="text-xs">
+                  Renewal: {formatMoney(data.renewal.pricePaise, sub.currency)} for {formatCredits(data.renewal.includedCredits)} credits
+                  {data.renewal.termsChanged ? ' — this plan’s price or included credits have changed since you bought it.' : '.'}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              {cancelling || scheduledPaid ? (
+                <Button size="sm" loading={busy} onClick={() => act(resumeSubscription, `You’ll stay on ${planName}.`)}>
+                  {cancelling ? 'Resume plan' : 'Keep current plan'}
+                </Button>
+              ) : (
+                <>
+                  <Link href="/dashboard/billing/plans">
+                    <Button size="sm">Upgrade</Button>
+                  </Link>
+                  {!isFree && data.renewal && (
+                    <Link href="/dashboard/billing/checkout?renew=1">
+                      <Button size="sm" variant="secondary">Renew</Button>
+                    </Link>
+                  )}
+                </>
+              )}
+              <Link href="/dashboard/billing/plans">
+                <Button size="sm" variant="secondary">Manage plan</Button>
+              </Link>
+              {!isFree && !cancelling && (
+                <Button size="sm" variant="ghost" onClick={() => setConfirmCancel(true)}>
+                  Cancel plan
+                </Button>
+              )}
+            </div>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-[#3D3650] border-b border-[#E7DFF5]">
-                  <th className="py-2 pr-4 font-medium">Invoice</th>
-                  <th className="py-2 pr-4 font-medium">Cycle</th>
-                  <th className="py-2 pr-4 font-medium">Usage</th>
-                  <th className="py-2 pr-4 font-medium">Tax</th>
-                  <th className="py-2 pr-4 font-medium">Total</th>
-                  <th className="py-2 pr-4 font-medium">Status</th>
-                  <th className="py-2 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv) => (
-                  <tr key={inv.id} className="border-b border-[#E7DFF5]/60 last:border-0">
-                    <td className="py-3 pr-4 font-mono text-xs text-[#3D3650]">{inv.invoiceNumber}</td>
-                    <td className="py-3 pr-4 text-[#3D3650]">
-                      {new Date(inv.cycleStart).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
-                      {' – '}
-                      {new Date(inv.cycleEnd).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
-                    </td>
-                    <td className="py-3 pr-4 font-medium text-[#170B2E]">
-                      {paiseToINR(inv.subtotalPaise)}
-                      {inv.discountPaise > 0 && (
-                        <span className="block text-xs font-normal text-emerald-600">
-                          {inv.discountPercent != null ? `${inv.discountPercent}% discount` : 'Discount'} applied
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 pr-4 text-[#3D3650]">{paiseToINR(inv.taxPaise)}</td>
-                    <td className="py-3 pr-4 font-medium text-[#170B2E]">{paiseToINR(inv.totalPaise)}</td>
-                    <td className="py-3 pr-4">
-                      <Badge variant={statusVariant[inv.status] ?? 'default'}>
-                        {inv.status.toUpperCase()}
-                      </Badge>
-                    </td>
-                    <td className="py-3">
-                      <div className="flex items-center justify-end gap-3">
-                        <Link
-                          href={`/dashboard/billing/invoices/${inv.id}`}
-                          className="text-xs font-medium text-[#7F40E8] hover:text-[#170B2E] transition-colors"
-                        >
-                          View
-                        </Link>
-                        <button
-                          onClick={() => downloadInvoicePdf(inv)}
-                          disabled={downloadingId === inv.id}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-[#3D3650] hover:text-[#170B2E] transition-colors disabled:opacity-50"
-                        >
-                          <Download size={12} />
-                          {downloadingId === inv.id ? 'Downloading…' : 'PDF'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+        </SectionCard>
+
+        {/* ── Credit balance ── */}
+        <SectionCard
+          title="Credit balance"
+          actions={
+            <Link href="/dashboard/billing/credits" className="inline-flex items-center gap-1 text-xs font-medium text-[#6425C4]">
+              View credits <ArrowUpRight size={13} />
+            </Link>
+          }
+        >
+          <div data-testid="credit-balance">
+            <p className="text-3xl font-bold text-[#170B2E]">
+              {formatCredits(wallet.available)}
+              <span className="text-sm font-normal text-[#3D3650]"> credits available</span>
+            </p>
+            <p className="text-xs text-[#3D3650] mt-1">
+              {formatCredits(wallet.used)} used this period
+              {wallet.reserved > 0 ? ` · ${formatCredits(wallet.reserved)} held for active calls` : ''}
+            </p>
+            <div className="mt-3">
+              <div className="flex justify-between text-[11px] text-[#3D3650] mb-1">
+                <span>Used</span>
+                <span>{wallet.usedPercent}%</span>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: '#E7DFF5' }}>
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, wallet.usedPercent))}%`,
+                    background:
+                      wallet.usedPercent >= 80 ? 'linear-gradient(135deg,#f43f5e,#fb7185)' : 'linear-gradient(135deg,#7F40E8,#410686)',
+                  }}
+                />
+              </div>
+            </div>
+            {wallet.buckets.length > 0 && (
+              <ul className="mt-4 divide-y divide-[#E7DFF5] border border-[#E7DFF5] rounded-lg">
+                {wallet.buckets.map((b) => (
+                  <li key={b.id} className="flex items-center justify-between px-3 py-2 text-xs">
+                    <span className="text-[#170B2E] font-medium">{CREDIT_SOURCE_LABEL[b.source] ?? b.source}</span>
+                    <span className="text-[#3D3650]">
+                      {formatCredits(b.remaining)} left · {b.expiresAt ? `expires ${formatDate(b.expiresAt)}` : 'no expiry'}
+                    </span>
+                  </li>
                 ))}
-              </tbody>
-            </table>
-            <Pagination
-              page={invoicePage}
-              pageCount={invoicePageCount}
-              totalItems={invoiceTotal}
-              pageSize={invoicePageSize}
-              onPageChange={setInvoicePage}
-            />
+              </ul>
+            )}
+            <div className="mt-4">
+              <Link href="/dashboard/billing/credits#topups">
+                <Button size="sm" variant="secondary">
+                  <Coins size={14} /> Buy more credits
+                </Button>
+              </Link>
+            </div>
           </div>
-        )}
+        </SectionCard>
       </div>
 
-      {/* ── Usage history ── */}
-      <div className="rounded-2xl border border-[#E7DFF5] p-6" style={{ background: '#FFFFFF' }}>
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-semibold text-[#170B2E]">Usage history</p>
-          <span className="text-xs text-[#3D3650]">{usageHistoryTotal} cycles</span>
+      {/* ── Usage this period ── */}
+      <SectionCard
+        title="Usage this period"
+        subtitle={`${formatDate(usage.cycle.start)} – ${formatDate(usage.cycle.end)} · credits consumed by media type`}
+        actions={
+          <Link href="/dashboard/usage" className="inline-flex items-center gap-1 text-xs font-medium text-[#6425C4]">
+            Usage details <ArrowUpRight size={13} />
+          </Link>
+        }
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-testid="usage-by-media">
+          <MediaTile
+            icon={<PhoneCall size={15} className="text-[#7F40E8]" />}
+            label="Audio"
+            credits={usage.credits.audio}
+            minutes={usage.usage.audioMinutes}
+            rate={usage.creditRates.audioCreditsPerMinute}
+            unit="audio"
+          />
+          <MediaTile
+            icon={<Video size={15} className="text-[#A05DF9]" />}
+            label="Video"
+            credits={usage.credits.video}
+            minutes={usage.usage.videoMinutes}
+            rate={usage.creditRates.videoCreditsPerMinute}
+            unit="video"
+          />
+          <MediaTile
+            icon={<Monitor size={15} className="text-emerald-500" />}
+            label="Screen share"
+            credits={usage.credits.screenShare}
+            minutes={usage.usage.screenShareMinutes}
+            rate={usage.creditRates.screenShareCreditsPerMinute}
+            unit="screen share"
+          />
         </div>
+        <p className="text-xs text-[#3D3650] mt-3">
+          Total: <span className="font-semibold text-[#170B2E]">{formatCredits(usage.credits.total)} credits</span> across{' '}
+          {usage.usage.callsCompleted} completed calls. A participant-minute is one minute of one participant using that media.
+        </p>
+      </SectionCard>
 
-        {usageHistory.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-8 text-center">
-            <Clock size={24} className="text-[#3D3650]" />
-            <p className="text-sm text-[#3D3650]">No usage recorded yet.</p>
-          </div>
+      {/* ── Recent usage ── */}
+      <SectionCard
+        title="Recent usage"
+        subtitle="Credits consumed per call"
+        actions={
+          <Link href="/dashboard/billing/credits" className="inline-flex items-center gap-1 text-xs font-medium text-[#6425C4]">
+            Full credit history <ArrowUpRight size={13} />
+          </Link>
+        }
+      >
+        {history.length === 0 ? (
+          <p className="text-sm text-[#3D3650] py-4 text-center">No calls have used credits yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" data-testid="recent-usage">
               <thead>
                 <tr className="text-left text-xs text-[#3D3650] border-b border-[#E7DFF5]">
-                  <th className="py-2 pr-4 font-medium">Cycle</th>
-                  <th className="py-2 pr-4 font-medium">Audio</th>
-                  <th className="py-2 pr-4 font-medium">Video</th>
-                  <th className="py-2 pr-4 font-medium">Screen share</th>
-                  <th className="py-2 font-medium">Cost</th>
+                  <th className="py-2 pr-4 font-medium">Date</th>
+                  <th className="py-2 pr-4 font-medium">Call</th>
+                  <th className="py-2 pr-4 font-medium">Media</th>
+                  <th className="py-2 pr-4 font-medium">Usage</th>
+                  <th className="py-2 font-medium text-right">Credits</th>
                 </tr>
               </thead>
               <tbody>
-                {usageHistory.map((row) => {
-                  const isCurrent = new Date(row.billingCycleEnd) > new Date();
+                {history.map((row) => {
+                  const parts = usageBreakdown(row.metadata).filter((p) => p.minutes > 0);
+                  const callId = typeof row.metadata?.callId === 'string' ? row.metadata.callId : row.referenceId;
                   return (
                     <tr key={row.id} className="border-b border-[#E7DFF5]/60 last:border-0">
-                      <td className="py-3 pr-4 text-[#3D3650]">
-                        {new Date(row.billingCycleStart).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
-                        {' – '}
-                        {new Date(row.billingCycleEnd).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
-                        {isCurrent && (
-                          <span className="ml-2 text-[10px] font-medium text-[#7F40E8]">CURRENT</span>
-                        )}
+                      <td className="py-2.5 pr-4 text-[#3D3650] whitespace-nowrap">{formatDate(row.createdAt)}</td>
+                      <td className="py-2.5 pr-4 font-mono text-xs text-[#3D3650]">{callId ? `${callId.slice(0, 12)}…` : '—'}</td>
+                      <td className="py-2.5 pr-4 text-[#3D3650]">{parts.map((p) => p.label).join(', ') || '—'}</td>
+                      <td className="py-2.5 pr-4 text-[#3D3650] whitespace-nowrap">
+                        {parts.reduce((s, p) => s + p.minutes, 0).toFixed(2)} participant-min
                       </td>
-                      <td className="py-3 pr-4 text-[#3D3650]">{row.audioMinutes.toFixed(2)} participant-min</td>
-                      <td className="py-3 pr-4 text-[#3D3650]">{row.videoMinutes.toFixed(2)} participant-min</td>
-                      <td className="py-3 pr-4 text-[#3D3650]">{row.screenShareMinutes.toFixed(2)} participant-min</td>
-                      <td className="py-3 font-medium text-[#170B2E]">{paiseToINR(row.usageCostPaise)}</td>
+                      <td className="py-2.5 text-right font-medium text-[#170B2E]" title={describeCreditTransaction(row)}>
+                        {formatCredits(Math.abs(row.amount))}
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-            <Pagination
-              page={usageHistoryPage}
-              pageCount={usageHistoryPageCount}
-              totalItems={usageHistoryTotal}
-              pageSize={usageHistoryPageSize}
-              onPageChange={setUsageHistoryPage}
-            />
           </div>
         )}
-      </div>
+      </SectionCard>
 
-      {/* ── How it works ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-<InfoCard
-          icon={<Wallet size={16} style={{ color: '#34D399' }} />}
-          title="Free tier"
-          body={`${free?.audioMinutes ?? 500} audio + ${free?.videoMinutes ?? 200} video participant-minutes free every month. Screen sharing is always billable.`}
-        />
-        <InfoCard
-          icon={<Clock size={16} style={{ color: '#7F40E8' }} />}
-          title="Monthly invoice"
-          body="On your billing date each month (anchored to when you started your plan), we aggregate your usage and generate an invoice for anything beyond the free allowance."
-        />
-        <InfoCard
-          icon={<CreditCard size={16} style={{ color: '#FBBF24' }} />}
-          title="Auto-charge"
-          body="Your saved card is charged automatically. Failed payments get a 7-day grace period."
-        />
-      </div>
+      <PrepaidExplainer />
+
+      <ConfirmDialog
+        open={confirmCancel}
+        title={`Cancel ${planName}?`}
+        confirmLabel="Cancel plan"
+        cancelLabel="Keep plan"
+        tone="danger"
+        busy={busy}
+        onCancel={() => setConfirmCancel(false)}
+        onConfirm={() => act(cancelSubscription, `Your plan remains active until ${periodEnd}.`)}
+      >
+        <p>Your plan stays active until {periodEnd}. You keep its credits and features until then, and then move to the Free plan.</p>
+        <p>Plan payments are not refunded. You can resume anytime before {periodEnd}.</p>
+      </ConfirmDialog>
     </div>
   );
+
 }
 
-function TypeRow({
+function MediaTile({
   icon,
   label,
+  credits,
   minutes,
-  costPaise,
-  freeOf,
   rate,
-  color,
+  unit,
 }: {
   icon: React.ReactNode;
   label: string;
+  credits: number;
   minutes: number;
-  costPaise: number;
-  freeOf: number;
-  rate: string;
-  color: string;
+  rate: number;
+  unit: string;
 }) {
-  const pct =
-    freeOf > 0 ? Math.min(100, Math.round((minutes / freeOf) * 100)) : Math.min(100, minutes > 0 ? 100 : 0);
-  const remaining = freeOf > 0 ? Math.max(0, freeOf - minutes) : 0;
   return (
     <div className="rounded-xl border border-[#E7DFF5] p-4" style={{ background: '#F8F4FD' }}>
-      <div className="flex items-center gap-1.5 mb-1">
-        {icon}
-        <p className="text-xs text-[#3D3650]">{label}</p>
+      <div className="flex items-center gap-1.5 text-xs text-[#3D3650]">
+        {icon} {label}
       </div>
-      <p className="text-lg font-bold text-[#170B2E]">
-        {minutes.toFixed(2)}
-        <span className="text-xs font-normal text-[#3D3650]"> participant-min</span>
+      <p className="text-lg font-bold text-[#170B2E] mt-1">
+        {formatCredits(credits)}
+        <span className="text-xs font-normal text-[#3D3650]"> credits</span>
       </p>
-      <p className="text-xs font-semibold mt-1" style={{ color }}>
-        {paiseToINR(costPaise)}
-      </p>
-      <p className="text-[11px] text-[#3D3650] mt-0.5">{rate}</p>
-      {freeOf > 0 && (
-        <div className="mt-2.5">
-          <div className="flex items-center justify-between text-[10px] text-[#3D3650] mb-1">
-            <span>{remaining.toFixed(2)} / {freeOf} participant-min remaining</span>
-            <span>{pct}%</span>
-          </div>
-          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#E7DFF5' }}>
-            <div
-              className="h-full rounded-full"
-              style={{
-                width: `${pct}%`,
-                background: pct >= 90 ? 'linear-gradient(135deg,#f43f5e,#fb7185)' : 'linear-gradient(135deg,#7F40E8,#410686)',
-              }}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SummaryTile({
-  label,
-  value,
-  icon,
-  valueColor,
-  hint,
-}: {
-  label: string;
-  value: string;
-  icon?: React.ReactNode;
-  valueColor?: string;
-  hint?: string;
-}) {
-  return (
-    <div title={hint}>
-      <p className="text-[11px] text-[#3D3650] mb-1">{label}</p>
-      <p
-        className="text-sm font-semibold flex items-center gap-1.5 truncate"
-        style={{ color: valueColor ?? '#F1F5F9' }}
-      >
-        {icon}
-        {value}
+      <p className="text-[11px] text-[#3D3650]">{minutes.toFixed(2)} participant-min</p>
+      <p className="text-[11px] text-[#6425C4] mt-1">
+        1 {unit} participant-minute = {formatCredits(rate)} credit{rate === 1 ? '' : 's'}
       </p>
     </div>
   );
 }
 
-function InfoCard({
+function Notice({
+  tone,
   icon,
-  title,
-  body,
+  children,
+  testId,
 }: {
+  tone: 'info' | 'warning' | 'error';
   icon: React.ReactNode;
-  title: string;
-  body: string;
+  children: React.ReactNode;
+  testId?: string;
 }) {
+  const styles = {
+    info: { background: 'rgba(127,64,232,0.06)', borderColor: 'rgba(127,64,232,0.25)', color: '#410686' },
+    warning: { background: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.35)', color: '#92400E' },
+    error: { background: 'rgba(239,68,68,0.06)', borderColor: 'rgba(239,68,68,0.3)', color: '#B91C1C' },
+  }[tone];
   return (
-    <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-      <div className="flex items-center gap-2 mb-2">
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center"
-          style={{ background: 'rgba(127,64,232,0.1)', border: '1px solid rgba(127,64,232,0.2)' }}
-        >
-          {icon}
-        </div>
-        <p className="text-sm font-semibold text-[#170B2E]">{title}</p>
-      </div>
-      <p className="text-xs text-[#3D3650] leading-relaxed">{body}</p>
-    </div>
-  );
-}
-
-/**
- * Warns the customer before they're surprised by a bill: nudges at 50/75%,
- * escalates at 90%, and calls out clearly once the free allowance is fully
- * used (with a CTA to add a card if they haven't already).
- */
-function UsageAlertBanner({
-  freeUsagePercent,
-  hasPaymentMethod,
-  audioRemaining,
-  videoRemaining,
-}: {
-  freeUsagePercent?: number;
-  hasPaymentMethod: boolean;
-  audioRemaining: number;
-  videoRemaining: number;
-}) {
-  const pct = freeUsagePercent ?? 0;
-  if (pct < 50) return null;
-
-  const tier =
-    pct >= 100
-      ? { color: '#F87171', border: 'rgba(248,113,113,0.35)', bg: 'rgba(239,68,68,0.06)' }
-      : pct >= 90
-        ? { color: '#FBBF24', border: 'rgba(251,191,36,0.35)', bg: 'rgba(251,191,36,0.06)' }
-        : { color: '#7F40E8', border: 'rgba(127,64,232,0.3)', bg: 'rgba(127,64,232,0.05)' };
-
-  const message =
-    pct >= 100
-      ? hasPaymentMethod
-        ? "You've used your full free allowance — you're now on paid usage."
-        : "You've used your full free allowance. Add a payment method to keep making calls."
-      : `You've used ${pct}% of your free allowance. ${audioRemaining.toFixed(2)} audio + ${videoRemaining.toFixed(2)} video participant-minutes remaining.`;
-
-  return (
-    <div
-      className="flex items-center gap-3 rounded-xl border px-4 py-3"
-      style={{ borderColor: tier.border, background: tier.bg }}
-    >
-      <AlertTriangle size={16} style={{ color: tier.color }} className="shrink-0" />
-      <p className="text-sm flex-1" style={{ color: tier.color }}>{message}</p>
-    </div>
-  );
-}
-
-/**
- * Lets the customer cap their own monthly paid usage so a leaked API key or
- * runaway integration can't run up a surprise bill. Enforced server-side in
- * UsageBillingService.canStartCall — this is just the control surface.
- */
-function SpendingLimitCard({
-  spendingLimitPaise,
-  onSaved,
-  showToast,
-}: {
-  spendingLimitPaise: number | null;
-  onSaved: (paise: number | null) => void;
-  showToast: (type: 'success' | 'error', message: string) => void;
-}) {
-  const [input, setInput] = useState(spendingLimitPaise != null ? String(spendingLimitPaise / 100) : '');
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    setInput(spendingLimitPaise != null ? String(spendingLimitPaise / 100) : '');
-  }, [spendingLimitPaise]);
-
-  const save = async (paise: number | null) => {
-    setSaving(true);
-    try {
-      await api.post('/billing/spending-limit', { spendingLimitPaise: paise });
-      onSaved(paise);
-    } catch (e: any) {
-      showToast('error', e?.response?.data?.message || 'Could not update your spending limit.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-      <div className="flex items-center gap-2 mb-1">
-        <ShieldCheck size={16} style={{ color: '#34D399' }} />
-        <p className="text-sm font-semibold text-[#170B2E]">Monthly spending limit</p>
-      </div>
-      <p className="text-xs text-[#3D3650] mb-3">
-        Cap how much paid usage (beyond your free allowance) can be billed each month. New calls are blocked once you hit it — active calls are never interrupted.
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1.5 rounded-lg border border-[#E7DFF5] px-3 py-2" style={{ background: '#F8F4FD' }}>
-          <span className="text-[#3D3650] text-sm">₹</span>
-          <input
-            type="number"
-            min={0}
-            step="1"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="No limit"
-            className="w-28 bg-transparent text-sm text-[#170B2E] outline-none"
-          />
-        </div>
-        <button
-          onClick={() => {
-            const value = parseFloat(input);
-            if (!input.trim() || Number.isNaN(value) || value < 0) return;
-            save(Math.round(value * 100));
-          }}
-          disabled={saving}
-          className="text-sm font-medium px-3 py-2 rounded-lg text-white transition-colors disabled:opacity-50"
-          style={{ background: 'linear-gradient(135deg, #7F40E8, #410686)' }}
-        >
-          Save
-        </button>
-        {spendingLimitPaise != null && (
-          <button
-            onClick={() => { setInput(''); save(null); }}
-            disabled={saving}
-            className="text-sm text-[#3D3650] hover:text-[#170B2E] transition-colors disabled:opacity-50"
-          >
-            Remove limit
-          </button>
-        )}
-      </div>
+    <div role={tone === 'info' ? 'status' : 'alert'} data-testid={testId} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm" style={styles}>
+      <span className="inline-flex flex-wrap items-center gap-2">
+        {icon}
+        {children}
+      </span>
     </div>
   );
 }

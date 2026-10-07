@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { Atom, Bell, Blocks, BookOpen, Cable, CreditCard, Gauge, Headset, KeyRound, Lightbulb, Monitor, RotateCw, Server, Smartphone, UserRound, Webhook, Zap } from 'lucide-react';
-import { api } from '../lib/api';
+import { PricingAuthority } from '../components/PricingAuthority';
 import { PURPLECALLIO_API_URL, PURPLECALLIO_SIGNAL_URL, PURPLECALLIO_URL } from '../lib/brand';
 
 // ── Sidebar nav ───────────────────────────────────────────────────────────────
@@ -12,7 +12,7 @@ const NAV = [
   { group: 'Products', items: [{ id: 'hosted-ui', label: 'Hosted UI', icon: Monitor }, { id: 'react-components', label: 'React Components', icon: Atom }, { id: 'headless-sdk', label: 'Headless SDK', icon: Blocks }, { id: 'angular-sdk', label: 'Angular SDK', icon: Blocks }, { id: 'react-native-sdk', label: 'React Native SDK', icon: Smartphone }, { id: 'vue-sdk', label: 'Vue SDK', icon: Blocks }, { id: 'svelte-sdk', label: 'Svelte SDK', icon: Blocks }] },
   { group: 'REST API', items: [{ id: 'api-create', label: 'POST /calls' }, { id: 'api-join', label: 'POST /calls/:id/join' }, { id: 'api-leave', label: 'POST /calls/:id/leave' }, { id: 'api-accept', label: 'POST /calls/:id/accept' }, { id: 'api-reject', label: 'POST /calls/:id/reject' }, { id: 'api-end', label: 'POST /calls/:id/end' }, { id: 'api-get', label: 'GET /calls/:id' }] },
 { group: 'Real-time', items: [{ id: 'websocket', label: 'WebSocket Events', icon: Cable }, { id: 'webhooks', label: 'Webhooks', icon: Webhook }] },
-  { group: 'Billing', items: [{ id: 'usage-billing', label: 'Usage & Billing', icon: CreditCard }] },
+  { group: 'Billing', items: [{ id: 'usage-billing', label: 'Plans, Credits & Usage', icon: CreditCard }] },
   { group: 'Reference', items: [{ id: 'examples', label: 'Examples', icon: Lightbulb }, { id: 'errors', label: 'Errors', icon: Gauge }, { id: 'faq', label: 'FAQ', icon: BookOpen }, { id: 'notifications', label: 'Notifications', icon: Bell }, { id: 'support', label: 'Contact Support', icon: Headset }] },
 ];
 
@@ -111,15 +111,6 @@ function Endpoint({ method, path, summary, children, id }: { method: 'GET' | 'PO
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function DocsPage() {
   const [activeId, setActiveId] = useState('quickstart');
-  const [rates, setRates] = useState<{
-    audioPaise: number;
-    videoPaise: number;
-    screenSharePaise: number;
-    freeAudioMins: number;
-    freeVideoMins: number;
-    taxPercent: number;
-  } | null>(null);
-
   useEffect(() => {
     const ob = new IntersectionObserver(
       (entries) => entries.forEach((e) => { if (e.isIntersecting) setActiveId(e.target.id); }),
@@ -128,22 +119,6 @@ export default function DocsPage() {
     document.querySelectorAll('section[id]').forEach((el) => ob.observe(el));
     return () => ob.disconnect();
   }, []);
-
-  useEffect(() => {
-    let active = true;
-    api
-      .get('/billing/rates')
-      .then((res) => { if (active) setRates(res.data); })
-      .catch(() => {});
-    return () => { active = false; };
-  }, []);
-
-  const paiseToINR = (p: number) => `₹${((p ?? 0) / 100).toFixed(2)}`;
-  const audio = rates ? paiseToINR(rates.audioPaise) : 'Loading…';
-  const video = rates ? paiseToINR(rates.videoPaise) : 'Loading…';
-  const screen = rates ? paiseToINR(rates.screenSharePaise) : 'Loading…';
-  const freeAudio = rates?.freeAudioMins;
-  const freeVideo = rates?.freeVideoMins;
 
   return (
     <div style={{ background: '#FFFFFF', color: '#170B2E', minHeight: '100vh' }}>
@@ -1125,36 +1100,23 @@ meeting.microphone.enable();`} />
 
 {/* ── Usage & Billing ─────────────────────────── */}
           <Section id="usage-billing">
-            <Heading>Usage & Billing</Heading>
+            <Heading>Plans, Credits & Usage</Heading>
             <p className="text-[#3D3650] text-sm mb-5">
-              PurpleCallio is pay-as-you-go. There are no subscriptions and no
-              up-front fees — you pay a simple per-participant-minute rate only
-              for usage beyond the monthly free allowance.
+              PurpleCallio uses simple prepaid plans. Choose a plan, pay upfront,
+              and get usage credits. Calls are measured in participant-minutes and
+              consume credits at the current rate for each media type — no
+              surprise usage bills.
             </p>
 
-{/* Free tier + rates */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-              {[
-                { media: 'Audio', rate: audio, note: freeAudio === undefined ? 'Current allowance loading' : `First ${freeAudio} audio min/month free` },
-                { media: 'Video', rate: video, note: freeVideo === undefined ? 'Current allowance loading' : `First ${freeVideo} video min/month free` },
-                { media: 'Screen share', rate: screen, note: 'Separate usage category; no free allowance' },
-              ].map((r) => (
-                <div key={r.media} className="rounded-xl border border-[#E7DFF5] p-4" style={{ background: '#FFFFFF' }}>
-                  <p className="text-xs text-[#3D3650]">{r.media}</p>
-                  <p className="text-2xl font-bold text-[#170B2E] mt-1">{r.rate}</p>
-                  <p className="text-[11px] text-[#3D3650] mt-1">/ participant-minute</p>
-                  <p className="text-[11px] text-[#3D3650] mt-2">{r.note}</p>
-                </div>
-              ))}
-            </div>
+            <PricingAuthority className="mb-6" />
 
-            <p className="text-sm font-semibold text-[#170B2E] mb-3">How billing works</p>
+            <p className="text-sm font-semibold text-[#170B2E] mb-3">How plans and credits work</p>
             <div className="space-y-3 mb-6">
               {[
-                { t: 'Start free', d: freeAudio === undefined || freeVideo === undefined ? 'Current free allowances are loaded from the billing service.' : `Every account gets ${freeAudio} audio + ${freeVideo} video minutes/month at no cost. No card required to begin.` },
-                { t: 'Add a payment method', d: 'In the dashboard, add a card only when you go to production. You are only charged for minutes beyond the free tier.' },
-                { t: 'Monthly invoice', d: rates ? `At the end of each month we generate an invoice for billable usage and auto-charge your saved card. GST of ${rates.taxPercent}% applies on billable usage.` : 'Current tax information is loaded from the billing service.' },
-                { t: 'Failed payment', d: 'We retry and enter a 7-day grace period. Active calls are never interrupted, but new calls are blocked until payment succeeds.' },
+                { t: 'Start on the Free plan', d: 'Every account starts on the Free plan with a monthly amount of included credits for building and testing.' },
+                { t: 'Choose a plan and pay upfront', d: 'Pick a paid plan in Dashboard → Billing and pay once at checkout (GST added). Credits are added as soon as the payment is confirmed. Nothing is charged automatically.' },
+                { t: 'Usage consumes credits', d: 'Audio, video, and screen-sharing participant-minutes consume credits from your balance. Track usage and your credit balance in the dashboard.' },
+                { t: 'Top up, renew, or upgrade', d: 'Buy a one-time top-up when you need more credits, renew manually when your plan period ends, or upgrade at any time. When credits run out, new calls cannot start — active calls are never interrupted.' },
               ].map((s) => (
                 <div key={s.t} className="flex gap-3 rounded-xl border border-[#E7DFF5] p-4" style={{ background: '#FFFFFF' }}>
                   <span className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center font-mono text-xs font-bold" style={{ background: 'linear-gradient(135deg, rgba(127,64,232,0.2), rgba(65,6,134,0.2))', color: '#6425C4', border: '1px solid rgba(127,64,232,0.25)' }}>✓</span>
@@ -1167,9 +1129,9 @@ meeting.microphone.enable();`} />
             </div>
 
             <Tip type="info">
-              Screen sharing is a separately tracked, billable usage category with no free allowance. Everything else —
-              Hosted UI, React Components, Headless SDK, REST API, signaling, and the
-              dashboard — is included on the free tier.
+              Plan credits expire at the end of the plan period; top-up expiry is shown at purchase. Need higher
+              volumes? Choose “Talk to us” on the <Link href="/pricing" className="underline">pricing page</Link> to
+              request a custom plan.
             </Tip>
           </Section>
 
@@ -1221,8 +1183,8 @@ meeting.microphone.enable();`} />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
               {[
                 'Support ticket updates',
-                'Usage alerts',
-                'Billing and invoice updates',
+                'Low-credit and plan renewal reminders',
+                'Payment and receipt updates',
                 'Payment updates',
                 'Important account activity',
                 'Other important product events',

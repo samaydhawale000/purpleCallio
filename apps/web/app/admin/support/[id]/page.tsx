@@ -17,8 +17,11 @@ import {
 import { TicketStatusBadge, ticketStatusLabel } from '../../../components/support/TicketStatusBadge';
 import { TicketThread } from '../../../components/support/TicketThread';
 import { ToastHost, ToastState } from '../../../dashboard/billing/Toast';
+import { CustomPlanBadge, CustomPlanContextPanel } from '../_components/CustomPlanContext';
 
 type AdminTicketDetail = SupportTicket & {
+  type?: 'GENERAL' | 'CUSTOM_PLAN';
+  customPlanRequest?: { id: string; status: string } | null;
   messages: SupportMessage[];
   customer: {
     id: string;
@@ -147,6 +150,7 @@ export default function AdminTicketPage() {
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <span className="font-mono text-xs text-[#6425C4]">{ticket.ticketNumber}</span>
                   <TicketStatusBadge status={ticket.status} />
+                  {ticket.type === 'CUSTOM_PLAN' && <CustomPlanBadge />}
                 </div>
                 <h1 className="text-lg font-bold text-[#170B2E] break-words">{ticket.subject}</h1>
                 <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2 text-xs text-[#3D3650]">
@@ -167,6 +171,9 @@ export default function AdminTicketPage() {
         </div>
 
         <div className="space-y-4">
+          {ticket.type === 'CUSTOM_PLAN' && ticket.customPlanRequest && (
+            <CustomPlanContextPanel requestId={ticket.customPlanRequest.id} />
+          )}
           <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
             <p className="text-xs font-mono uppercase tracking-widest text-[#3D3650] mb-3">Status</p>
             <select

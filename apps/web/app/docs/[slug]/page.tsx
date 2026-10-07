@@ -390,19 +390,23 @@ const docs = {
       ],
    },
    "usage-billing": {
-      title: "Usage and Billing",
-      meta: "Video Calling API Usage & Billing",
+      title: "Plans, Credits and Usage",
+      meta: "Video Calling API Plans, Credits & Usage",
       description:
-         "Understand PurpleCallio participant-minute usage, free allowances, billing cycles, invoices, and the usage dashboard.",
-      lead: "PurpleCallio uses participant-minutes: each participant's time in a call is measured. For example, two participants in a ten-minute call use twenty participant-minutes.",
+         "Understand PurpleCallio prepaid plans, included usage credits, participant-minute measurement, credit rates, top-ups and the usage dashboard.",
+      lead: "PurpleCallio uses simple prepaid plans with included usage credits. Usage is measured in participant-minutes — each participant's time in a call — and consumes credits. For example, two participants in a ten-minute call use twenty participant-minutes.",
       sections: [
          [
-            "What is included",
-            "The current free allowance and media rates are shown on the pricing page and in the product. Billing begins only for usage beyond the applicable free allowance.",
+            "Plans and credits",
+            "Choose a plan and pay upfront; the plan's included credits are added once payment is confirmed. Audio, video and screen sharing each consume credits at their own rate per participant-minute. Current plans, credits and rates are shown on the pricing page and in the product.",
+         ],
+         [
+            "Renewals, top-ups and upgrades",
+            "Paid plans do not renew automatically — renew from the Billing page when the period ends. Plan credits expire at the end of the plan period. Buy one-time top-ups when you need more credits, or upgrade at any time. When credits run out, new calls cannot start; active calls are never interrupted.",
          ],
          [
             "Track usage",
-            "Use the dashboard to review usage and invoices. Audio, video, and screen sharing each appear as separate usage categories.",
+            "Use the dashboard to review participant-minutes, credits consumed, your credit balance, payments and receipts. Audio, video and screen sharing each appear as separate usage categories.",
          ],
       ],
    },
@@ -763,7 +767,7 @@ export default async function DocPage({
             </ContentSection>
          )}
          {slug === "usage-billing" && (
-            <ContentSection title="Current rates and examples">
+            <ContentSection title="Current plans, credit rates and examples">
                <PricingAuthority />
             </ContentSection>
          )}

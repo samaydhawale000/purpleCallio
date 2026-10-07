@@ -1,9 +1,8 @@
 /**
- * Pure, framework-agnostic discount/invoice arithmetic — the ONE place a
- * customer-specific discount is turned into paise. Used identically by
- * InvoiceBillingService (real invoice generation + live preview) and
- * UsageBillingService (spending-limit check), so there is never a second
- * implementation of this math to drift out of sync.
+ * Pure, framework-agnostic discount + tax arithmetic — the ONE place a
+ * customer-specific discount and GST are turned into paise. Used by
+ * CheckoutService for plan, renewal, top-up and custom-plan prices, so
+ * there is never a second implementation of this math to drift out of sync.
  *
  * Rounding rule: standard round-half-up via `Math.round`, matching every
  * other paise calculation already in this codebase (see
@@ -12,7 +11,7 @@
  */
 
 export interface InvoiceAmounts {
-  /** Raw usage subtotal (post free-allowance, pre-discount, pre-tax). */
+  /** Subtotal before discount and tax (e.g. the plan price). */
   subtotalPaise: number;
   /** The discount percentage applied, or null if none was active. */
   discountPercent: number | null;
@@ -22,9 +21,7 @@ export interface InvoiceAmounts {
   taxableAmountPaise: number;
   /** GST computed on taxableAmountPaise (post-discount), per taxPercent. */
   taxPaise: number;
-  /** taxableAmountPaise + taxPaise. Does NOT include proration adjustments
-   *  — callers that fold in ProrationAdjustment rows add those on top,
-   *  exactly as InvoiceBillingService already did before discounts existed. */
+  /** taxableAmountPaise + taxPaise — what the customer pays. */
   totalPaise: number;
 }
 
@@ -41,10 +38,9 @@ export function calculateDiscountPaise(
 }
 
 /**
- * Full discount + tax breakdown for an invoice (real or preview). Order is
- * fixed and must not change: free allowance is already applied by the
- * caller (subtotalPaise is the post-allowance billable amount) → discount →
- * tax on the discounted (taxable) amount → total.
+ * Full discount + tax breakdown for a checkout. Order is fixed and must not
+ * change: subtotal → discount → tax on the discounted (taxable) amount →
+ * total.
  */
 export function calculateInvoiceAmounts(params: {
   subtotalPaise: number;

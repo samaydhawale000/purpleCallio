@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CallGateway } from '../socket/gateways/call.gateway';
 import { TurnService } from '../turn/turn.service';
 import { UsageBillingService } from '../billing/usage-billing.service';
+import { SubscriptionService } from '../billing/subscriptions/subscription.service';
+import { CreditService } from '../billing/credits/credit.service';
 import {
   CustomerDiscountService,
   SetDiscountInput,
@@ -21,6 +23,8 @@ export class AdminService {
     private customerDiscounts: CustomerDiscountService,
     private ociMonitoring: OciMonitoringService,
     private callService: CallService,
+    private subscriptions: SubscriptionService,
+    private credits: CreditService,
   ) {}
 
   // ── Overview ──────────────────────────────────────────
@@ -33,9 +37,10 @@ export class AdminService {
     const [totalUsers, paidUsersAgg, totalProjects, activeCalls] =
       await Promise.all([
         this.prisma.user.count(),
-        this.prisma.usageInvoice.groupBy({
-          by: ['userId'],
-          where: { status: 'paid' },
+        // Paying = an active paid/custom prepaid subscription.
+        this.prisma.subscription.groupBy({
+          by: ['companyId'],
+          where: { status: 'ACTIVE', planType: { in: ['PAID', 'CUSTOM'] } },
         }),
         this.prisma.project.count(),
         this.prisma.call.count({
@@ -78,16 +83,26 @@ export class AdminService {
     // than 2 once group calls/screen share are involved.
     const activeParticipants = this.callGateway.getMetrics().inCall;
 
-    // Real billing numbers (participant-minutes + rated revenue), sourced
-    // from the same rating engine that actually bills customers — distinct
-    // from the platform-minutes figures above.
-    const billingSummary =
-      await this.usageBilling.summarizeAdminUsage(startOfMonth);
+    // Metered participant-minutes and credits consumed (the prepaid
+    // billing basis) — distinct from the platform-minutes figures above —
+    // plus verified prepaid revenue this month.
+    const [billingSummary, revenueMonth] = await Promise.all([
+      this.usageBilling.summarizeAdminUsage(startOfMonth),
+      this.prisma.payment.aggregate({
+        where: {
+          purpose: { not: 'LEGACY' },
+          paymentStatus: 'PAID',
+          paidAt: { gte: startOfMonth },
+        },
+        _sum: { amount: true },
+      }),
+    ]);
     const participantMinutesMonth =
       billingSummary.lineItems.audioMinutes +
       billingSummary.lineItems.videoMinutes +
       billingSummary.lineItems.screenShareMinutes;
-    const billableRevenuePaise = billingSummary.lineItems.costPaise;
+    const creditsConsumedMonth = billingSummary.creditsConsumed;
+    const revenueMonthPaise = revenueMonth._sum.amount ?? 0;
 
     return {
       stats: {
@@ -100,7 +115,8 @@ export class AdminService {
         minutesToday,
         minutesMonth,
         participantMinutesMonth,
-        billableRevenuePaise,
+        creditsConsumedMonth,
+        revenueMonthPaise,
       },
       charts: await this.getCharts(),
     };
@@ -155,6 +171,13 @@ export class AdminService {
           projects: {
             include: { apiKeys: true, calls: true },
           },
+          subscriptions: {
+            where: { status: 'ACTIVE' },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { planName: true, planType: true },
+          },
+          creditWallet: { select: { balance: true } },
         },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -181,7 +204,9 @@ export class AdminService {
           avatarUrl: u.avatarUrl,
           companyName: u.companyName,
           profileCompleted: u.profileCompleted,
-          hasPaymentMethod: !!u.razorpayTokenId,
+          plan: u.subscriptions[0]?.planName ?? null,
+          planType: u.subscriptions[0]?.planType ?? null,
+          creditBalance: u.creditWallet?.balance ?? 0,
           status: u.status,
           role: u.role,
           createdAt: u.createdAt,
@@ -224,9 +249,10 @@ export class AdminService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('Customer not found');
 
-    const [usage, discount] = await Promise.all([
+    const [usage, discount, subscription] = await Promise.all([
       this.usageBilling.getCurrentUsage(userId),
       this.getCustomerDiscount(userId),
+      this.subscriptions.getOverview(userId),
     ]);
 
     return {
@@ -242,36 +268,30 @@ export class AdminService {
       primaryUseCase: user.primaryUseCase,
       profileCompleted: user.profileCompleted,
       status: user.status,
-      hasPaymentMethod: !!user.razorpayTokenId,
-      spendingLimitPaise: user.spendingLimitPaise,
       createdAt: user.createdAt,
       usage,
+      subscription,
       discount,
+      // Pay-as-you-go leftovers, shown for context only.
+      legacy: {
+        hasSavedCard: !!user.razorpayTokenId,
+        spendingLimitPaise: user.spendingLimitPaise,
+      },
     };
   }
 
   // ── Customer-specific discount ──────────────────────
   /**
-   * Current rates, the customer's latest discount record (active or not —
-   * so the admin UI can show "Disabled" state, not just "no discount"), and
-   * an illustrative (unrounded, display-only — never used for real billing)
-   * per-rate preview of what each rate becomes under that discount.
+   * The customer's latest discount record (active or not — so the admin UI
+   * can show a "Disabled" state). The percentage is applied to plan,
+   * renewal and top-up prices at checkout (before GST).
    */
   async getCustomerDiscount(userId: string) {
-    const [rates, discount] = await Promise.all([
-      this.usageBilling.getRates(),
-      this.customerDiscounts.getLatestDiscount(userId),
-    ]);
-
-    const percentage = discount?.active ? discount.percentage : 0;
-    const factor = (100 - percentage) / 100;
-    const effectiveRates = {
-      audioPaise: rates.audioPaise * factor,
-      videoPaise: rates.videoPaise * factor,
-      screenSharePaise: rates.screenSharePaise * factor,
+    const discount = await this.customerDiscounts.getLatestDiscount(userId);
+    return {
+      discount,
+      appliesTo: 'Plan purchases, renewals and credit top-ups (before GST).',
     };
-
-    return { discount, rates, effectiveRates };
   }
 
   async setCustomerDiscount(

@@ -1,102 +1,102 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { api } from "../lib/api";
-import { formatPaise, type BillingRates } from "../lib/pricing";
+import Link from "next/link";
+import { formatCredits, intervalLabel } from "../lib/billing";
+import { formatRate, gstNote, planPrice, sortPlans, topUpExpiryText, usePublicPricing } from "../lib/public-pricing";
 
-/** The public display of record for rates. Values always come from GET /billing/rates. */
-export function PricingAuthority({ className = "" }: { className?: string }) {
-   const [rates, setRates] = useState<BillingRates | null>(null);
-   const [unavailable, setUnavailable] = useState(false);
-
-   useEffect(() => {
-      let active = true;
-      api.get<BillingRates>("/billing/rates")
-         .then(({ data }) => {
-            if (active) setRates(data);
-         })
-         .catch(() => {
-            if (active) setUnavailable(true);
-         });
-      return () => {
-         active = false;
-      };
-   }, []);
+/**
+ * The public display of record for plans and credit rates. Every value comes
+ * from GET /billing/plans — used by the FAQ, docs and billing terms.
+ */
+export function PricingAuthority({ className = "", showPlans = true }: { className?: string; showPlans?: boolean }) {
+   const state = usePublicPricing();
 
    return (
       <section
          className={`rounded-xl border border-[#D6C4EE] bg-[#7F40E8]/5 p-5 ${className}`}
-         aria-label="Current PurpleCallio pricing"
+         aria-label="Current PurpleCallio plans and credit rates"
       >
-         <p className="font-semibold text-[#170B2E]">Authoritative pricing</p>
+         <p className="font-semibold text-[#170B2E]">Current plans and credit rates</p>
          <p className="mt-2 text-sm leading-6 text-[#3D3650]">
-            <strong>PurpleCallio uses participant-minute billing.</strong> Audio,
-            video, and screen sharing are tracked separately. Screen sharing is
-            billed as its own usage category and is not automatically added as a
-            surcharge to video minutes.
+            <strong>PurpleCallio uses simple prepaid plans with included usage credits.</strong> Usage is measured in
+            participant-minutes and each media type — audio, video and screen sharing — consumes credits at its own
+            rate. Screen sharing is its own category, not a surcharge on video.
          </p>
-         {rates ? <><div className="mt-5 overflow-x-auto">
-                  <table className="w-full min-w-[500px] text-left text-sm">
+
+         {state.status === "ready" ? (
+            <>
+               <div className="mt-5 overflow-x-auto">
+                  <table className="w-full min-w-[420px] text-left text-sm">
                      <thead className="border-b border-[#D6C4EE] text-xs uppercase tracking-wider text-[#3D3650]">
                         <tr>
                            <th className="pb-2 pr-4">Usage category</th>
-                           <th className="pb-2 pr-4">Current rate</th>
-                           <th className="pb-2">Free allowance</th>
+                           <th className="pb-2">Credits per participant-minute</th>
                         </tr>
                      </thead>
                      <tbody className="text-[#3D3650]">
-                        <tr className="border-b border-[#E7DFF5]">
-                           <th className="py-3 pr-4 font-medium text-[#170B2E]">
-                              Audio
-                           </th>
-                           <td className="py-3 pr-4">
-                              {formatPaise(rates.audioPaise)} / participant-minute
-                           </td>
-                           <td className="py-3">
-                              First {rates.freeAudioMins} participant-minutes
-                              each month
-                           </td>
-                        </tr>
-                        <tr className="border-b border-[#E7DFF5]">
-                           <th className="py-3 pr-4 font-medium text-[#170B2E]">
-                              Video
-                           </th>
-                           <td className="py-3 pr-4">
-                              {formatPaise(rates.videoPaise)} / participant-minute
-                           </td>
-                           <td className="py-3">
-                              First {rates.freeVideoMins} participant-minutes
-                              each month
-                           </td>
-                        </tr>
-                        <tr>
-                           <th className="py-3 pr-4 font-medium text-[#170B2E]">
-                              Screen sharing
-                           </th>
-                           <td className="py-3 pr-4">
-                              {formatPaise(rates.screenSharePaise)} /
-                              participant-minute
-                           </td>
-                           <td className="py-3">No free allowance</td>
-                        </tr>
+                        {[
+                           ["Audio", state.data.creditRates.audioCreditsPerMinute],
+                           ["Video", state.data.creditRates.videoCreditsPerMinute],
+                           ["Screen sharing", state.data.creditRates.screenShareCreditsPerMinute],
+                        ].map(([label, rate]) => (
+                           <tr key={label} className="border-b border-[#E7DFF5] last:border-0">
+                              <th className="py-3 pr-4 font-medium text-[#170B2E]">{label}</th>
+                              <td className="py-3">{formatRate(rate as number)}</td>
+                           </tr>
+                        ))}
                      </tbody>
                   </table>
-         </div>
-         <div className="mt-5 space-y-2 text-sm leading-6 text-[#3D3650]">
+               </div>
+
+               {showPlans && state.data.plans.length > 0 && (
+                  <ul className="mt-5 space-y-1 text-sm text-[#3D3650]">
+                     {sortPlans(state.data.plans).map((p) => {
+                        const price = planPrice(p);
+                        return (
+                           <li key={p.id}>
+                              <strong className="text-[#170B2E]">{p.name}:</strong> {price.amount}
+                              {price.suffix ? ` ${price.suffix}` : ""}
+                              {p.version && !p.customPricing
+                                 ? ` · ${formatCredits(p.version.includedCredits)} credits per ${intervalLabel(p.version)}`
+                                 : ""}
+                           </li>
+                        );
+                     })}
+                  </ul>
+               )}
+
+               <div className="mt-5 space-y-2 text-sm leading-6 text-[#3D3650]">
                   <p>
-                     <strong className="text-[#3D3650]">Example:</strong> 2
-                     participants in a 10-minute video call use 20 video
-                     participant-minutes.
+                     <strong>Example:</strong> 2 participants in a 10-minute video call use 20 video participant-minutes ={" "}
+                     {formatRate(20 * state.data.creditRates.videoCreditsPerMinute)} credits.
                   </p>
                   <p>
-                     <strong className="text-[#3D3650]">
-                        Separate screen-sharing example:
-                     </strong>{" "}
-                     1 participant sharing for 10 minutes uses 10 screen-sharing
-                     participant-minutes, independently of video usage.
+                     <strong>Screen sharing:</strong> 1 participant sharing for 10 minutes uses 10 screen-share
+                     participant-minutes = {formatRate(10 * state.data.creditRates.screenShareCreditsPerMinute)} credits,
+                     independently of video usage.
                   </p>
-                  <p>GST of {rates.taxPercent}% applies to billable usage.</p>
-         </div></> : <p className="mt-4 text-sm text-[#3D3650]">{unavailable ? "Current rates are temporarily unavailable. Please check back before relying on pricing." : "Loading current rates…"}</p>}
+                  <p>
+                     {gstNote(state.data.creditRates)} {topUpExpiryText(state.data.creditRates)}
+                  </p>
+                  <p>
+                     <Link href="/pricing" className="font-medium text-[#6425C4] hover:text-[#170B2E]">
+                        See full plan details →
+                     </Link>
+                  </p>
+               </div>
+            </>
+         ) : state.status === "error" ? (
+            <p className="mt-4 text-sm text-[#3D3650]">
+               Current plans and credit rates are temporarily unavailable.{" "}
+               <button type="button" onClick={state.retry} className="font-medium text-[#6425C4] underline">
+                  Retry
+               </button>
+            </p>
+         ) : (
+            <p role="status" className="mt-4 text-sm text-[#3D3650]">
+               Loading current plans and credit rates…
+            </p>
+         )}
       </section>
    );
 }

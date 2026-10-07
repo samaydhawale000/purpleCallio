@@ -78,7 +78,11 @@ export class UsageSegmentService {
     let isVideoCall = false;
 
     const eventCallType = (event: EventInput) => {
-      if (!event.metadata || typeof event.metadata !== 'object' || Array.isArray(event.metadata)) {
+      if (
+        !event.metadata ||
+        typeof event.metadata !== 'object' ||
+        Array.isArray(event.metadata)
+      ) {
         return undefined;
       }
       const callType = (event.metadata as { callType?: unknown }).callType;
@@ -98,7 +102,6 @@ export class UsageSegmentService {
         participants: current.participants,
       });
     };
-
 
     const snapshotParticipants = (): ParticipantMediaState[] =>
       Array.from(states.entries()).map(([participantId, s]) => ({
@@ -240,7 +243,9 @@ export class UsageSegmentService {
 
     // Close any dangling segment at the last event time.
     if (current) {
-      const last = sorted.length ? sorted[sorted.length - 1].createdAt : new Date();
+      const last = sorted.length
+        ? sorted[sorted.length - 1].createdAt
+        : new Date();
       close(last);
     }
 
@@ -332,4 +337,3 @@ export class UsageSegmentService {
     });
   }
 }
-

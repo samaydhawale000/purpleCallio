@@ -21,7 +21,6 @@ const good = () => ({
   RAZORPAY_KEY_ID: 'rzp_live_abc',
   RAZORPAY_KEY_SECRET: 's'.repeat(24),
   RAZORPAY_WEBHOOK_SECRET: 'w'.repeat(24),
-  TOPUP_PAISE_PER_MINUTE: '100',
 });
 
 const errorsOf = (vars, opts) => checkEnv(vars, opts).errors.join('\n');

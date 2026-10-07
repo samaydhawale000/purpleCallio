@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHmac } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { EntitlementService } from '../billing/subscriptions/entitlement.service';
+import { FeatureKey } from '../billing/plans/feature-registry';
 
 export type WebhookEvent =
   | 'call.created'
@@ -32,7 +34,10 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export class WebhookService {
   private readonly logger = new Logger(WebhookService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly entitlements: EntitlementService,
+  ) {}
 
   async fireForCall(callId: string, event: WebhookEvent): Promise<void> {
     try {
@@ -42,6 +47,19 @@ export class WebhookService {
       });
 
       if (!call || !call.project.webhookUrl) return;
+
+      // Webhooks are a plan entitlement (checked centrally, never by plan name).
+      if (
+        !(await this.entitlements.hasFeature(
+          call.project.ownerId,
+          FeatureKey.WEBHOOKS,
+        ))
+      ) {
+        this.logger.debug(
+          `Webhooks not included in the plan for project ${call.projectId} — skipping ${event}.`,
+        );
+        return;
+      }
 
       const payload: WebhookPayload = {
         event,
@@ -59,9 +77,16 @@ export class WebhookService {
       // down endpoint never blocks call state transitions. Never throw out
       // of this method: nothing awaits it, so an uncaught rejection here
       // would become an unhandled promise rejection.
-      await this.deliverWithRetry(call.id, call.project.webhookUrl, call.project.webhookSecret, payload);
+      await this.deliverWithRetry(
+        call.id,
+        call.project.webhookUrl,
+        call.project.webhookSecret,
+        payload,
+      );
     } catch (err: any) {
-      this.logger.error(`Webhook dispatch failed for call ${callId} (${event}): ${err?.message || err}`);
+      this.logger.error(
+        `Webhook dispatch failed for call ${callId} (${event}): ${err?.message || err}`,
+      );
     }
   }
 
@@ -78,7 +103,13 @@ export class WebhookService {
     payload: WebhookPayload,
   ): Promise<void> {
     const delivery = await this.prisma.webhookDelivery.create({
-      data: { callId, event: payload.event, url, status: 'pending', attempts: 0 },
+      data: {
+        callId,
+        event: payload.event,
+        url,
+        status: 'pending',
+        attempts: 0,
+      },
     });
 
     let lastError: string | null = null;
@@ -135,7 +166,12 @@ export class WebhookService {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ATTEMPT_TIMEOUT_MS);
     try {
-      const res = await fetch(url, { method: 'POST', headers, body, signal: controller.signal });
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body,
+        signal: controller.signal,
+      });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }

@@ -54,6 +54,7 @@ function createFakePrisma(seed: any[] = []) {
 function createFakePayments(configured = true) {
   return {
     isConfigured: jest.fn(() => configured),
+    customerExists: jest.fn(async () => true),
     updateCustomerContact: jest.fn(async () => undefined),
   };
 }
@@ -72,12 +73,17 @@ function setup(seed: any[] = [], googlePayload?: any) {
 
   const prisma = createFakePrisma(seed);
   const payments = createFakePayments();
-  const billing = new BillingService(prisma as any, payments as any, { createNotification: jest.fn(), notifyAdmins: jest.fn() } as never);
-  jest
-    .spyOn(billing, 'getOrCreateFreeSubscription')
-    .mockResolvedValue(undefined as any);
+  const billing = new BillingService(prisma as any, payments as any);
+  const subscriptions = {
+    getActiveSubscription: jest.fn(async () => undefined),
+  };
 
-  const service = new AuthService(prisma as any, new JwtService({}), billing);
+  const service = new AuthService(
+    prisma as any,
+    new JwtService({}),
+    billing,
+    subscriptions as any,
+  );
   (service as any).googleClient = {
     verifyIdToken: jest.fn(async () => ({
       getPayload: () =>

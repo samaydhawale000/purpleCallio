@@ -187,16 +187,27 @@ export class CustomerDiscountService {
     }
   }
 
-  private validateDates(effectiveFrom: Date, effectiveUntil: Date | null): void {
-    if (!(effectiveFrom instanceof Date) || Number.isNaN(effectiveFrom.getTime())) {
+  private validateDates(
+    effectiveFrom: Date,
+    effectiveUntil: Date | null,
+  ): void {
+    if (
+      !(effectiveFrom instanceof Date) ||
+      Number.isNaN(effectiveFrom.getTime())
+    ) {
       throw new BadRequestException('effectiveFrom must be a valid date.');
     }
     if (effectiveUntil != null) {
-      if (!(effectiveUntil instanceof Date) || Number.isNaN(effectiveUntil.getTime())) {
+      if (
+        !(effectiveUntil instanceof Date) ||
+        Number.isNaN(effectiveUntil.getTime())
+      ) {
         throw new BadRequestException('effectiveUntil must be a valid date.');
       }
       if (effectiveUntil <= effectiveFrom) {
-        throw new BadRequestException('effectiveUntil must be after effectiveFrom.');
+        throw new BadRequestException(
+          'effectiveUntil must be after effectiveFrom.',
+        );
       }
     }
   }

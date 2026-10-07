@@ -49,7 +49,7 @@ const statusVariant: Record<string, 'default' | 'success' | 'warning' | 'error' 
   open: 'info',
   processing: 'info',
   paid: 'success',
-  dunning: 'warning',
+  dunning: 'warning', // shown as "Unpaid"
   failed: 'error',
 };
 
@@ -74,7 +74,7 @@ export default function InvoiceDetailPage() {
         logout();
         router.push('/login');
       } else {
-        setError('Could not load this invoice.');
+        setError('Could not load this legacy invoice.');
       }
     } finally {
       setLoading(false);
@@ -121,8 +121,8 @@ export default function InvoiceDetailPage() {
   if (error || !invoice) {
     return (
       <div className="flex flex-col gap-4">
-        <Link href="/dashboard/billing" className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E] transition-colors w-fit">
-          <ArrowLeft size={14} /> Back to Billing
+        <Link href="/dashboard/billing/payments" className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E] transition-colors w-fit">
+          <ArrowLeft size={14} /> Back to Payments
         </Link>
         <div className="rounded-lg border border-red-500/30 px-4 py-3 text-sm text-red-600" style={{ background: 'rgba(239,68,68,0.06)' }}>
           {error ?? 'Invoice not found.'}
@@ -136,8 +136,8 @@ export default function InvoiceDetailPage() {
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
       <div className="flex items-center justify-between">
-        <Link href="/dashboard/billing" className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E] transition-colors">
-          <ArrowLeft size={14} /> Back to Billing
+        <Link href="/dashboard/billing/payments" className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E] transition-colors">
+          <ArrowLeft size={14} /> Back to Payments
         </Link>
         <button
           onClick={downloadPdf}
@@ -150,13 +150,17 @@ export default function InvoiceDetailPage() {
         </button>
       </div>
 
+      <div className="rounded-lg border border-[#E7DFF5] px-4 py-3 text-xs text-[#3D3650]" style={{ background: '#F8F4FD' }}>
+        This invoice is from the previous billing model and is kept for your records. PurpleCallio now uses prepaid plans and credits.
+      </div>
+
       <Card padding glow>
         <div className="flex items-start justify-between mb-6">
           <div>
-            <p className="text-xs text-[#3D3650] mb-1">Invoice</p>
+            <p className="text-xs text-[#3D3650] mb-1">Legacy usage invoice (previous billing model)</p>
             <p className="text-lg font-bold text-[#170B2E] font-mono">{invoice.invoiceNumber}</p>
           </div>
-          <Badge variant={statusVariant[invoice.status] ?? 'default'}>{invoice.status.toUpperCase()}</Badge>
+          <Badge variant={statusVariant[invoice.status] ?? 'default'}>{invoice.status === 'dunning' ? 'UNPAID' : invoice.status.toUpperCase()}</Badge>
         </div>
 
         <div className="grid grid-cols-2 gap-4 mb-6 text-sm">

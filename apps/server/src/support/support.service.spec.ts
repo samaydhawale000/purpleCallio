@@ -329,6 +329,9 @@ describe('SupportService', () => {
         false,
       );
 
+      // Unread compares timestamps; make sure the reply is strictly newer
+      // than the customer's last read (same-millisecond writes are "seen").
+      await new Promise((r) => setTimeout(r, 2));
       await service.addAdminMessage('admin_1', t.id, 'reply');
       expect((await service.listCustomerTickets('user_a'))[0].hasUnread).toBe(
         true,
