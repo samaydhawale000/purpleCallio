@@ -9,8 +9,9 @@ import { useRequireAuth } from '../../../hooks/useRequireAuth';
 import { api } from '../../../lib/api';
 import { countryByCode, usageRangeLabel, useCaseLabel } from '../../../lib/onboarding';
 
-const paiseToINR = (paise: number) =>
-  `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}`;
+import type { CurrentUsage } from '../../../lib/billing';
+import { formatCredits } from '../../../lib/billing';
+import { CustomerBillingPanel } from '../../billing/_components/CustomerBillingPanel';
 
 interface CustomerDetail {
   id: string;
@@ -25,13 +26,8 @@ interface CustomerDetail {
   primaryUseCase: string | null;
   profileCompleted: boolean;
   status: string;
-  hasPaymentMethod: boolean;
-  spendingLimitPaise: number | null;
   createdAt: string;
-  usage: {
-    usage: { audioMinutes: number; videoMinutes: number; screenShareMinutes: number };
-    cost: { totalPaise: number };
-  };
+  usage: CurrentUsage;
   discount: DiscountDetail;
 }
 
@@ -47,8 +43,7 @@ interface Discount {
 
 interface DiscountDetail {
   discount: Discount | null;
-  rates: { audioPaise: number; videoPaise: number; screenSharePaise: number };
-  effectiveRates: { audioPaise: number; videoPaise: number; screenSharePaise: number };
+  appliesTo: string;
 }
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -131,7 +126,7 @@ export default function AdminCustomerDetailPage() {
   };
 
   const disableDiscount = async () => {
-    if (!window.confirm('Disable this customer’s discount? Future invoices will bill at standard rates.')) return;
+    if (!window.confirm('Disable this customer’s discount? Future plan, renewal and top-up purchases will use standard prices.')) return;
     setSaving(true);
     try {
       await api.patch(`/admin/customers/${customerId}/discount/disable`, {});
@@ -142,18 +137,6 @@ export default function AdminCustomerDetailPage() {
       setSaving(false);
     }
   };
-
-  // Live preview of the effective rates for whatever percentage is
-  // currently being typed — mirrors the backend's own (unrounded,
-  // display-only) effectiveRates calculation so the preview always matches
-  // what the backend would compute for that same percentage.
-  const previewRates = customer
-    ? {
-        audioPaise: customer.discount.rates.audioPaise * ((100 - percentage) / 100),
-        videoPaise: customer.discount.rates.videoPaise * ((100 - percentage) / 100),
-        screenSharePaise: customer.discount.rates.screenSharePaise * ((100 - percentage) / 100),
-      }
-    : null;
 
   if (loading) {
     return (
@@ -184,20 +167,13 @@ export default function AdminCustomerDetailPage() {
       </div>
 
       {/* Overview */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="rounded-2xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-          <p className="text-xs text-[#3D3650] mb-2">Current cycle usage</p>
-          <p className="text-sm text-[#3D3650]">
+          <p className="text-xs text-[#3D3650] mb-2">Usage this period</p>
+          <p className="text-lg font-bold text-[#170B2E]">{formatCredits(customer.usage.credits.total)} credits</p>
+          <p className="text-sm text-[#3D3650] mt-1">
             {Math.round(customer.usage.usage.audioMinutes)} audio · {Math.round(customer.usage.usage.videoMinutes)} video ·{' '}
             {Math.round(customer.usage.usage.screenShareMinutes)} screen-share participant-min
-          </p>
-          <p className="text-lg font-bold text-[#170B2E] mt-1">{paiseToINR(customer.usage.cost.totalPaise)}</p>
-        </div>
-        <div className="rounded-2xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-          <p className="text-xs text-[#3D3650] mb-2">Billing</p>
-          <p className="text-sm text-[#3D3650]">{customer.hasPaymentMethod ? 'Card on file' : 'No card on file'}</p>
-          <p className="text-sm text-[#3D3650] mt-1">
-            Spending limit: {customer.spendingLimitPaise != null ? paiseToINR(customer.spendingLimitPaise) : 'None'}
           </p>
         </div>
         <div className="rounded-2xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
@@ -208,6 +184,9 @@ export default function AdminCustomerDetailPage() {
           </p>
         </div>
       </div>
+
+      {/* Plan, credits, payments */}
+      <CustomerBillingPanel customerId={customerId} onChanged={load} />
 
       {/* Account profile (from onboarding) */}
       <div className="rounded-2xl border border-[#E7DFF5] p-6" style={{ background: '#FFFFFF' }}>
@@ -250,7 +229,10 @@ export default function AdminCustomerDetailPage() {
       {/* Discount */}
       <div className="rounded-2xl border border-[#E7DFF5] p-6" style={{ background: '#FFFFFF' }}>
         <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-semibold text-[#170B2E]">Customer discount</p>
+          <div>
+            <p className="text-sm font-semibold text-[#170B2E]">Customer discount</p>
+            <p className="text-xs text-[#3D3650] mt-0.5">Applies to plan, renewal and top-up prices before GST.</p>
+          </div>
           {!editing && (
             <div className="flex gap-2">
               <button
@@ -301,7 +283,7 @@ export default function AdminCustomerDetailPage() {
               )}
             </div>
           ) : (
-            <p className="text-sm text-[#3D3650]">No discount — this customer is billed at standard rates.</p>
+            <p className="text-sm text-[#3D3650]">No discount — this customer pays standard plan and top-up prices.</p>
           )
         )}
 
@@ -349,30 +331,9 @@ export default function AdminCustomerDetailPage() {
               </div>
             </div>
 
-            {/* Billing preview — backend-computed rates + a live, unrounded
-                preview of the discounted per-unit rate at whatever
-                percentage is currently typed. Never used for real billing,
-                which discounts the invoice subtotal once, not per-rate. */}
-            {previewRates && (
-              <div className="rounded-xl border border-[#E7DFF5] p-4" style={{ background: '#F8F4FD' }}>
-                <p className="text-xs font-mono uppercase tracking-widest text-[#3D3650] mb-3">Billing preview</p>
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <p className="text-xs text-[#3D3650] mb-2">Current rates</p>
-                    <p className="text-[#3D3650]">Audio {paiseToINR(customer.discount.rates.audioPaise)}</p>
-                    <p className="text-[#3D3650]">Video {paiseToINR(customer.discount.rates.videoPaise)}</p>
-                    <p className="text-[#3D3650]">Screen {paiseToINR(customer.discount.rates.screenSharePaise)}</p>
-                  </div>
-                  <div className="text-center text-[#3D3650]">→</div>
-                  <div>
-                    <p className="text-xs text-[#3D3650] mb-2">After {percentage}% discount</p>
-                    <p className="text-[#170B2E] font-medium">Audio {paiseToINR(previewRates.audioPaise)}</p>
-                    <p className="text-[#170B2E] font-medium">Video {paiseToINR(previewRates.videoPaise)}</p>
-                    <p className="text-[#170B2E] font-medium">Screen {paiseToINR(previewRates.screenSharePaise)}</p>
-                  </div>
-                </div>
-              </div>
-            )}
+            <p className="text-xs text-[#3D3650]">
+              The discount applies to plan, renewal and top-up prices before GST. It never changes credit rates.
+            </p>
 
             {formError && <p className="text-sm text-red-600">{formError}</p>}
 

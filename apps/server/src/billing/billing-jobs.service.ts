@@ -1,219 +1,132 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-
+import { BillingStatus, PaymentStatus, PlanType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { InvoiceBillingService } from './invoice-billing.service';
-import { addAnchoredMonth } from './billing-cycle.util';
+import { BillingConfigService } from './billing-config.service';
+import { BillingNotificationService } from './billing-notification.service';
+import { CheckoutService } from './checkout/checkout.service';
+import { CreditService } from './credits/credit.service';
+import { SubscriptionService } from './subscriptions/subscription.service';
 
 /**
- * Scheduled billing jobs — run outside any API request:
- *  - Daily: renew any subscription whose cycle has ended (anchored to that
- *    customer's own signup day-of-month, not the calendar 1st) — closes out
- *    the cycle's invoice, charges the saved card, advances to the next
- *    cycle, or terminates the subscription if cancelAtPeriodEnd is set.
- *  - Daily: retry invoices stuck in dunning on a fixed day-1/3/7 schedule.
- *  - Daily: auto-downgrade subscriptions that have exceeded their grace
- *    period after repeated payment failures (PAST_DUE → Free).
+ * Prepaid billing housekeeping. None of these jobs moves money:
+ *  - roll subscriptions whose period ended (Free refresh, or paid → expired
+ *    → Free fallback),
+ *  - expire credit buckets past their expiry,
+ *  - remind customers before a paid plan ends (renewal is always manual),
+ *  - abandon checkouts that were never paid.
  *
- * There is no distributed lock / queue infra in this stack (single
- * @nestjs/schedule cron, no Redis) — safety instead comes from atomic
- * conditional updateMany "claims" (mirroring CallService.endCall's status-
- * transition idiom) plus DB unique constraints on invoice creation, so a
- * re-run or an overlapping instance can never double-advance a cycle,
- * double-generate an invoice, or double-charge one.
+ * The pay-as-you-go jobs that used to live here (close the cycle, generate a
+ * usage invoice, auto-charge the saved card, dunning retries on a
+ * 1/3/7-day schedule) have been removed — no background job charges a
+ * customer anymore.
+ *
+ * Every step is idempotent (atomic claims, ledger idempotency keys,
+ * notification dedupe keys), so overlapping runs are harmless.
  */
 @Injectable()
 export class BillingJobsService {
   private readonly logger = new Logger(BillingJobsService.name);
+  private running = false;
 
   constructor(
     private prisma: PrismaService,
-    private invoiceBilling: InvoiceBillingService,
+    private subscriptions: SubscriptionService,
+    private credits: CreditService,
+    private config: BillingConfigService,
+    private checkout: CheckoutService,
+    private notify: BillingNotificationService,
   ) {}
 
-  @Cron(CronExpression.EVERY_DAY_AT_3AM)
-  async handleDailyBilling() {
-    this.logger.log('Running daily billing jobs…');
-    await this.renewDueSubscriptions();
-    await this.retryDunningInvoices();
-    await this.downgradePastDueSubscriptions();
-    this.logger.log('Daily billing jobs complete.');
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async run() {
+    if (this.running) return;
+    this.running = true;
+    try {
+      await this.rollOverSubscriptions();
+      await this.expireCredits();
+      await this.abandonStaleCheckouts();
+    } catch (err) {
+      this.logger.error(`Billing housekeeping failed: ${String(err)}`);
+    } finally {
+      this.running = false;
+    }
   }
 
-  /**
-   * For each ACTIVE subscription whose cycle has ended: honor
-   * cancelAtPeriodEnd (final invoice, then terminate — no new cycle), or
-   * else close out the just-ended cycle's invoice/charge and roll forward
-   * to the next anchored cycle. PAST_DUE subscriptions are excluded here —
-   * they're handled by retryDunningInvoices/downgradePastDueSubscriptions
-   * instead of being silently rolled forward while unpaid.
-   */
-  private async renewDueSubscriptions() {
-    const now = new Date();
-    const due = await this.prisma.subscription.findMany({
-      where: { status: 'ACTIVE', currentPeriodEnd: { lte: now } },
-    });
+  @Cron(CronExpression.EVERY_HOUR)
+  async hourly() {
+    try {
+      await this.sendRenewalReminders();
+    } catch (err) {
+      this.logger.error(`Renewal reminders failed: ${String(err)}`);
+    }
+  }
 
-    for (const sub of due) {
+  async rollOverSubscriptions(now = new Date()) {
+    const due = await this.subscriptions.findDueForRollover(now);
+    const users = Array.from(new Set(due.map((d) => d.companyId)));
+    for (const userId of users) {
       try {
-        await this.renewOne(sub, now);
+        await this.subscriptions.getActiveSubscription(userId);
       } catch (err) {
-        this.logger.error(`Failed to renew subscription ${sub.id}: ${String(err)}`);
+        this.logger.error(`Rollover failed for ${userId}: ${String(err)}`);
       }
     }
+    return users.length;
   }
 
-  private async renewOne(sub: any, now: Date) {
-    const oldStart = sub.currentPeriodStart ?? now;
-    const oldEnd = sub.currentPeriodEnd ?? now;
-
-    if (sub.cancelAtPeriodEnd) {
-      // Atomically claim: only the caller that actually flips the
-      // subscription to CANCELED closes out the final cycle.
-      const claimed = await this.prisma.subscription.updateMany({
-        where: { id: sub.id, status: 'ACTIVE' },
-        data: { status: 'CANCELED' },
-      });
-      if (claimed.count === 0) return; // another run already handled this
-
-      const invoice = await this.invoiceBilling.generateInvoiceForCycle(sub.companyId, oldStart);
-      if (invoice && invoice.totalPaise > 0) {
-        await this.invoiceBilling.chargeInvoice(sub.companyId, invoice.id);
+  async expireCredits(now = new Date()) {
+    const due = await this.prisma.creditBucket.findMany({
+      where: { expiredAt: null, expiresAt: { lte: now } },
+      select: { userId: true },
+      distinct: ['userId'],
+      take: 500,
+    });
+    for (const { userId } of due) {
+      try {
+        await this.credits.expireDue(userId);
+      } catch (err) {
+        this.logger.error(`Credit expiry failed for ${userId}: ${String(err)}`);
       }
-      this.logger.log(
-        `Subscription ${sub.id} cancelled at period end (final cycle ${oldStart.toISOString()} invoiced).`,
-      );
-      return;
     }
+    return due.length;
+  }
 
-    const newStart = oldEnd;
-    const anchorDay = sub.billingAnchorDay ?? oldStart.getDate();
-    const newEnd = addAnchoredMonth(newStart, anchorDay);
-
-    // Atomic claim, conditioned on the currentPeriodEnd we read — if another
-    // run already advanced this subscription, count === 0 and we skip.
-    const claimed = await this.prisma.subscription.updateMany({
-      where: { id: sub.id, currentPeriodEnd: sub.currentPeriodEnd },
-      data: { currentPeriodStart: newStart, currentPeriodEnd: newEnd },
-    });
-    if (claimed.count === 0) return;
-
-    // Carry over purchased (top-up) minutes from the previous cycle.
-    const oldUsage = await this.prisma.usage.findUnique({
-      where: {
-        companyId_billingCycleStart: { companyId: sub.companyId, billingCycleStart: oldStart },
-      },
-    });
-    await this.prisma.usage.upsert({
-      where: {
-        companyId_billingCycleStart: { companyId: sub.companyId, billingCycleStart: newStart },
-      },
-      create: {
-        companyId: sub.companyId,
-        subscriptionId: sub.id,
-        billingCycleStart: newStart,
-        billingCycleEnd: newEnd,
-        minutesPurchased: oldUsage?.minutesPurchased ?? 0,
-      },
-      update: {},
-    });
-
-    const invoice = await this.invoiceBilling.generateInvoiceForCycle(sub.companyId, oldStart);
-    if (invoice && invoice.totalPaise > 0) {
-      await this.invoiceBilling.chargeInvoice(sub.companyId, invoice.id);
-    }
-
-    this.logger.log(
-      `Renewed subscription ${sub.id} for ${sub.companyId}: new cycle ${newStart.toISOString()} -> ${newEnd.toISOString()}`,
+  async sendRenewalReminders(now = new Date()) {
+    const config = await this.config.get();
+    if (config.renewalReminderDays <= 0) return 0;
+    const horizon = new Date(
+      now.getTime() + config.renewalReminderDays * 86_400_000,
     );
+    const ending = await this.prisma.subscription.findMany({
+      where: {
+        status: BillingStatus.ACTIVE,
+        planType: { not: PlanType.FREE },
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd: { gt: now, lte: horizon },
+      },
+      take: 500,
+    });
+    for (const sub of ending) await this.notify.planExpiringSoon(sub);
+    return ending.length;
   }
 
-  /**
-   * Retry invoices stuck in dunning on their scheduled day (fixed day-1/3/7
-   * schedule from when dunning started — see InvoiceBillingService).
-   */
-  private async retryDunningInvoices() {
-    const now = new Date();
-    const due = await this.prisma.usageInvoice.findMany({
-      where: { status: 'dunning', nextRetryAt: { lte: now } },
+  async abandonStaleCheckouts(now = new Date()) {
+    const config = await this.config.get();
+    const cutoff = new Date(
+      now.getTime() - config.pendingCheckoutTtlHours * 3_600_000,
+    );
+    const stale = await this.prisma.payment.findMany({
+      where: {
+        purpose: { not: 'LEGACY' },
+        paymentStatus: { in: [PaymentStatus.PENDING, PaymentStatus.FAILED] },
+        createdAt: { lte: cutoff },
+      },
+      select: { id: true },
+      take: 500,
     });
-
-    for (const invoice of due) {
-      try {
-        await this.invoiceBilling.retryChargeInvoice(invoice.id);
-      } catch (err) {
-        this.logger.error(`Dunning retry failed for invoice ${invoice.id}: ${String(err)}`);
-      }
-    }
-  }
-
-  /**
-   * Any subscription that is PAST_DUE and has passed its grace period is
-   * reset to ACTIVE (giving up on collecting the unpaid invoice) unless the
-   * customer had already asked to cancel, in which case the cancellation is
-   * honored instead. Also seals any still-open dunning invoice as failed so
-   * billing history doesn't show a permanently-pending state.
-   */
-  private async downgradePastDueSubscriptions() {
-    const now = new Date();
-    const pastDue = await this.prisma.subscription.findMany({
-      where: { status: 'PAST_DUE' },
-    });
-
-    for (const sub of pastDue) {
-      if (sub.gracePeriodEndsAt && sub.gracePeriodEndsAt > now) continue;
-
-      await this.prisma.usageInvoice.updateMany({
-        where: { userId: sub.companyId, status: 'dunning' },
-        data: { status: 'failed', nextRetryAt: null },
-      });
-
-      // A customer who cancelled while their payment was failing shouldn't
-      // be silently reactivated when their grace period runs out — honor
-      // the cancellation instead of resetting them to good standing.
-      if (sub.cancelAtPeriodEnd) {
-        await this.prisma.subscription.update({
-          where: { id: sub.id },
-          data: {
-            status: 'CANCELED',
-            dunningAttempts: 0,
-            paymentFailedAt: null,
-            gracePeriodEndsAt: null,
-          },
-        });
-        await this.prisma.auditLog.create({
-          data: {
-            actorId: sub.companyId,
-            action: 'SUBSCRIPTION_CANCELED',
-            metadata: { from: 'PAST_DUE', reason: 'cancel_at_period_end_after_grace' },
-          },
-        });
-        this.logger.log(`Subscription ${sub.id} cancelled after grace period elapsed (unpaid, cancelAtPeriodEnd).`);
-        continue;
-      }
-
-      await this.prisma.subscription.update({
-        where: { id: sub.id },
-        data: {
-          status: 'ACTIVE',
-          cancelAtPeriodEnd: false,
-          dunningAttempts: 0,
-          paymentFailedAt: null,
-          gracePeriodEndsAt: null,
-        },
-      });
-
-      await this.prisma.auditLog.create({
-        data: {
-          actorId: sub.companyId,
-          action: 'PLAN_CHANGED',
-          metadata: { reason: 'auto_reset_after_grace_period', from: 'PAST_DUE', to: 'ACTIVE' },
-        },
-      });
-
-      this.logger.log(
-        `Reset subscription ${sub.id} to good standing (grace period elapsed, unpaid invoice sealed as failed).`,
-      );
-    }
+    for (const p of stale)
+      await this.checkout.abandon(p.id, 'checkout_abandoned');
+    return stale.length;
   }
 }

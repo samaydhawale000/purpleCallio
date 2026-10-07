@@ -1,13 +1,12 @@
 import {
   BadRequestException,
-  Injectable,
   Inject,
+  Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { NotificationType } from '@prisma/client';
+import { BillingStatus, PaymentStatus, PlanType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotificationService } from '../notification/notification.service';
 import { PAYMENT_SERVICE } from '../payment/payment.service';
 import type { PaymentService } from '../payment/payment.service';
 
@@ -15,17 +14,12 @@ import type { PaymentService } from '../payment/payment.service';
 export const PHONE_RE = /^\+[1-9]\d{7,14}$/;
 
 /**
- * PurpleCallio billing = usage-based (see UsageBillingService,
- * RatingEngineService, UsageSegmentService — that is the active model
- * calls are actually metered and charged against, enforced via
- * UsageBillingService.canStartCall).
- *
- * `Subscription` here is not a per-plan subscription anymore — there is no
- * more Plan model. It's the billing-cycle-anchor + dunning-state record for
- * a customer: currentPeriodStart/End + billingAnchorDay (see
- * billing-cycle.util.ts) drive the monthly cycle, and status/
- * gracePeriodEndsAt/dunningAttempts/paymentFailedAt drive the dunning flow in
- * InvoiceBillingService + BillingJobsService.
+ * Account-level billing helpers that sit outside the prepaid purchase flow:
+ *  - payment methods: cards saved under the retired pay-as-you-go model can
+ *    be listed and removed. They are never charged automatically — payment
+ *    for plans and top-ups is always chosen by the customer at checkout;
+ *  - the contact phone kept in sync on the Razorpay customer;
+ *  - admin revenue reporting.
  */
 @Injectable()
 export class BillingService {
@@ -34,54 +28,19 @@ export class BillingService {
   constructor(
     private prisma: PrismaService,
     @Inject(PAYMENT_SERVICE) private payments: PaymentService,
-    private notifications: NotificationService,
   ) {}
 
-  // ── Subscriptions (billing-cycle anchor) ────────────
-  async getCurrentSubscription(userId: string) {
-    return this.prisma.subscription.findFirst({
-      where: { companyId: userId },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  async getOrCreateFreeSubscription(userId: string) {
-    const existing = await this.getCurrentSubscription(userId);
-    if (existing) return existing;
-
-    const now = new Date();
-    const periodEnd = new Date(now);
-    periodEnd.setMonth(periodEnd.getMonth() + 1);
-
-    const sub = await this.prisma.subscription.create({
-      data: {
-        companyId: userId,
-        status: 'ACTIVE',
-        currentPeriodStart: now,
-        currentPeriodEnd: periodEnd,
-        billingAnchorDay: now.getDate(),
-      },
-    });
-
-    await this.ensureUsageRecord(userId, sub.id, now, periodEnd);
-    return sub;
-  }
-
+  /** LEGACY invoice rows from before usage invoices existed (read-only). */
   async getInvoices(userId: string) {
-    const sub = await this.getCurrentSubscription(userId);
-    if (!sub) return [];
     return this.prisma.invoices.findMany({
-      where: { subscriptionId: sub.id },
+      where: { subscription: { companyId: userId } },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   /**
-   * The card stored on the User record (razorpayTokenId + card fields) is
-   * always the one actually charged at month end — it's the source of truth
-   * for "default", independent of how many tokens Razorpay has on file for
-   * the customer. Merge it into the provider's list (or fall back to it
-   * entirely in mock mode, where there is no provider list to fetch).
+   * Saved cards on the customer's Razorpay record (including the legacy
+   * pay-as-you-go card stored on the user). Display + removal only.
    */
   async getPaymentMethods(userId: string) {
     const found = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -91,8 +50,10 @@ export class BillingService {
     if (user?.razorpayCustomerId && this.payments.isConfigured()) {
       methods = await this.payments.getPaymentMethods(user.razorpayCustomerId);
     }
-
-    if (user?.razorpayTokenId && !methods.some((m) => m.id === user.razorpayTokenId)) {
+    if (
+      user?.razorpayTokenId &&
+      !methods.some((m) => m.id === user.razorpayTokenId)
+    ) {
       methods = [
         {
           id: user.razorpayTokenId,
@@ -104,110 +65,69 @@ export class BillingService {
         ...methods,
       ];
     }
-
     return methods.map((m) => ({
       ...m,
-      brand: m.brand ?? (m.id === user?.razorpayTokenId ? user.cardBrand : null),
-      last4: m.last4 ?? (m.id === user?.razorpayTokenId ? user.cardLast4 : null),
-      expMonth: m.expMonth ?? (m.id === user?.razorpayTokenId ? user.cardExpMonth : null),
-      expYear: m.expYear ?? (m.id === user?.razorpayTokenId ? user.cardExpYear : null),
-      default: m.id === user?.razorpayTokenId,
+      brand:
+        m.brand ?? (m.id === user?.razorpayTokenId ? user.cardBrand : null),
+      last4:
+        m.last4 ?? (m.id === user?.razorpayTokenId ? user.cardLast4 : null),
+      expMonth:
+        m.expMonth ??
+        (m.id === user?.razorpayTokenId ? user.cardExpMonth : null),
+      expYear:
+        m.expYear ?? (m.id === user?.razorpayTokenId ? user.cardExpYear : null),
+      legacy: m.id === user?.razorpayTokenId,
     }));
   }
 
-  /**
-   * Remove a saved card. If it was the active auto-charge card, promote
-   * another remaining card to default automatically (mirrors how most SaaS
-   * billing UIs behave) rather than silently pausing auto-billing.
-   */
+  /** Remove a saved card from Razorpay (and the legacy reference to it). */
   async removePaymentMethod(userId: string, tokenId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
     if (user.razorpayCustomerId && this.payments.isConfigured()) {
       try {
-        await this.payments.deletePaymentMethod(user.razorpayCustomerId, tokenId);
+        await this.payments.deletePaymentMethod(
+          user.razorpayCustomerId,
+          tokenId,
+        );
       } catch (e: any) {
-        this.logger.warn(`Failed to delete Razorpay token ${tokenId}: ${e?.message}`);
+        this.logger.warn(
+          `Failed to delete Razorpay token ${tokenId}: ${e?.message}`,
+        );
       }
     }
-
     if (user.razorpayTokenId === tokenId) {
-      const remaining = user.razorpayCustomerId && this.payments.isConfigured()
-        ? (await this.payments.getPaymentMethods(user.razorpayCustomerId)).filter((m) => m.id !== tokenId)
-        : [];
-      const promoted = remaining[0] ?? null;
-
       await this.prisma.user.update({
         where: { id: userId },
         data: {
-          razorpayTokenId: promoted?.id ?? null,
-          cardBrand: promoted?.brand ?? null,
-          cardLast4: promoted?.last4 ?? null,
-          cardExpMonth: promoted?.expMonth ?? null,
-          cardExpYear: promoted?.expYear ?? null,
+          razorpayTokenId: null,
+          cardBrand: null,
+          cardLast4: null,
+          cardExpMonth: null,
+          cardExpYear: null,
         },
       });
     }
-
     await this.logAudit(userId, 'PAYMENT_METHOD_REMOVED', { tokenId });
     return { removed: true };
   }
 
-  /** Switch which saved card is charged automatically at month end. */
-  async setDefaultPaymentMethod(userId: string, tokenId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found');
-
-    let card: {
-      brand?: string | null;
-      last4?: string | null;
-      expMonth?: number | null;
-      expYear?: number | null;
-    } | null = null;
-
-    if (user.razorpayCustomerId && this.payments.isConfigured()) {
-      card = await this.payments.getPaymentMethod(user.razorpayCustomerId, tokenId);
-      if (!card) throw new NotFoundException('Payment method not found');
-    }
-
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        razorpayTokenId: tokenId,
-        cardBrand: card?.brand ?? user.cardBrand,
-        cardLast4: card?.last4 ?? user.cardLast4,
-        cardExpMonth: card?.expMonth ?? user.cardExpMonth,
-        cardExpYear: card?.expYear ?? user.cardExpYear,
-      },
-    });
-
-    await this.logAudit(userId, 'PAYMENT_METHOD_UPDATED', { tokenId, event: 'default_changed' });
-    return { success: true };
-  }
-
-  // ── Add Payment Method (usage-based, no charge) ────
-  /**
-   * Ensure a Razorpay customer exists for the user, creating one if needed,
-   * and persist the customer id on the user.
-   */
   /**
    * A stored customer id can belong to a different Razorpay account or mode
-   * than the current keys (e.g. test-mode customers after switching to live,
-   * or `cus_mock_` ids from a run without credentials). Razorpay rejects
-   * those at Checkout, so drop the id — and the card token saved against it,
-   * which can't be charged on this account either — so a fresh customer is
-   * created on the next card setup.
+   * than the current keys (e.g. test-mode customers after switching to
+   * live, or `cus_mock_` ids from a run without credentials). Drop it — and
+   * the card token saved against it — so stale ids never reach Razorpay.
    */
-  private async clearStaleRazorpayCustomer<T extends {
-    id: string;
-    razorpayCustomerId: string | null;
-  }>(user: T): Promise<T> {
+  private async clearStaleRazorpayCustomer<
+    T extends { id: string; razorpayCustomerId: string | null },
+  >(user: T): Promise<T> {
     const customerId = user.razorpayCustomerId;
     if (!customerId || !this.payments.isConfigured()) return user;
 
-    const stale = customerId.startsWith('cus_mock_')
-      || !(await this.payments.customerExists(customerId));
+    const stale =
+      customerId.startsWith('cus_mock_') ||
+      !(await this.payments.customerExists(customerId));
     if (!stale) return user;
 
     this.logger.warn(
@@ -225,67 +145,9 @@ export class BillingService {
     return { ...user, ...cleared };
   }
 
-  async ensureRazorpayCustomer(userId: string): Promise<string> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found');
-
-    const current = await this.clearStaleRazorpayCustomer(user);
-    if (current.razorpayCustomerId) return current.razorpayCustomerId;
-
-    // Payment provider not configured (local/dev/demo) — use a synthetic
-    // customer id so the rest of the flow (card save, auto-charge bookkeeping)
-    // still works without calling out to Razorpay.
-    const customerId = this.payments.isConfigured()
-      ? await this.payments.createCustomer({
-          email: user.email || '',
-          name: user.name,
-          contact: user.phone,
-          userId,
-        })
-      : `cus_mock_${userId}`;
-
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { razorpayCustomerId: customerId },
-    });
-
-    return customerId;
-  }
-
   /**
-   * Create a ₹1 Razorpay card-mandate authorisation order so the frontend
-   * can open the Checkout modal with recurring = true. Returns the order id.
-   *
-   * The contact phone number Razorpay requires to authorise a recurring
-   * mandate is collected once at login (see AuthService.updateProfile) and kept
-   * in sync on the Razorpay customer — not re-collected here.
-   */
-  async createPaymentSetup(userId: string) {
-    const customerId = await this.ensureRazorpayCustomer(userId);
-
-    if (this.payments.isConfigured()) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { phone: true },
-      });
-      if (!user?.phone) {
-        throw new BadRequestException(
-          'Add a contact phone number to your account before saving a card.',
-        );
-      }
-      await this.payments.updateCustomerContact(customerId, user.phone);
-    }
-
-    const setup = await this.payments.createSetupIntent(customerId);
-    return { clientSecret: setup.clientSecret, customerId };
-  }
-
-  /**
-   * Sets the user's contact phone number (required by Razorpay to authorise
-   * a recurring card mandate) and, if a Razorpay customer already exists,
-   * syncs it there immediately — covers customers created before this field
-   * existed, which Razorpay would otherwise reject with "The contact field
-   * is required for recurring links".
+   * Sets the user's contact phone number (prefilled in Checkout) and syncs
+   * it to the Razorpay customer if one exists.
    */
   async setContactPhone(userId: string, phone: string) {
     const trimmed = phone?.trim();
@@ -294,379 +156,108 @@ export class BillingService {
         'Enter a valid phone number with country code, e.g. +919876543210.',
       );
     }
-
     const updated = await this.prisma.user.update({
       where: { id: userId },
       data: { phone: trimmed },
     });
     const user = await this.clearStaleRazorpayCustomer(updated);
-
     if (user.razorpayCustomerId && this.payments.isConfigured()) {
-      await this.payments.updateCustomerContact(user.razorpayCustomerId, trimmed);
-    }
-
-    return { phone: trimmed };
-  }
-
-  /**
-   * Persist the saved-card token + card metadata for future auto-charges.
-   *
-   * When Razorpay is configured, the token is never taken from the client —
-   * a `razorpay_payment_id` is not a card token. Instead we verify the
-   * Checkout payment signature server-side, then ask Razorpay for the real
-   * token it created for this customer (see resolveSavedCardToken). Only in
-   * mock/dev mode (no Razorpay credentials) do we fall back to trusting the
-   * client-simulated token, since there is no real gateway to verify against.
-   */
-  async attachPaymentMethod(
-    userId: string,
-    paymentMethodId: string,
-    payment?: {
-      tokenId?: string | null;
-      orderId?: string | null;
-      paymentId?: string | null;
-      signature?: string | null;
-    } | null,
-    fallbackCard?: {
-      brand?: string | null;
-      last4?: string | null;
-      expMonth?: number | null;
-      expYear?: number | null;
-    } | null,
-  ) {
-    const customerId = await this.ensureRazorpayCustomer(userId);
-
-    let tokenId: string | null | undefined;
-    let card = fallbackCard;
-
-    if (this.payments.isConfigured()) {
-      if (!payment?.orderId || !payment?.paymentId || !payment?.signature) {
-        throw new BadRequestException(
-          'Missing Razorpay payment verification details.',
-        );
-      }
-      const { verified } = await this.payments.verifyCardSetupPayment({
-        orderId: payment.orderId,
-        paymentId: payment.paymentId,
-        signature: payment.signature,
-      });
-      if (!verified) {
-        throw new BadRequestException(
-          'Could not verify the Razorpay payment signature.',
-        );
-      }
-      const resolved = await this.payments.resolveSavedCardToken(
-        customerId,
-        payment.paymentId,
+      await this.payments.updateCustomerContact(
+        user.razorpayCustomerId,
+        trimmed,
       );
-      tokenId = resolved.id;
-      card = {
-        brand: resolved.brand,
-        last4: resolved.last4,
-        expMonth: resolved.expMonth,
-        expYear: resolved.expYear,
-      };
-    } else {
-      // Mock/dev mode: no real gateway to verify against — trust the
-      // client-simulated token so local dev/demo still works end to end.
-      tokenId = payment?.tokenId;
     }
-
-    await this.payments.attachPaymentMethod({
-      customerId,
-      paymentMethodId,
-      tokenId,
-      card,
-      setDefault: true,
-    });
-
-    // Persist the token + card metadata for server-side auto-charge.
-    if (tokenId) {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          razorpayTokenId: tokenId,
-          cardBrand: card?.brand ?? null,
-          cardLast4: card?.last4 ?? null,
-          cardExpMonth: card?.expMonth ?? null,
-          cardExpYear: card?.expYear ?? null,
-        },
-      });
-    }
-
-    await this.logAudit(userId, 'PAYMENT_RECEIVED', {
-      event: 'payment_method_attached',
-      paymentMethodId,
-      tokenId,
-    });
-    return { attached: true, customerId };
-  }
-
-  async createPortalSession(userId: string) {
-    if (!this.payments.isConfigured()) {
-      return { url: '/dashboard/billing', mock: true };
-    }
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.razorpayCustomerId) {
-      throw new NotFoundException('No Razorpay customer found');
-    }
-    const url = await this.payments.createPortalSession(user.razorpayCustomerId);
-    return { url };
-  }
-
-  async ensureUsageRecord(userId: string, subId: string, start: Date, end: Date) {
-    const existing = await this.prisma.usage.findUnique({
-      where: {
-        companyId_billingCycleStart: {
-          companyId: userId,
-          billingCycleStart: start,
-        },
-      },
-    });
-    if (existing) return existing;
-    return this.prisma.usage.create({
-      data: {
-        companyId: userId,
-        subscriptionId: subId,
-        billingCycleStart: start,
-        billingCycleEnd: end,
-        minutesUsed: 0,
-        callsCreated: 0,
-        callsCompleted: 0,
-      },
-    });
-  }
-
-  /**
-   * Credit purchased (top-up) minutes to the current usage record. Only
-   * called today from handlePaymentCaptured's topUpMinutes branch (defensive
-   * — kept in case any in-flight/external Razorpay order still carries a
-   * `notes.minutes` value; there is no live way to create one anymore).
-   */
-  private async creditPurchasedMinutes(userId: string, sub: any, minutes: number) {
-    const start = sub.currentPeriodStart || new Date();
-    await this.prisma.usage.upsert({
-      where: {
-        companyId_billingCycleStart: { companyId: userId, billingCycleStart: start },
-      },
-      create: {
-        companyId: userId,
-        subscriptionId: sub.id,
-        billingCycleStart: start,
-        billingCycleEnd: sub.currentPeriodEnd || new Date(),
-        minutesUsed: 0,
-        minutesPurchased: minutes,
-        callsCreated: 0,
-        callsCompleted: 0,
-        participants: 0,
-        apiRequests: 0,
-      },
-      update: {
-        minutesPurchased: { increment: minutes },
-      },
-    });
+    return { phone: trimmed };
   }
 
   // ── Admin: revenue ───────────────────────────────────
   /**
-   * Usage-based revenue: real charges only come through paid UsageInvoice
-   * rows (InvoiceBillingService.chargeInvoice never writes to Payment — that
-   * table is legacy). "MRR"/"ARR" have no fixed recurring price to project
-   * from anymore, so they're approximated as trailing-30-day realized (paid)
-   * revenue, annualized.
+   * Prepaid revenue = verified payments (plans, renewals, top-ups, custom
+   * plans) net of refunds, plus historical paid usage invoices. MRR is the
+   * monthly-normalized price of currently active paid subscriptions.
    */
   async getRevenue() {
-    const [paidInvoices, activeSubscriptions, payingCustomersAgg, trailing30] = await Promise.all([
-      this.prisma.usageInvoice.findMany({
-        where: { status: 'paid' },
-        orderBy: { paidAt: 'desc' },
-        take: 100,
-      }),
-      this.prisma.subscription.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.usageInvoice.groupBy({ by: ['userId'], where: { status: 'paid' } }),
-      this.prisma.usageInvoice.aggregate({
-        where: { status: 'paid', paidAt: { gte: new Date(Date.now() - 30 * 86400000) } },
-        _sum: { totalPaise: true },
-      }),
-    ]);
+    const since30 = new Date(Date.now() - 30 * 86_400_000);
+    const [paid, refunds, last30, legacyPaid, activePaid, recent] =
+      await Promise.all([
+        this.prisma.payment.aggregate({
+          where: {
+            purpose: { not: 'LEGACY' },
+            paymentStatus: { in: [PaymentStatus.PAID, PaymentStatus.REFUNDED] },
+          },
+          _sum: { amount: true },
+          _count: true,
+        }),
+        this.prisma.payment.aggregate({
+          where: { purpose: { not: 'LEGACY' } },
+          _sum: { refundedPaise: true },
+        }),
+        this.prisma.payment.aggregate({
+          where: {
+            purpose: { not: 'LEGACY' },
+            paymentStatus: PaymentStatus.PAID,
+            paidAt: { gte: since30 },
+          },
+          _sum: { amount: true },
+        }),
+        this.prisma.usageInvoice.aggregate({
+          where: { status: 'paid' },
+          _sum: { totalPaise: true },
+          _count: true,
+        }),
+        this.prisma.subscription.findMany({
+          where: {
+            status: BillingStatus.ACTIVE,
+            planType: { in: [PlanType.PAID, PlanType.CUSTOM] },
+          },
+          select: {
+            pricePaise: true,
+            billingInterval: true,
+            intervalCount: true,
+            companyId: true,
+          },
+        }),
+        this.prisma.payment.findMany({
+          where: {
+            purpose: { not: 'LEGACY' },
+            paymentStatus: { in: [PaymentStatus.PAID, PaymentStatus.REFUNDED] },
+          },
+          orderBy: { paidAt: 'desc' },
+          take: 20,
+          include: { user: { select: { id: true, email: true, name: true } } },
+        }),
+      ]);
 
-    const total = paidInvoices.reduce((s, i) => s + i.totalPaise, 0);
-    const mrr = trailing30._sum.totalPaise ?? 0;
-    const arr = mrr * 12;
+    const monthly = (s: {
+      pricePaise: number;
+      billingInterval: string | null;
+      intervalCount: number;
+    }) =>
+      s.billingInterval === 'YEAR'
+        ? s.pricePaise / (12 * s.intervalCount)
+        : s.billingInterval === 'CUSTOM'
+          ? (s.pricePaise * 30) / Math.max(1, s.intervalCount)
+          : s.pricePaise / Math.max(1, s.intervalCount);
+    const mrr = Math.round(activePaid.reduce((sum, s) => sum + monthly(s), 0));
+    const prepaidNet =
+      (paid._sum.amount ?? 0) - (refunds._sum.refundedPaise ?? 0);
 
     return {
-      total,
-      count: paidInvoices.length,
-      mrr,
-      arr,
-      payingCustomers: payingCustomersAgg.length,
-      activeSubscriptions,
-      invoices: paidInvoices,
+      totalPaise: prepaidNet + (legacyPaid._sum.totalPaise ?? 0),
+      prepaidNetPaise: prepaidNet,
+      refundedPaise: refunds._sum.refundedPaise ?? 0,
+      last30DaysPaise: last30._sum.amount ?? 0,
+      legacyUsageInvoicePaise: legacyPaid._sum.totalPaise ?? 0,
+      payments: paid._count,
+      mrrPaise: mrr,
+      arrPaise: mrr * 12,
+      activePaidSubscriptions: activePaid.length,
+      payingCustomers: new Set(activePaid.map((s) => s.companyId)).size,
+      recentPayments: recent,
     };
   }
 
-  // ── Webhook (Razorpay) ──────────────────────────────
-  // NOTE: this previously assumed Stripe's webhook shape (`event.type`,
-  // `event.data.object`, invoice/session field names) even though it's only
-  // ever called from the Razorpay webhook endpoint — meaning no real
-  // Razorpay webhook (payment success/failure) was ever actually processed
-  // via that mismatched shape; the switch never matched. Razorpay's shape is
-  // `event.event` (event name) + `event.payload.<entity>.entity`.
-  async handleWebhookEvent(event: Record<string, any>) {
-    const type = event.event;
-    this.logger.log(`Handling Razorpay webhook: ${type}`);
-    switch (type) {
-      case 'payment.captured':
-        await this.handlePaymentCaptured(event.payload?.payment?.entity);
-        break;
-      case 'payment.failed':
-        await this.handlePaymentFailedEvent(event.payload?.payment?.entity);
-        break;
-      default:
-        this.logger.debug(`Unhandled Razorpay webhook event: ${type}`);
-        break;
-    }
-  }
-
-  /**
-   * A captured (successful) payment — covers minute top-ups via a Razorpay
-   * Order carrying `notes` (userId + minutes) that Razorpay copies onto the
-   * resulting payment entity.
-   *
-   * Idempotent: Razorpay retries webhook delivery, so this must never credit
-   * the same payment twice. Guarded by an existence check + a DB unique
-   * constraint on Payment.razorpayPaymentId as the hard backstop.
-   */
-  private async handlePaymentCaptured(payment: any) {
-    if (!payment?.id) return;
-
-    const already = await this.prisma.payment.findFirst({
-      where: { razorpayPaymentId: payment.id },
-    });
-    if (already) {
-      this.logger.warn(`Payment ${payment.id} already recorded — skipping duplicate webhook.`);
-      return;
-    }
-
-    const userId = payment.notes?.userId;
-    if (!userId) {
-      this.logger.warn(`payment.captured for ${payment.id} has no userId in notes — skipping.`);
-      return;
-    }
-
-    const sub = await this.getOrCreateFreeSubscription(userId);
-
-    try {
-      await this.prisma.payment.create({
-        data: {
-          subscriptionId: sub.id,
-          razorpayPaymentId: payment.id,
-          razorpayOrderId: payment.order_id ?? null,
-          amount: payment.amount ?? 0,
-          currency: (payment.currency || 'INR').toUpperCase(),
-          paymentStatus: 'PAID',
-          paymentMethod: payment.method ?? null,
-          paidAt: new Date(),
-        },
-      });
-    } catch (e: any) {
-      if (e?.code === 'P2002') {
-        this.logger.warn(`Payment ${payment.id} already recorded (race) — skipping duplicate credit.`);
-        return;
-      }
-      throw e;
-    }
-
-    const topUpMinutes = Number(payment.notes?.minutes || 0);
-    if (topUpMinutes > 0) {
-      await this.creditPurchasedMinutes(userId, sub, topUpMinutes);
-      await this.logAudit(userId, 'PAYMENT_RECEIVED', {
-        minutes: topUpMinutes,
-        type: 'topup',
-        razorpayPaymentId: payment.id,
-      });
-    } else {
-      await this.logAudit(userId, 'PAYMENT_RECEIVED', { amount: payment.amount, razorpayPaymentId: payment.id });
-    }
-    await this.notifyPaymentOutcome(userId, payment, true);
-  }
-
-  /**
-   * Webhook payment notification. An invoice auto-charge carries its
-   * invoiceId in the Razorpay notes, so it shares InvoiceBillingService's
-   * per-invoice dedupe key — the customer hears about that payment once,
-   * whichever path processes it first.
-   */
-  private async notifyPaymentOutcome(userId: string, payment: any, succeeded: boolean) {
-    const invoiceId: string | undefined = payment.notes?.invoiceId;
-    await this.notifications.createNotification({
-      userId,
-      type: succeeded
-        ? NotificationType.INVOICE_PAYMENT_SUCCESS
-        : NotificationType.INVOICE_PAYMENT_FAILED,
-      title: succeeded ? 'Payment successful' : 'Payment failed',
-      message: succeeded
-        ? 'Your payment was successfully processed.'
-        : "We couldn't process your latest payment. Please check your billing information.",
-      metadata: invoiceId ? { invoiceId } : undefined,
-      dedupeKey: invoiceId
-        ? `${succeeded ? 'invoice-paid' : 'invoice-payment-failed'}:${invoiceId}`
-        : `payment-${succeeded ? 'success' : 'failed'}:${payment.id}`,
-    });
-  }
-
-  private async handlePaymentFailedEvent(payment: any) {
-    if (!payment?.id) return;
-
-    const userId = payment.notes?.userId;
-    if (!userId) {
-      this.logger.warn(`payment.failed for ${payment.id} has no userId in notes — skipping.`);
-      return;
-    }
-
-    const already = await this.prisma.payment.findFirst({
-      where: { razorpayPaymentId: payment.id },
-    });
-    if (already) return;
-
-    const sub = await this.getOrCreateFreeSubscription(userId);
-
-    try {
-      await this.prisma.payment.create({
-        data: {
-          subscriptionId: sub.id,
-          razorpayPaymentId: payment.id,
-          razorpayOrderId: payment.order_id ?? null,
-          amount: payment.amount ?? 0,
-          currency: (payment.currency || 'INR').toUpperCase(),
-          paymentStatus: 'FAILED',
-        },
-      });
-    } catch (e: any) {
-      if (e?.code === 'P2002') return;
-      throw e;
-    }
-
-    // Increment dunning attempt and extend grace period (7 days from now).
-    const grace = new Date();
-    grace.setDate(grace.getDate() + 7);
-    await this.prisma.subscription.update({
-      where: { id: sub.id },
-      data: {
-        status: 'PAST_DUE',
-        dunningAttempts: { increment: 1 },
-        paymentFailedAt: new Date(),
-        gracePeriodEndsAt: grace,
-      },
-    });
-    await this.logAudit(sub.companyId, 'PAYMENT_FAILED', {
-      amount: payment.amount,
-      razorpayPaymentId: payment.id,
-    });
-    await this.notifyPaymentOutcome(sub.companyId, payment, false);
-  }
-
-  private async logAudit(actorId: any, action: any, metadata: any) {
+  private async logAudit(actorId: string | null, action: any, metadata: any) {
     try {
       await this.prisma.auditLog.create({
         data: { actorId: actorId || null, action, metadata },

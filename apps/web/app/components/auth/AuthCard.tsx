@@ -10,6 +10,7 @@ import { GoogleSignInButton } from '../ui/GoogleSignInButton';
 import { ProfileCompletionForm } from './ProfileCompletionForm';
 import { api } from '../../lib/api';
 import { useAuthStore, toAuthUser, type AuthUser } from '../../store/auth.store';
+import { captureBillingIntent, consumeBillingIntent } from '../../lib/billing-intent';
 import logo from '../../assets/images/logo.webp';
 
 type Phase = 'loading' | 'signin' | 'profile' | 'redirecting' | 'error';
@@ -24,7 +25,8 @@ const fade = {
 /**
  * The right-hand card on /login and /signup: Google sign-in first, then — on
  * the same page — the profile-completion step when the backend says
- * onboarding is required. Completed profiles go straight to /dashboard.
+ * onboarding is required. Completed profiles go straight to /dashboard (or
+ * to the plan chosen on the pricing page — see lib/billing-intent.ts).
  */
 export function AuthCard({
   title,
@@ -47,6 +49,11 @@ export function AuthCard({
   const [meError, setMeError] = useState(false);
   const [retry, setRetry] = useState(0);
   const refreshedFor = useRef<string | null>(null);
+
+  // Remember a plan picked on the pricing page (?plan= / ?intent=custom).
+  useEffect(() => {
+    captureBillingIntent(window.location.search);
+  }, []);
 
   // A session restored from storage may predate the onboarding fields (or
   // be stale), so ask the server once per session for the authoritative
@@ -79,12 +86,12 @@ export function AuthCard({
   else phase = meError ? 'error' : 'loading';
 
   useEffect(() => {
-    if (phase === 'redirecting') router.replace('/dashboard');
+    if (phase === 'redirecting') router.replace(consumeBillingIntent());
   }, [phase, router]);
 
   const handleCompleted = (updated: AuthUser) => {
     setUser(updated);
-    router.replace('/dashboard');
+    router.replace(consumeBillingIntent());
   };
 
   const signOut = () => {

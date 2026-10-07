@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -12,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { OAuth2Client } from 'google-auth-library';
 
 import { BillingService } from '../billing/billing.service';
+import { SubscriptionService } from '../billing/subscriptions/subscription.service';
 
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { toUserProfile, PROFILE_SELECT } from './user-profile';
@@ -24,6 +22,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private billingService: BillingService,
+    private subscriptions: SubscriptionService,
   ) {
     this.googleClient = new OAuth2Client(
       process.env.GOOGLE_CLIENT_ID,
@@ -41,73 +40,60 @@ export class AuthService {
       });
       payload = ticket.getPayload();
     } catch {
-      throw new UnauthorizedException(
-        'Invalid Google token',
-      );
+      throw new UnauthorizedException('Invalid Google token');
     }
 
     if (!payload || !payload.email) {
-      throw new UnauthorizedException(
-        'Invalid Google token payload',
-      );
+      throw new UnauthorizedException('Invalid Google token payload');
     }
 
     const email = payload.email;
     const googleId = payload.sub;
-    const name =
-      payload.name ?? null;
-    const avatarUrl =
-      payload.picture ?? null;
+    const name = payload.name ?? null;
+    const avatarUrl = payload.picture ?? null;
 
     // Find an existing user by googleId, then by email.
-    let user =
-      await this.prisma.user.findUnique({
-        where: { googleId },
-      });
+    let user = await this.prisma.user.findUnique({
+      where: { googleId },
+    });
 
     if (!user) {
-      user =
-        await this.prisma.user.findUnique({
-          where: { email },
-        });
+      user = await this.prisma.user.findUnique({
+        where: { email },
+      });
 
       // New user — create one.
       if (!user) {
-        user =
-          await this.prisma.user.create({
-            data: {
-              email,
-              googleId,
-              name,
-              avatarUrl,
-            },
-          });
-} else {
+        user = await this.prisma.user.create({
+          data: {
+            email,
+            googleId,
+            name,
+            avatarUrl,
+          },
+        });
+      } else {
         // Existing email user — link the Google account.
-        user =
-          await this.prisma.user.update({
-            where: { id: user.id },
-            data: {
-              googleId,
-              name: name ?? user.name,
-              avatarUrl: avatarUrl ?? user.avatarUrl,
-            },
-          });
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            googleId,
+            name: name ?? user.name,
+            avatarUrl: avatarUrl ?? user.avatarUrl,
+          },
+        });
       }
     }
 
-    // Ensure the user has a subscription + usage record (Free plan by default).
-    this.billingService.getOrCreateFreeSubscription(user.id).catch(() => {
+    // Ensure the user has an active subscription + credit wallet (Free plan
+    // with its monthly credits by default).
+    this.subscriptions.getActiveSubscription(user.id).catch(() => {
       // Non-fatal: subscription assignment should not block login.
     });
 
-    const tokens =
-      await this.generateTokens(user.id);
+    const tokens = await this.generateTokens(user.id);
 
-    await this.saveRefreshToken(
-      user.id,
-      tokens.refreshToken,
-    );
+    await this.saveRefreshToken(user.id, tokens.refreshToken);
 
     return {
       user: toUserProfile(user),
@@ -118,32 +104,26 @@ export class AuthService {
     };
   }
 
-  private async generateTokens(
-    userId: string,
-  ) {
-    const accessToken =
-      await this.jwtService.signAsync(
-        {
-          sub: userId,
-        },
-        {
-          secret:
-            process.env.JWT_ACCESS_SECRET,
-          expiresIn: '15m',
-        },
-      );
+  private async generateTokens(userId: string) {
+    const accessToken = await this.jwtService.signAsync(
+      {
+        sub: userId,
+      },
+      {
+        secret: process.env.JWT_ACCESS_SECRET,
+        expiresIn: '15m',
+      },
+    );
 
-    const refreshToken =
-      await this.jwtService.signAsync(
-        {
-          sub: userId,
-        },
-        {
-          secret:
-            process.env.JWT_REFRESH_SECRET,
-          expiresIn: '30d',
-        },
-      );
+    const refreshToken = await this.jwtService.signAsync(
+      {
+        sub: userId,
+      },
+      {
+        secret: process.env.JWT_REFRESH_SECRET,
+        expiresIn: '30d',
+      },
+    );
 
     return {
       accessToken,
@@ -151,15 +131,8 @@ export class AuthService {
     };
   }
 
-  private async saveRefreshToken(
-    userId: string,
-    refreshToken: string,
-  ) {
-    const hash =
-      await bcrypt.hash(
-        refreshToken,
-        10,
-      );
+  private async saveRefreshToken(userId: string, refreshToken: string) {
+    const hash = await bcrypt.hash(refreshToken, 10);
 
     await this.prisma.user.update({
       where: {
@@ -171,54 +144,40 @@ export class AuthService {
     });
   }
 
-  async refreshToken(
-    refreshToken: string,
-  ) {
-    const payload =
-      await this.jwtService.verifyAsync(
-        refreshToken,
-        {
-          secret:
-            process.env.JWT_REFRESH_SECRET,
-        },
-      );
+  async refreshToken(refreshToken: string) {
+    const payload = await this.jwtService.verifyAsync(refreshToken, {
+      secret: process.env.JWT_REFRESH_SECRET,
+    });
 
-    const user =
-      await this.prisma.user.findUnique({
-        where: {
-          id: payload.sub,
-        },
-      });
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: payload.sub,
+      },
+    });
 
     if (!user) {
       throw new UnauthorizedException();
     }
 
-    const valid =
-      await bcrypt.compare(
-        refreshToken,
-        user.refreshTokenHash || '',
-      );
+    const valid = await bcrypt.compare(
+      refreshToken,
+      user.refreshTokenHash || '',
+    );
 
     if (!valid) {
       throw new UnauthorizedException();
     }
 
-    const tokens =
-      await this.generateTokens(user.id);
+    const tokens = await this.generateTokens(user.id);
 
-    await this.saveRefreshToken(
-      user.id,
-      tokens.refreshToken,
-    );
+    await this.saveRefreshToken(user.id, tokens.refreshToken);
 
     return tokens;
   }
 
   /**
-   * Contact number, collected once right after login (not re-asked later,
-   * e.g. when saving a card) — see BillingService.setContactPhone for why
-   * Razorpay needs this synced onto the payment-provider customer too.
+   * Contact number, collected once right after login and prefilled in
+   * Checkout — see BillingService.setContactPhone.
    */
   async setPhone(userId: string, phone: string) {
     return this.billingService.setContactPhone(userId, phone);

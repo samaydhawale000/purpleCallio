@@ -1,10 +1,15 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { NotificationType } from '@prisma/client';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { CreditTransactionType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotificationService } from '../notification/notification.service';
-import { BillingService } from './billing.service';
-import { CustomerDiscountService } from './customer-discount.service';
-import { calculateDiscountPaise } from './discount.util';
+import { BillingConfigService } from './billing-config.service';
+import { CreditService } from './credits/credit.service';
+import { SubscriptionService } from './subscriptions/subscription.service';
+import {
+  EntitlementService,
+  CallEligibility,
+} from './subscriptions/entitlement.service';
+import { BillingNotificationService } from './billing-notification.service';
+import { omit } from './omit.util';
 
 export interface UsageSnapshot {
   audioMinutes: number;
@@ -15,13 +20,7 @@ export interface UsageSnapshot {
   callsCompleted: number;
 }
 
-export interface UsageCost {
-  audioPaise: number;
-  videoPaise: number;
-  screenSharePaise: number;
-  totalPaise: number;
-}
-
+/** LEGACY per-minute paise rates (BillingRate) — internal cost basis only. */
 export interface BillingRates {
   audioPaise: number;
   videoPaise: number;
@@ -32,18 +31,18 @@ export interface BillingRates {
 }
 
 /**
- * Usage-based, per-participant-minute billing engine (PurpleCallio v2).
+ * Usage → credits.
  *
- * Rates:
- *  - Audio       ₹0.20 / participant-minute
- *  - Video       ₹0.80 / participant-minute
- *  - Screen share +₹0.10 / participant-minute (add-on to video)
+ * Measurement is unchanged: calls are metered as fractional
+ * participant-minutes per media type (UsageSegmentService →
+ * RatingEngineService). What changed is the output: a finished call's
+ * minutes are converted to credits (BillingConfig rates) and debited from
+ * the customer's prepaid wallet — there is no invoice and nothing is owed.
  *
- * Developer Free Tier: 500 audio + 200 video participant-minutes / month.
- * Screen sharing is always billable (no free allowance).
- *
- * Rates + free allowances are stored in the `BillingRate` table so admins
- * can edit them from the admin portal.
+ * Policy when a call runs past the balance: the call is never cut off; the
+ * debit takes whatever credits remain (the balance never goes negative) and
+ * the uncovered remainder is recorded as `shortfall` on the ledger entry
+ * for visibility. New calls are then blocked until credits are added.
  */
 @Injectable()
 export class UsageBillingService {
@@ -51,12 +50,14 @@ export class UsageBillingService {
 
   constructor(
     private prisma: PrismaService,
-    private billingService: BillingService,
-    private customerDiscounts: CustomerDiscountService,
-    private notifications: NotificationService,
+    private config: BillingConfigService,
+    private credits: CreditService,
+    private subscriptions: SubscriptionService,
+    private entitlements: EntitlementService,
+    private notify: BillingNotificationService,
   ) {}
 
-  /** Fetch the default billing rates (fall back to defaults if not seeded). */
+  /** LEGACY: pay-as-you-go rates (for historical invoices / internal cost). */
   async getRates(): Promise<BillingRates> {
     const rate = await this.prisma.billingRate.findUnique({
       where: { key: 'default' },
@@ -81,35 +82,50 @@ export class UsageBillingService {
     };
   }
 
-  /** Compute the cost (in paise) for a usage snapshot at the current rates. */
-  async computeCost(snapshot: UsageSnapshot): Promise<UsageCost> {
-    const rates = await this.getRates();
-    const audioPaise = snapshot.audioMinutes * rates.audioPaise;
-    const videoPaise = snapshot.videoMinutes * rates.videoPaise;
-    const screenSharePaise =
-      snapshot.screenShareMinutes * rates.screenSharePaise;
-    return {
-      audioPaise,
-      videoPaise,
-      screenSharePaise,
-      totalPaise: audioPaise + videoPaise + screenSharePaise,
+  /** LEGACY: update the internal cost-basis rates (not customer-facing). */
+  async updateRates(data: Partial<BillingRates>) {
+    const pick = (k: keyof BillingRates) =>
+      data[k] !== undefined &&
+      Number.isFinite(Number(data[k])) &&
+      Number(data[k]) >= 0
+        ? { [k]: Math.round(Number(data[k])) }
+        : {};
+    const fields = {
+      ...pick('audioPaise'),
+      ...pick('videoPaise'),
+      ...pick('screenSharePaise'),
     };
+    return this.prisma.billingRate.upsert({
+      where: { key: 'default' },
+      create: { key: 'default', ...fields },
+      update: fields,
+    });
+  }
+
+  /** Internal cost (paise) of usage at the legacy rate card — analytics only. */
+  private internalCostPaise(
+    m: {
+      audioMinutes: number;
+      videoMinutes: number;
+      screenShareMinutes: number;
+    },
+    rates: BillingRates,
+  ) {
+    return Math.round(
+      m.audioMinutes * rates.audioPaise +
+        m.videoMinutes * rates.videoPaise +
+        m.screenShareMinutes * rates.screenSharePaise,
+    );
   }
 
   /**
-   * Get (or create) the current usage record for a user, keyed to their
-   * subscription's own anchored billing cycle (currentPeriodStart/End) —
-   * NOT the calendar month. This is the single source of truth for "the
-   * current cycle" so this service and the legacy subscription-anchored
-   * code (BillingService, BillingJobsService) always write to the same
-   * Usage row. Creates a free subscription if the user has none yet,
-   * instead of hand-rolling cycle math here.
+   * The Usage row for the customer's current subscription period (created
+   * on demand). Analytics aggregate only — credits are the billing record.
    */
   async getOrCreateUsage(userId: string) {
-    const sub = await this.getOrCreateSubscriptionForUsage(userId);
+    const sub = await this.subscriptions.getActiveSubscription(userId);
     const cycleStart = sub.currentPeriodStart ?? new Date();
     const cycleEnd = sub.currentPeriodEnd ?? new Date();
-
     const existing = await this.prisma.usage.findUnique({
       where: {
         companyId_billingCycleStart: {
@@ -119,57 +135,33 @@ export class UsageBillingService {
       },
     });
     if (existing) return existing;
-
-    return this.prisma.usage.create({
-      data: {
-        companyId: userId,
-        subscriptionId: sub.id,
-        billingCycleStart: cycleStart,
-        billingCycleEnd: cycleEnd,
-        minutesUsed: 0,
-        minutesPurchased: 0,
-        callsCreated: 0,
-        callsCompleted: 0,
-        participants: 0,
-        apiRequests: 0,
-        audioMinutes: 0,
-        videoMinutes: 0,
-        screenShareMinutes: 0,
-        usageCostPaise: 0,
-      },
-    });
+    try {
+      return await this.prisma.usage.create({
+        data: {
+          companyId: userId,
+          subscriptionId: sub.id,
+          billingCycleStart: cycleStart,
+          billingCycleEnd: cycleEnd,
+        },
+      });
+    } catch (e: any) {
+      if (e?.code !== 'P2002') throw e;
+      return this.prisma.usage.findUniqueOrThrow({
+        where: {
+          companyId_billingCycleStart: {
+            companyId: userId,
+            billingCycleStart: cycleStart,
+          },
+        },
+      });
+    }
   }
 
   /**
-   * Resolve the subscription whose currentPeriodStart/End defines "the
-   * current cycle" for this user, creating a free one via BillingService's
-   * single subscription-creation path if none exists yet — so there is
-   * exactly one place a Subscription row is ever created.
-   */
-  private async getOrCreateSubscriptionForUsage(userId: string) {
-    return this.billingService.getOrCreateFreeSubscription(userId);
-  }
-
-  /**
-   * Record a completed call's usage and write a per-call line item.
-   *
-   * @param userId   owner of the project the call belongs to
-   * @param callId   the call id
-   * @param data     minutes + participants per media type
-   */
-  /**
-   * Records a completed call's usage exactly once. Callers (CallService.
-   * endCall) are expected to have already claimed an atomic status
-   * transition so this only runs once per call in practice; this existence
-   * check is a second layer so a duplicate call here (e.g. a retried job)
-   * is a no-op rather than double-billing. NOTE: this check-then-act is not
-   * itself race-proof — the durable fix is a DB unique constraint on
-   * CallUsage.callId (see schema.prisma TODO), blocked for now by
-   * pre-existing duplicate rows that need manual cleanup first.
-   *
-   * Minutes are kept as fractional participant-minutes (not rounded) so
-   * free-allowance exhaustion and cumulative billing stay accurate; round
-   * only when displaying to users.
+   * Records a finished call exactly once and debits its credits. The
+   * CallUsage row, the Usage aggregate and the credit debit commit in one
+   * transaction; `usage:<callId>` is the ledger idempotency key, so a
+   * retried recording can never charge twice.
    */
   async recordCallUsage(
     userId: string,
@@ -184,26 +176,56 @@ export class UsageBillingService {
     },
   ) {
     const usage = await this.getOrCreateUsage(userId);
-
-    const existing = await this.prisma.callUsage.findFirst({ where: { callId } });
+    const existing = await this.prisma.callUsage.findFirst({
+      where: { callId },
+    });
     if (existing) {
       this.logger.warn(
-        `Usage for call ${callId} was already recorded — skipping duplicate billing.`,
+        `Usage for call ${callId} was already recorded — skipping duplicate debit.`,
       );
       return usage;
     }
 
-    const cost = await this.computeCost({
-      audioMinutes: data.audioMinutes,
-      videoMinutes: data.videoMinutes,
-      screenShareMinutes: data.screenShareMinutes,
-      participants: data.participants,
-      callsCreated: 0,
-      callsCompleted: 1,
-    });
+    const [config, rates] = await Promise.all([
+      this.config.get(),
+      this.getRates(),
+    ]);
+    const credits = this.config.creditsFor(data, config);
+    const costPaise = this.internalCostPaise(data, rates);
+    const before = await this.credits.getSummary(
+      userId,
+      usage.billingCycleStart,
+    );
 
-    const [updated] = await this.prisma.$transaction([
-      this.prisma.usage.update({
+    const result = await this.credits.withWallet(userId, async (tx) => {
+      const dup = await tx.callUsage.findFirst({
+        where: { callId },
+        select: { id: true },
+      });
+      if (dup) return null;
+      const debit = await this.credits.debit(
+        {
+          userId,
+          amount: credits.totalCredits,
+          type: CreditTransactionType.USAGE_DEBIT,
+          referenceType: 'Call',
+          referenceId: callId,
+          idempotencyKey: `usage:${callId}`,
+          allowPartial: true,
+          metadata: {
+            callId,
+            audioMinutes: round2(data.audioMinutes),
+            videoMinutes: round2(data.videoMinutes),
+            screenShareMinutes: round2(data.screenShareMinutes),
+            participants: data.participants,
+            audioCredits: credits.audioCredits,
+            videoCredits: credits.videoCredits,
+            screenShareCredits: credits.screenShareCredits,
+          },
+        },
+        tx,
+      );
+      const updated = await tx.usage.update({
         where: { id: usage.id },
         data: {
           audioMinutes: { increment: data.audioMinutes },
@@ -211,10 +233,11 @@ export class UsageBillingService {
           screenShareMinutes: { increment: data.screenShareMinutes },
           participants: { increment: data.participants },
           callsCompleted: { increment: 1 },
-          usageCostPaise: { increment: cost.totalPaise },
+          usageCostPaise: { increment: costPaise },
+          creditsUsed: { increment: debit.debited },
         },
-      }),
-      this.prisma.callUsage.create({
+      });
+      await tx.callUsage.create({
         data: {
           usageId: usage.id,
           callId,
@@ -222,62 +245,80 @@ export class UsageBillingService {
           videoMinutes: data.videoMinutes,
           screenShareMinutes: data.screenShareMinutes,
           participants: data.participants,
-          costPaise: cost.totalPaise,
+          costPaise,
+          creditsCharged: debit.debited,
           startedAt: data.startedAt ?? null,
           endedAt: data.endedAt ?? new Date(),
         },
-      }),
-    ]);
+      });
+      return { updated, debit };
+    });
 
+    if (!result) return usage;
+    if (result.debit.shortfall > 0) {
+      this.logger.warn(
+        `Call ${callId} for ${userId} needed ${credits.totalCredits} credits; ${result.debit.shortfall} were not covered by the balance.`,
+      );
+    }
     this.logger.log(
-      `Recorded call ${callId} for user ${userId}: ${data.audioMinutes}a/${data.videoMinutes}v/${data.screenShareMinutes}ss mins, ${cost.totalPaise} paise`,
+      `Recorded call ${callId} for ${userId}: ${result.debit.debited} credits`,
     );
-    await this.notifyAllowanceThresholds(userId, updated, data);
-    return updated;
+    await this.notifyThresholds(
+      userId,
+      usage.subscriptionId ?? usage.id,
+      usage.billingCycleStart,
+      before,
+    );
+    return result.updated;
   }
 
   /**
-   * Notify when THIS call pushed the cycle's audio/video usage across 80% or
-   * 100% of the free allowance. Comparing before/after (rather than "is it
-   * over 80%?") means later calls in the same cycle never re-notify; the
-   * per-cycle dedupe key is the backstop for a retried recording. If one
-   * call jumps past both thresholds, only the 100% notice is sent.
+   * Low-credit notices when this debit crossed a configured threshold of the
+   * period's credits (e.g. 80/90/100%). Only the highest crossed threshold
+   * is sent; the per-period dedupe key stops repeats.
    */
-  private async notifyAllowanceThresholds(
+  private async notifyThresholds(
     userId: string,
-    usage: { id: string; audioMinutes: number; videoMinutes: number },
-    added: { audioMinutes: number; videoMinutes: number },
+    periodRef: string,
+    periodStart: Date,
+    before: { granted: number; balance: number; usedPercent: number },
   ) {
     try {
-      const rates = await this.getRates();
-      const media = [
-        { name: 'audio', used: usage.audioMinutes, added: added.audioMinutes, free: rates.freeAudioMins },
-        { name: 'video', used: usage.videoMinutes, added: added.videoMinutes, free: rates.freeVideoMins },
-      ];
-      for (const m of media) {
-        if (m.free <= 0 || m.added <= 0) continue;
-        const before = (m.used - m.added) / m.free;
-        const after = m.used / m.free;
-        const crossed = [1, 0.8].find((t) => before < t && after >= t);
-        if (!crossed) continue;
-
-        const reached = crossed === 1;
-        await this.notifications.createNotification({
-          userId,
-          type: reached
-            ? NotificationType.USAGE_LIMIT_REACHED
-            : NotificationType.USAGE_LIMIT_APPROACHING,
-          title: reached ? 'Usage limit reached' : 'Usage approaching limit',
-          message: reached
-            ? `You've reached your free ${m.name} allowance for this billing cycle. Additional ${m.name} usage is billed at your standard rates.`
-            : `You've used 80% of your free ${m.name} allowance for this billing cycle.`,
-          metadata: { usageId: usage.id, media: m.name },
-          dedupeKey: `usage:${usage.id}:${m.name}:${reached ? 100 : 80}`,
-        });
-      }
+      const [config, after] = await Promise.all([
+        this.config.get(),
+        this.credits.getSummary(userId, periodStart),
+      ]);
+      if (after.granted <= 0) return;
+      const beforePct =
+        before.granted > 0
+          ? ((before.granted - before.balance) / before.granted) * 100
+          : 0;
+      const afterPct =
+        after.balance <= 0
+          ? 100
+          : ((after.granted - after.balance) / after.granted) * 100;
+      const crossed = [...config.lowCreditThresholds]
+        .sort((a, b) => b - a)
+        .find((t) => beforePct < t && afterPct >= t);
+      if (!crossed) return;
+      await this.notify.creditsThreshold(
+        userId,
+        crossed,
+        `${periodRef}:${periodStart.toISOString()}`,
+      );
     } catch (err) {
-      this.logger.warn(`Usage threshold check failed for ${userId}: ${String(err)}`);
+      this.logger.warn(
+        `Credit threshold check failed for ${userId}: ${String(err)}`,
+      );
     }
+  }
+
+  /** The single eligibility rule for starting a call (BillingGuard + CallService). */
+  async canStartCall(
+    ownerId: string,
+    type: 'AUDIO' | 'VIDEO',
+  ): Promise<CallEligibility> {
+    return this.entitlements.canStartCall(ownerId, type);
   }
 
   private async getAggregatedCallUsage(usageId: string) {
@@ -288,6 +329,7 @@ export class UsageBillingService {
         videoMinutes: true,
         screenShareMinutes: true,
         participants: true,
+        creditsCharged: true,
       },
       _count: true,
     });
@@ -296,79 +338,26 @@ export class UsageBillingService {
       videoMinutes: agg._sum.videoMinutes ?? 0,
       screenShareMinutes: agg._sum.screenShareMinutes ?? 0,
       participants: agg._sum.participants ?? 0,
+      creditsCharged: agg._sum.creditsCharged ?? 0,
       callsCompleted: agg._count,
     };
   }
 
-  /**
-   * Current usage + cost for the user's current cycle.
-   */
+  /** Current period: minutes, credits consumed per media, wallet and plan. */
   async getCurrentUsage(userId: string) {
     const usage = await this.getOrCreateUsage(userId);
-    const rates = await this.getRates();
-    const totals = await this.getAggregatedCallUsage(usage.id);
-    const cost = await this.computeCost({
-      audioMinutes: totals.audioMinutes,
-      videoMinutes: totals.videoMinutes,
-      screenShareMinutes: totals.screenShareMinutes,
-      participants: totals.participants,
-      callsCreated: usage.callsCreated,
-      callsCompleted: totals.callsCompleted,
-    });
-
-    // Free-tier + payment-method status so the UI can decide whether to show
-    // costs and when to prompt the user to add a card.
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { razorpayTokenId: true },
-    });
-    const hasPaymentMethod = !!user?.razorpayTokenId;
-    const isFreeTier = !hasPaymentMethod;
-
-    // Free-allowance usage percentage (max of audio/video) for the 90% warning.
-    const audioPct = rates.freeAudioMins > 0
-      ? Math.round((totals.audioMinutes / rates.freeAudioMins) * 100)
-      : 0;
-    const videoPct = rates.freeVideoMins > 0
-      ? Math.round((totals.videoMinutes / rates.freeVideoMins) * 100)
-      : 0;
-    const freeUsagePercent = Math.max(audioPct, videoPct);
-
-    // Free allowance only covers audio + video (screen share always paid).
-    const billableAudio = Math.max(
-      0,
-      totals.audioMinutes - rates.freeAudioMins,
-    );
-    const billableVideo = Math.max(
-      0,
-      totals.videoMinutes - rates.freeVideoMins,
-    );
-    // Screen share is always billable.
-    const billableScreenShare = totals.screenShareMinutes;
-
-    const billableCostAudio = billableAudio * rates.audioPaise;
-    const billableCostVideo = billableVideo * rates.videoPaise;
-    const billableCostScreenShare =
-      billableScreenShare * rates.screenSharePaise;
-    const billableTotal = billableCostAudio + billableCostVideo + billableCostScreenShare;
-
-    // Estimate end-of-month based on elapsed days in the cycle.
-    const start = usage.billingCycleStart.getTime();
-    const now = Date.now();
-    const elapsedDays = Math.max(1, (now - start) / 86400000);
-    const daysInMonth = Math.max(
-      1,
-      (usage.billingCycleEnd.getTime() - start) / 86400000,
-    );
-    const projectedPaise = Math.round(
-      (billableTotal / elapsedDays) * daysInMonth,
-    );
-
+    const sub = await this.subscriptions.getActiveSubscription(userId);
+    const [totals, config, wallet, media] = await Promise.all([
+      this.getAggregatedCallUsage(usage.id),
+      this.config.get(),
+      this.credits.getSummary(userId, sub.currentPeriodStart),
+      this.entitlements.mediaCreditsUsed(
+        userId,
+        sub.currentPeriodStart ?? usage.billingCycleStart,
+      ),
+    ]);
     return {
-      cycle: {
-        start: usage.billingCycleStart,
-        end: usage.billingCycleEnd,
-      },
+      cycle: { start: usage.billingCycleStart, end: usage.billingCycleEnd },
       usage: {
         audioMinutes: totals.audioMinutes,
         videoMinutes: totals.videoMinutes,
@@ -377,91 +366,39 @@ export class UsageBillingService {
         callsCreated: usage.callsCreated,
         callsCompleted: totals.callsCompleted,
       },
-      freeAllowance: {
-        audioMinutes: rates.freeAudioMins,
-        videoMinutes: rates.freeVideoMins,
+      credits: {
+        audio: media.audioCredits,
+        video: media.videoCredits,
+        screenShare: media.screenShareCredits,
+        total:
+          media.audioCredits + media.videoCredits + media.screenShareCredits,
+        charged: totals.creditsCharged,
       },
-      rates: {
-        audioPaise: rates.audioPaise,
-        videoPaise: rates.videoPaise,
-        screenSharePaise: rates.screenSharePaise,
+      creditRates: {
+        audioCreditsPerMinute: config.audioCreditsPerMinute,
+        videoCreditsPerMinute: config.videoCreditsPerMinute,
+        screenShareCreditsPerMinute: config.screenShareCreditsPerMinute,
       },
-cost: {
-        audioPaise: billableCostAudio,
-        videoPaise: billableCostVideo,
-        screenSharePaise: billableCostScreenShare,
-        totalPaise: billableTotal,
-      },
-      estimatedMonthEndPaise: projectedPaise,
-      nextBillingDate: new Date(usage.billingCycleEnd.getTime() + 1),
-      // Flags for the UI: free-tier status, card presence, free-usage %.
-      isFreeTier,
-      hasPaymentMethod,
-      freeUsagePercent,
+      wallet,
+      subscription: this.subscriptions.serialize(sub),
     };
   }
 
-  /**
-   * Per-call line items for a user's current cycle (call analytics).
-   */
+  /** Per-call usage + credits for the current period (newest first). */
   async getCallUsage(userId: string, pageValue?: string) {
     const page = Math.max(1, parseInt(pageValue ?? '', 10) || 1);
-    const pageSize = Math.min(
-      100,
-      Number(process.env.PAGE_SIZE) || 10,
-    );
+    const pageSize = Math.min(100, Number(process.env.PAGE_SIZE) || 10);
     const usage = await this.getOrCreateUsage(userId);
-    const rates = await this.getRates();
-    // Apply the monthly audio/video allowance to calls in the order they
-    // occurred. `CallUsage.costPaise` is the raw rated amount retained for
-    // internal analytics; customers must see the amount actually chargeable
-    // after their free allowance has been consumed.
-    let remainingAudioMinutes = rates.freeAudioMins;
-    let remainingVideoMinutes = rates.freeVideoMins;
-
-    const calls = await this.prisma.callUsage.findMany({
-      where: { usageId: usage.id },
-      orderBy: { createdAt: 'asc' },
-    });
-
-    const ratedCalls = calls
-      .map((call) => {
-        const billableAudioMinutes = Math.max(
-          0,
-          call.audioMinutes - remainingAudioMinutes,
-        );
-        const billableVideoMinutes = Math.max(
-          0,
-          call.videoMinutes - remainingVideoMinutes,
-        );
-
-        remainingAudioMinutes = Math.max(
-          0,
-          remainingAudioMinutes - call.audioMinutes,
-        );
-        remainingVideoMinutes = Math.max(
-          0,
-          remainingVideoMinutes - call.videoMinutes,
-        );
-
-        // Screen sharing has no free allowance; it is an add-on to video.
-        const billedCostPaise = Math.round(
-          billableAudioMinutes * rates.audioPaise +
-            billableVideoMinutes * rates.videoPaise +
-            call.screenShareMinutes * rates.screenSharePaise,
-        );
-
-        return {
-          ...call,
-          billedCostPaise,
-          billableAudioMinutes,
-          billableVideoMinutes,
-        };
-      })
-      .reverse();
-
-    const total = ratedCalls.length;
-    const pageData = ratedCalls.slice((page - 1) * pageSize, page * pageSize);
+    const where = { usageId: usage.id };
+    const [total, pageData] = await Promise.all([
+      this.prisma.callUsage.count({ where }),
+      this.prisma.callUsage.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
 
     const callIds = pageData.map((c) => c.callId);
     const segmentsByCall = new Map<
@@ -488,9 +425,8 @@ cost: {
           0,
           (seg.endedAt.getTime() - seg.startedAt.getTime()) / 1000,
         );
-        // Wall-clock only (display context). Billable usage is the
-        // per-participant audioMinutes/videoMinutes/screenShareMinutes on
-        // the CallUsage row itself — never derive it from these seconds.
+        // Wall-clock only (display context); credits come from the
+        // per-participant minutes on the CallUsage row.
         entry.callSeconds += seconds;
         if (seg.audio) entry.audioSeconds += seconds;
         if (seg.video) entry.videoSeconds += seconds;
@@ -500,15 +436,17 @@ cost: {
     }
 
     return {
-      data: pageData.map((call) => ({
-        ...call,
-        durationSeconds: segmentsByCall.get(call.callId) ?? {
-          callSeconds: 0,
-          audioSeconds: 0,
-          videoSeconds: 0,
-          screenShareSeconds: 0,
-        },
-      })),
+      data: pageData
+        .map((row) => omit(row, 'costPaise'))
+        .map((call) => ({
+          ...call,
+          durationSeconds: segmentsByCall.get(call.callId) ?? {
+            callSeconds: 0,
+            audioSeconds: 0,
+            videoSeconds: 0,
+            screenShareSeconds: 0,
+          },
+        })),
       total,
       page,
       pageSize,
@@ -516,15 +454,13 @@ cost: {
     };
   }
 
-  /**
-   * Paginated history of a user's past billing cycles' usage (newest
-   * first), including the still-open current cycle. Each row is one
-   * anchored cycle now that Usage is keyed to Subscription.currentPeriod*
-   * rather than the calendar month.
-   */
+  /** Usage per subscription period (newest first), including the current one. */
   async getUsageHistory(userId: string, pageValue?: string) {
     const page = Math.max(1, parseInt(pageValue ?? '', 10) || 1);
-    const pageSize = Math.min(100, Math.max(1, Number(process.env.PAGE_SIZE) || 10));
+    const pageSize = Math.min(
+      100,
+      Math.max(1, Number(process.env.PAGE_SIZE) || 10),
+    );
     const where = { companyId: userId };
     const [total, data] = await Promise.all([
       this.prisma.usage.count({ where }),
@@ -535,170 +471,18 @@ cost: {
         take: pageSize,
       }),
     ]);
-
-    const now = Date.now();
-    const rates = await this.getRates();
-    const withCurrentRecomputed = await Promise.all(
-      data.map(async (row) => {
-        if (row.billingCycleEnd.getTime() > now) {
-          const totals = await this.getAggregatedCallUsage(row.id);
-          const billableVideo = Math.max(0, totals.videoMinutes - rates.freeVideoMins);
-          const billableAudio = Math.max(0, totals.audioMinutes - rates.freeAudioMins);
-          return {
-            ...row,
-            audioMinutes: totals.audioMinutes,
-            videoMinutes: totals.videoMinutes,
-            screenShareMinutes: totals.screenShareMinutes,
-            participants: totals.participants,
-            callsCompleted: totals.callsCompleted,
-            usageCostPaise:
-              billableAudio * rates.audioPaise +
-              billableVideo * rates.videoPaise +
-              totals.screenShareMinutes * rates.screenSharePaise,
-          };
-        }
-        return row;
-      }),
-    );
-
-    return { data: withCurrentRecomputed, total, page, pageSize, pageCount: Math.max(1, Math.ceil(total / pageSize)) };
-  }
-
-  /**
-   * Whether the user can still start a new AUDIO/VIDEO call under the free
-   * allowance. Screen-share is always allowed (billable). Returns remaining
-   * free minutes so the caller can decide.
-   */
-  async getFreeAllowanceStatus(userId: string) {
-    const usage = await this.getOrCreateUsage(userId);
-    const rates = await this.getRates();
-    const totals = await this.getAggregatedCallUsage(usage.id);
     return {
-      audioRemaining: Math.max(0, rates.freeAudioMins - totals.audioMinutes),
-      videoRemaining: Math.max(0, rates.freeVideoMins - totals.videoMinutes),
-      audioExhausted: totals.audioMinutes >= rates.freeAudioMins,
-      videoExhausted: totals.videoMinutes >= rates.freeVideoMins,
+      data: data.map((row) => omit(row, 'usageCostPaise')),
+      total,
+      page,
+      pageSize,
+      pageCount: Math.max(1, Math.ceil(total / pageSize)),
     };
   }
 
-  /**
-   * Whether the project owner has a billing relationship that can cover
-   * paid usage once the free allowance runs out: a saved Razorpay card, or
-   * (legacy) an active subscription.
-   */
-  async hasPaymentMethod(ownerId: string): Promise<boolean> {
-    const sub = await this.prisma.subscription.findFirst({
-      where: { companyId: ownerId },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (sub && sub.status === 'ACTIVE') return true;
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: ownerId },
-      select: { razorpayCustomerId: true, razorpayTokenId: true },
-    });
-    return !!user?.razorpayCustomerId && !!user?.razorpayTokenId;
-  }
-
-  /**
-   * The single source of truth for "can this project owner start a new call
-   * of this type right now": free allowance first, then a saved payment
-   * method for paid usage. Screen-share is always allowed (always billable,
-   * no free allowance). Used by both BillingGuard (HTTP calls) and
-   * CallService (calls started outside the guarded HTTP path, e.g. the
-   * playground) so the two never diverge.
-   */
-  async canStartCall(
-    ownerId: string,
-    type: 'AUDIO' | 'VIDEO',
-  ): Promise<{ allowed: boolean; reason?: string }> {
-    const status = await this.getFreeAllowanceStatus(ownerId);
-    const exhausted = type === 'AUDIO' ? status.audioExhausted : status.videoExhausted;
-    if (!exhausted) return { allowed: true };
-
-    if (!(await this.hasPaymentMethod(ownerId))) {
-      return {
-        allowed: false,
-        reason: `Your free ${type.toLowerCase()} allowance is used up. Add a payment method to continue making calls.`,
-      };
-    }
-
-    // Paid usage from here on — enforce the customer's own spending cap (if
-    // they set one). Protects both them (a leaked API key running up a
-    // surprise bill) and us (unbounded exposure if a card later fails).
-    return this.checkSpendingLimit(ownerId);
-  }
-
-  /**
-   * Whether the owner's current-cycle billed cost is still under their
-   * self-set monthly spending cap. No cap set → always allowed.
-   *
-   * Compared net of any active customer discount (not the raw billable
-   * cost): the spending limit exists to protect the customer from a
-   * surprise bill and cap PurpleCallio's exposure to unpaid usage — both of
-   * those are about the amount that will actually be charged, so a
-   * discounted customer's cap reflects their real, lower cost rather than
-   * the pre-discount rate card. This does NOT include tax, matching the
-   * pre-discount behavior this replaces (which also compared a pre-tax
-   * figure) — only the discount adjustment was added.
-   */
-  async checkSpendingLimit(
-    ownerId: string,
-  ): Promise<{ allowed: boolean; reason?: string }> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: ownerId },
-      select: { spendingLimitPaise: true },
-    });
-    if (!user?.spendingLimitPaise) return { allowed: true };
-
-    const current = await this.getCurrentUsage(ownerId);
-    const discount = await this.customerDiscounts.getActiveDiscount(ownerId);
-    const discountPaise = calculateDiscountPaise(
-      current.cost.totalPaise,
-      discount?.percentage,
-    );
-    const netPaise = current.cost.totalPaise - discountPaise;
-
-    if (netPaise >= user.spendingLimitPaise) {
-      return {
-        allowed: false,
-        reason: `You've reached your monthly spending limit of ₹${(user.spendingLimitPaise / 100).toFixed(2)}. Raise or remove it in Billing settings to continue making calls.`,
-      };
-    }
-    return { allowed: true };
-  }
-
-  /** Get the customer's self-set monthly spending cap (paise), if any. */
-  async getSpendingLimit(userId: string): Promise<{ spendingLimitPaise: number | null }> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { spendingLimitPaise: true },
-    });
-    return { spendingLimitPaise: user?.spendingLimitPaise ?? null };
-  }
-
-  /** Set (or clear, with null) the customer's monthly spending cap (paise). */
-  async setSpendingLimit(
-    userId: string,
-    spendingLimitPaise: number | null,
-  ): Promise<{ spendingLimitPaise: number | null }> {
-    if (spendingLimitPaise != null && (!Number.isFinite(spendingLimitPaise) || spendingLimitPaise < 0)) {
-      throw new BadRequestException('spendingLimitPaise must be a non-negative number or null.');
-    }
-    const updated = await this.prisma.user.update({
-      where: { id: userId },
-      data: { spendingLimitPaise },
-      select: { spendingLimitPaise: true },
-    });
-    return { spendingLimitPaise: updated.spendingLimitPaise };
-  }
-
-/**
-   * Admin: aggregate usage across all users since a given date.
-   * Sums per-media-type minutes + cost for all Usage rows in the window.
-   */
+  /** Admin: platform usage since a date (minutes, credits, internal cost). */
   async summarizeAdminUsage(since: Date) {
-    const [aggregate, lineItems] = await Promise.all([
+    const [aggregate, lineItems, creditsDebited] = await Promise.all([
       this.prisma.usage.aggregate({
         where: { billingCycleStart: { gte: since } },
         _sum: {
@@ -719,11 +503,15 @@ cost: {
           screenShareMinutes: true,
           participants: true,
           costPaise: true,
+          creditsCharged: true,
         },
         _count: true,
       }),
+      this.prisma.creditTransaction.aggregate({
+        where: { type: 'USAGE_DEBIT', createdAt: { gte: since } },
+        _sum: { amount: true },
+      }),
     ]);
-
     const rates = await this.getRates();
     return {
       since,
@@ -732,7 +520,7 @@ cost: {
         videoMinutes: aggregate._sum.videoMinutes ?? 0,
         screenShareMinutes: aggregate._sum.screenShareMinutes ?? 0,
         participants: aggregate._sum.participants ?? 0,
-        estimatedCostPaise: aggregate._sum.usageCostPaise ?? 0,
+        internalCostPaise: aggregate._sum.usageCostPaise ?? 0,
         callsCompleted: aggregate._sum.callsCompleted ?? 0,
         activeAccounts: aggregate._count,
       },
@@ -741,38 +529,26 @@ cost: {
         videoMinutes: lineItems._sum.videoMinutes ?? 0,
         screenShareMinutes: lineItems._sum.screenShareMinutes ?? 0,
         participants: lineItems._sum.participants ?? 0,
-        costPaise: lineItems._sum.costPaise ?? 0,
+        internalCostPaise: lineItems._sum.costPaise ?? 0,
+        creditsCharged: lineItems._sum.creditsCharged ?? 0,
         calls: lineItems._count,
       },
-      rates,
+      creditsConsumed: -(creditsDebited._sum.amount ?? 0),
+      internalRates: rates,
       currency: 'INR',
     };
   }
 
-  /** Update billing rates (admin). */
-  async updateRates(data: Partial<BillingRates>) {
-    const existing = await this.prisma.billingRate.findUnique({
-      where: { key: 'default' },
+  /** Throws if a call is not owned by the user (helper for controllers). */
+  async assertCallOwner(callId: string, userId: string) {
+    const call = await this.prisma.call.findFirst({
+      where: { id: callId, project: { ownerId: userId } },
+      select: { id: true },
     });
-    if (!existing) {
-      throw new NotFoundException('Billing rate not found. Run the seed.');
-    }
-    return this.prisma.billingRate.update({
-      where: { id: existing.id },
-      data: {
-        ...(data.audioPaise !== undefined && { audioPaise: data.audioPaise }),
-        ...(data.videoPaise !== undefined && { videoPaise: data.videoPaise }),
-        ...(data.screenSharePaise !== undefined && {
-          screenSharePaise: data.screenSharePaise,
-        }),
-        ...(data.freeAudioMins !== undefined && {
-          freeAudioMins: data.freeAudioMins,
-        }),
-        ...(data.freeVideoMins !== undefined && {
-          freeVideoMins: data.freeVideoMins,
-        }),
-        ...(data.taxPercent !== undefined && { taxPercent: data.taxPercent }),
-      },
-    });
+    if (!call) throw new NotFoundException('Call not found');
   }
+}
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
 }

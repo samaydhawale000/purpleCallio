@@ -196,7 +196,7 @@ const logout = useAuthStore((s) => s.logout);
             )}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-[#170B2E] truncate">{displayName}</p>
-              <p className="text-xs text-[#3D3650] truncate">{user?.email ?? 'Starter Plan'}</p>
+              {user?.email && <p className="text-xs text-[#3D3650] truncate">{user.email}</p>}
             </div>
             <button
               onClick={() => {

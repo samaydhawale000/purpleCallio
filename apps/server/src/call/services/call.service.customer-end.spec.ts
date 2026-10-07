@@ -33,7 +33,6 @@ describe('CallService customer call termination', () => {
       {} as never,
       gateway as never,
       { fireForCall: jest.fn() } as never,
-      {} as never,
       { recordCallUsage: jest.fn().mockResolvedValue({}) } as never,
       { rebuildSegmentsForCall: jest.fn().mockResolvedValue([]) } as never,
       {
@@ -42,6 +41,7 @@ describe('CallService customer call termination', () => {
           totals: { audioMins: 1, videoMins: 0, screenShareMins: 0 },
         }),
       } as never,
+      { hasFeature: jest.fn().mockResolvedValue(true) } as never,
     );
 
     await service.endCall(call.id);

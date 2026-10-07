@@ -29,16 +29,14 @@ export interface RatedCall {
 }
 
 /**
- * Usage Rating Engine.
+ * Usage Rating Engine — the measurement layer.
  *
- * This is the ONLY place money is calculated. It takes segments (built by the
- * segment builder) and converts them into paise using the current rates:
- *   - Audio:       ₹0.20 / participant-minute
- *   - Video:       ₹0.80 / participant-minute
- *   - Screen share:+₹0.10 / participant-minute (add-on to video)
- *
- * A segment is rated by: duration(seconds / 60) × participantCount × rate.
- * Video segments also include screen-share add-on when screenShare is true.
+ * Turns segments (built by the segment builder) into fractional
+ * participant-minutes per media type, rated per participant. Those minutes
+ * are what prepaid billing consumes: BillingConfigService converts them to
+ * credits. The `costPaise` this engine also records uses the legacy
+ * per-minute rate card (BillingRate) and is an internal cost basis for
+ * admin analytics only — customers are never charged from it.
  */
 @Injectable()
 export class RatingEngineService {
@@ -118,7 +116,8 @@ export class RatingEngineService {
         audio: seg.audio,
         video: seg.video,
         screenShare: seg.screenShare,
-        participants: (seg.participants as unknown as ParticipantMediaState[]) ?? [],
+        participants:
+          (seg.participants as unknown as ParticipantMediaState[]) ?? [],
       });
       rated.push(r);
       audioMins += r.audioMins;
@@ -153,7 +152,13 @@ export class RatingEngineService {
       costPaise: number;
       callId?: string;
     }[],
-  ): Promise<{ audioMins: number; videoMins: number; screenShareMins: number; costPaise: number; calls: number }> {
+  ): Promise<{
+    audioMins: number;
+    videoMins: number;
+    screenShareMins: number;
+    costPaise: number;
+    calls: number;
+  }> {
     let audioMins = 0;
     let videoMins = 0;
     let screenShareMins = 0;
@@ -168,7 +173,13 @@ export class RatingEngineService {
       if (seg.callId) calls.add(seg.callId);
     }
 
-    return { audioMins, videoMins, screenShareMins, costPaise, calls: calls.size };
+    return {
+      audioMins,
+      videoMins,
+      screenShareMins,
+      costPaise,
+      calls: calls.size,
+    };
   }
 
   /**

@@ -25,8 +25,9 @@ export class AdminSupportController {
     @Query('page') page?: string,
     @Query('search') search?: string,
     @Query('status') status?: string,
+    @Query('type') type?: string,
   ) {
-    return this.supportService.listAdminTickets({ page, search, status });
+    return this.supportService.listAdminTickets({ page, search, status, type });
   }
 
   @Get(':id')

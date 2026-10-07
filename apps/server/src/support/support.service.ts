@@ -4,6 +4,7 @@ import {
   Prisma,
   SupportSenderType,
   SupportTicketStatus,
+  SupportTicketType,
 } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,6 +25,7 @@ type TicketRow = {
   userId: string;
   ticketNumber: number;
   subject: string;
+  type?: SupportTicketType;
   documentationId: string | null;
   status: SupportTicketStatus;
   createdAt: Date;
@@ -51,25 +53,7 @@ export class SupportService {
 
   // ── Customer ─────────────────────────────────────────
   async createTicket(userId: string, dto: CreateTicketDto) {
-    // Ticket + first message in one nested write, so a ticket can never exist
-    // without its opening message. ticketNumber comes from a DB sequence.
-    const ticket = await this.prisma.supportTicket.create({
-      data: {
-        userId,
-        subject: dto.subject.trim(),
-        documentationId: dto.documentationId || null,
-        lastCustomerMessageAt: new Date(),
-        customerLastReadAt: new Date(),
-        messages: {
-          create: {
-            senderId: userId,
-            senderType: SupportSenderType.CUSTOMER,
-            message: dto.message.trim(),
-          },
-        },
-      },
-      include: { user: { select: { name: true, email: true } } },
-    });
+    const ticket = await this.createTicketRecord(this.prisma, userId, dto);
     const summary = this.toSummary(ticket);
 
     await this.notifications.createNotification({
@@ -90,6 +74,44 @@ export class SupportService {
     this.broadcast(ticket.id, userId);
 
     return summary;
+  }
+
+  /**
+   * Ticket + first message in one nested write, so a ticket can never exist
+   * without its opening message. ticketNumber comes from a DB sequence.
+   * Accepts a transaction client so other flows (e.g. a custom-plan
+   * request) can create a ticket atomically with their own records; those
+   * callers send their own notifications and call broadcastTicket().
+   */
+  async createTicketRecord(
+    client: Prisma.TransactionClient | PrismaService,
+    userId: string,
+    dto: CreateTicketDto,
+    type: SupportTicketType = SupportTicketType.GENERAL,
+  ) {
+    return client.supportTicket.create({
+      data: {
+        userId,
+        subject: dto.subject.trim(),
+        type,
+        documentationId: dto.documentationId || null,
+        lastCustomerMessageAt: new Date(),
+        customerLastReadAt: new Date(),
+        messages: {
+          create: {
+            senderId: userId,
+            senderType: SupportSenderType.CUSTOMER,
+            message: dto.message.trim(),
+          },
+        },
+      },
+      include: { user: { select: { name: true, email: true } } },
+    });
+  }
+
+  /** Tell the ticket owner's and admins' open dashboards to refetch. */
+  broadcastTicket(ticketId: string, ownerId: string) {
+    this.broadcast(ticketId, ownerId);
   }
 
   async listCustomerTickets(userId: string) {
@@ -165,6 +187,7 @@ export class SupportService {
     page?: string;
     search?: string;
     status?: string;
+    type?: string;
   }) {
     const page = Math.max(1, parseInt(params.page ?? '', 10) || 1);
     const pageSize = Math.min(
@@ -178,6 +201,12 @@ export class SupportService {
       (Object.values(SupportTicketStatus) as string[]).includes(params.status)
     ) {
       where.status = params.status as SupportTicketStatus;
+    }
+    if (
+      params.type &&
+      (Object.values(SupportTicketType) as string[]).includes(params.type)
+    ) {
+      where.type = params.type as SupportTicketType;
     }
 
     const search = params.search?.trim();
@@ -246,6 +275,7 @@ export class SupportService {
           orderBy: { createdAt: 'asc' },
           include: { sender: { select: { name: true, email: true } } },
         },
+        customPlanRequest: { select: { id: true, status: true } },
       },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
@@ -256,6 +286,7 @@ export class SupportService {
     return {
       ...this.toSummary(ticket),
       customer: ticket.user,
+      customPlanRequest: ticket.customPlanRequest,
       messages: ticket.messages.map((m) => ({
         id: m.id,
         senderType: m.senderType,
@@ -279,6 +310,13 @@ export class SupportService {
       SupportSenderType.ADMIN,
       message,
     );
+    // First team reply on a custom-plan conversation marks it contacted.
+    await this.prisma.customPlanRequest
+      ?.updateMany({
+        where: { ticketId: ticket.id, status: 'NEW' },
+        data: { status: 'CONTACTED' },
+      })
+      .catch(() => undefined);
     await this.notifications.createNotification({
       userId: ticket.userId,
       type: NotificationType.SUPPORT_TICKET_REPLY,
@@ -382,6 +420,7 @@ export class SupportService {
       id: t.id,
       ticketNumber: `${TICKET_PREFIX}${t.ticketNumber}`,
       subject: t.subject,
+      type: t.type ?? SupportTicketType.GENERAL,
       documentationId: t.documentationId,
       status: t.status,
       createdAt: t.createdAt,

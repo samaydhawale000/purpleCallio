@@ -13,6 +13,7 @@ import {
    ArrowUpRight,
    Receipt,
    Mic,
+   Coins,
 } from "lucide-react";
 import { useAuthStore } from "../../store/auth.store";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
@@ -30,18 +31,10 @@ interface CurrentUsage {
       callsCreated: number;
       callsCompleted: number;
    };
-   freeAllowance: { audioMinutes: number; videoMinutes: number };
-   rates: { audioPaise: number; videoPaise: number; screenSharePaise: number };
-   cost: {
-      audioPaise: number;
-      videoPaise: number;
-      screenSharePaise: number;
-      totalPaise: number;
-   };
-   estimatedMonthEndPaise: number;
-   isFreeTier?: boolean;
-   hasPaymentMethod?: boolean;
-   freeUsagePercent?: number;
+   credits?: { audio: number; video: number; screenShare: number; total: number; charged: number };
+   creditRates?: { audioCreditsPerMinute: number; videoCreditsPerMinute: number; screenShareCreditsPerMinute: number };
+   wallet?: { available: number; used: number; usedPercent: number; granted: number };
+   subscription?: { planName: string | null; planType: string | null };
 }
 
 interface CallUse {
@@ -51,12 +44,11 @@ interface CallUse {
    videoMinutes: number;
    screenShareMinutes: number;
    participants: number;
-   costPaise: number;
-   billedCostPaise: number;
+   creditsCharged?: number;
    startedAt: string | null;
    endedAt: string | null;
    createdAt: string;
-   // Wall-clock seconds (display context only — not billable usage).
+   // Wall-clock seconds (display context only — not credited usage).
    durationSeconds?: {
       callSeconds?: number;
       audioSeconds: number;
@@ -85,16 +77,20 @@ interface SegmentView {
    audioMinutes?: number;
    videoMinutes?: number;
    screenShareMinutes?: number;
-   costPaise: number;
 }
 
-const paiseToINR = (paise: number | null | undefined) =>
-   `₹${((Number.isFinite(paise) ? Number(paise) : 0) / 100).toFixed(2)}`;
+const formatCredits = (n: number | null | undefined) =>
+   (Number.isFinite(n) ? Number(n) : 0).toLocaleString("en-IN");
+
+const rateLabel = (rate: number | undefined, media: string) =>
+   rate == null
+      ? "Loading rate…"
+      : `1 ${media} participant-minute = ${formatCredits(rate)} credit${rate === 1 ? "" : "s"}`;
 
 // Real wall-clock duration, given actual elapsed seconds (from the call's
 // segment timeline) rather than guessed by dividing participant-minutes by
-// participant count. Use this for per-call display; only billing math
-// should ever use participant-minutes.
+// participant count. Use this for per-call display; credits are always
+// computed from participant-minutes.
 function formatDuration(totalSecondsRaw: number) {
    const totalSeconds = Math.max(0, Math.round(totalSecondsRaw));
    const wholeMinutes = Math.floor(totalSeconds / 60);
@@ -104,7 +100,7 @@ function formatDuration(totalSecondsRaw: number) {
    return `${wholeMinutes} min ${seconds} sec`;
 }
 
-// Participant-minutes are billed values from the backend rating engine;
+// Participant-minutes are rated values from the backend rating engine;
 // this only formats them for display (no rounding of stored values).
 function formatParticipantMinutes(value: number | null | undefined) {
    return (Number.isFinite(value) ? Number(value) : 0).toFixed(2);
@@ -121,6 +117,7 @@ export default function UsagePage() {
    const [loading, setLoading] = useState(true);
    const [expandedCall, setExpandedCall] = useState<string | null>(null);
    const [segments, setSegments] = useState<Record<string, SegmentView[]>>({});
+   const [segmentCredits, setSegmentCredits] = useState<Record<string, number | undefined>>({});
    const [segmentLoading, setSegmentLoading] = useState<string | null>(null);
    const [callPage, setCallPage] = useState(1);
    const [callPageSize, setCallPageSize] = useState(10);
@@ -142,6 +139,10 @@ export default function UsagePage() {
                   ...prev,
                   [callId]: res.data.segments ?? [],
                }));
+               setSegmentCredits((prev) => ({
+                  ...prev,
+                  [callId]: res.data.totals?.credits?.totalCredits,
+               }));
             } catch (e) {
                setSegments((prev) => ({ ...prev, [callId]: [] }));
             } finally {
@@ -149,7 +150,7 @@ export default function UsagePage() {
             }
          }
       },
-      [expandedCall, segments, api],
+      [expandedCall, segments],
    );
 
    const fetchCallUsage = useCallback(async () => {
@@ -229,94 +230,86 @@ export default function UsagePage() {
    }
 
    const u = usage?.usage;
-   const cost = usage?.cost;
-   const free = usage?.freeAllowance;
-   const rates = usage?.rates;
-   const paiseToINRShort = (p: number | null | undefined) =>
-      `₹${((Number.isFinite(p) ? Number(p) : 0) / 100).toFixed(2)}`;
+   const credits = usage?.credits;
+   const rates = usage?.creditRates;
+   const wallet = usage?.wallet;
    const maxMin = Math.max(...chart.map((d) => d.minutes), 1);
    const totalCallsInChart = chart.reduce((acc, d) => acc + d.calls, 0);
-   const totalBillableMinutes =
+   const totalParticipantMinutes =
       (u?.audioMinutes ?? 0) +
       (u?.videoMinutes ?? 0) +
       (u?.screenShareMinutes ?? 0);
+   const lowCredits = wallet ? wallet.available <= 0 || wallet.usedPercent >= 80 : false;
 
    return (
       <div className="flex flex-col gap-6">
          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold text-[#170B2E]">Current Usage</h1>
-            {usage?.isFreeTier && (
-               <span
-                  className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-mono font-semibold uppercase tracking-wider text-emerald-700"
-                  style={{
-                     background: "rgba(16,185,129,0.10)",
-                     borderColor: "rgba(16,185,129,0.35)",
-                  }}
-               >
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Free tier active
+            <h1 className="text-2xl font-bold text-[#170B2E]">Usage</h1>
+            {usage?.subscription?.planName && (
+               <span className="inline-flex items-center rounded-full border border-[#D6C4EE] px-3 py-1 text-[11px] font-semibold text-[#6425C4]" style={{ background: "#F8F4FD" }}>
+                  {usage.subscription.planName} plan
                </span>
             )}
             <p className="w-full text-sm text-[#3D3650] mt-1">
-               Pay only for what you use. Track participant-minutes and cost by media type.
+               Credits consumed this period, by media type, measured in participant-minutes.
             </p>
          </div>
 
-         {/* Free-tier near-limit warning */}
-         {usage?.isFreeTier && (usage.freeUsagePercent ?? 0) >= 90 && (
+         {/* Low / exhausted credits */}
+         {wallet && lowCredits && (
             <div
+               role="alert"
                className="rounded-2xl border p-5 flex flex-col sm:flex-row sm:items-center gap-4"
                style={{
-                  background:
-                     "linear-gradient(135deg, rgba(251,191,36,0.12), rgba(244,63,94,0.10))",
+                  background: "linear-gradient(135deg, rgba(251,191,36,0.12), rgba(244,63,94,0.10))",
                   borderColor: "rgba(251,191,36,0.4)",
                }}
             >
-               <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
-                  style={{
-                     background: "rgba(251,191,36,0.15)",
-                     border: "1px solid rgba(251,191,36,0.3)",
-                  }}
-               >
-                  <Wallet size={18} style={{ color: "#FBBF24" }} />
-               </div>
+               <Wallet size={18} style={{ color: "#F59E0B" }} className="shrink-0" />
                <div className="flex-1">
                   <p className="text-sm font-semibold text-[#170B2E]">
-                     You&apos;ve used {usage.freeUsagePercent}% of your free
-                     allowance
+                     {wallet.available <= 0
+                        ? "You’re out of credits"
+                        : `You’ve used ${wallet.usedPercent}% of your credits`}
                   </p>
                   <p className="text-xs text-[#3D3650] mt-0.5">
-                     Audio and video beyond your free limit will be billed per
-                     participant-minute.{" "}
-                     {usage.hasPaymentMethod
-                        ? "Your saved card will be charged automatically at month end."
-                        : "Add a payment method to avoid interruption when your free allowance runs out."}
+                     {wallet.available <= 0
+                        ? "New calls are paused until you add credits. Calls in progress are not cut off."
+                        : "Top up or upgrade your plan to keep calls running."}
                   </p>
                </div>
                <Link
-                  href="/dashboard/billing"
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[#170B2E] px-4 py-2 rounded-lg transition-all hover:opacity-90 shrink-0"
-                  style={{
-                     background: "linear-gradient(135deg, #F59E0B, #F43F5E)",
-                  }}
+                  href="/dashboard/billing/credits#topups"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-white px-4 py-2 rounded-lg transition-all hover:opacity-90 shrink-0"
+                  style={{ background: "linear-gradient(135deg, #7F40E8, #410686)" }}
                >
-                  {usage.hasPaymentMethod
-                     ? "View billing"
-                     : "Add payment method"}
+                  Buy more credits
                   <ArrowUpRight size={14} />
                </Link>
             </div>
          )}
 
          {/* Overview cards */}
-         <div
-            className={`grid grid-cols-2 gap-4 ${usage?.isFreeTier ? "sm:grid-cols-2" : "sm:grid-cols-4"}`}
-         >
+         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <UsageCard
+               icon={Coins}
+               label="Credits used"
+               value={formatCredits(credits?.total ?? 0)}
+               unit="credits"
+               color="#7F40E8"
+               hint="Credits consumed by calls this period."
+            />
+            <UsageCard
+               icon={Wallet}
+               label="Credits remaining"
+               value={formatCredits(wallet?.available ?? 0)}
+               unit="credits"
+               color="#10B981"
+            />
             <UsageCard
                icon={Clock}
                label="Total Usage"
-               value={totalBillableMinutes.toFixed(2)}
+               value={totalParticipantMinutes.toFixed(2)}
                unit="participant-min"
                color="#410686"
                hint="Sum of duration × participants using that media, across audio/video/screen share — not raw call length."
@@ -325,28 +318,11 @@ export default function UsagePage() {
                icon={PhoneCall}
                label="Total Calls"
                value={u?.callsCompleted ?? 0}
-               color="#7F40E8"
+               color="#F59E0B"
             />
-            {!usage?.isFreeTier && (
-               <>
-                  <UsageCard
-                     icon={Wallet}
-                     label="Current Cost"
-                     value={paiseToINR(cost?.totalPaise ?? 0)}
-                     color="#10B981"
-                  />
-                  <UsageCard
-                     icon={Gauge}
-                     label="Est. Month-end"
-                     value={paiseToINR(usage?.estimatedMonthEndPaise ?? 0)}
-                     color="#F59E0B"
-                     hint="Projected total for the full cycle, based on your usage so far — not an additional charge."
-                  />
-               </>
-            )}
          </div>
 
-         {/* Per-type breakdown + cost */}
+         {/* Per-type breakdown */}
          <div
             className="rounded-2xl border border-[#D6C4EE] p-6"
             style={{
@@ -360,14 +336,16 @@ export default function UsagePage() {
                      Usage by media type
                   </p>
                   <p className="text-xs text-[#3D3650] mt-0.5">
-                     {free ? `Free tier: ${free.audioMinutes} audio + ${free.videoMinutes} video participant-min/month · screen share always paid` : 'Free allowance loading'}
+                     {usage
+                        ? `${new Date(usage.cycle.start).toLocaleDateString("en-IN")} – ${new Date(usage.cycle.end).toLocaleDateString("en-IN")} · credits are deducted per participant-minute`
+                        : "Credits are deducted per participant-minute"}
                   </p>
                </div>
                <Link
                   href="/dashboard/billing"
                   className="inline-flex items-center gap-1 text-xs font-medium text-[#6425C4] hover:text-[#6425C4] transition-colors"
                >
-                  Billing &amp; Usage <ArrowUpRight size={14} />
+                  Plan &amp; credits <ArrowUpRight size={14} />
                </Link>
             </div>
 
@@ -376,28 +354,22 @@ export default function UsagePage() {
                   icon={<PhoneCall size={16} style={{ color: "#7F40E8" }} />}
                   label="Audio"
                   minutes={u?.audioMinutes ?? 0}
-                  costPaise={cost?.audioPaise ?? 0}
-                  freeOf={free?.audioMinutes ?? 0}
-                  rate={rates ? `${paiseToINRShort(rates.audioPaise)} / participant-min` : 'Loading rate…'}
-                  showCost
+                  credits={credits?.audio ?? 0}
+                  rate={rateLabel(rates?.audioCreditsPerMinute, "audio")}
                />
                <TypeRow
                   icon={<Video size={16} style={{ color: "#A05DF9" }} />}
                   label="Video"
                   minutes={u?.videoMinutes ?? 0}
-                  costPaise={cost?.videoPaise ?? 0}
-                  freeOf={free?.videoMinutes ?? 0}
-                  rate={rates ? `${paiseToINRShort(rates.videoPaise)} / participant-min` : 'Loading rate…'}
-                  showCost
+                  credits={credits?.video ?? 0}
+                  rate={rateLabel(rates?.videoCreditsPerMinute, "video")}
                />
                <TypeRow
                   icon={<Monitor size={16} style={{ color: "#34D399" }} />}
                   label="Screen Share"
                   minutes={u?.screenShareMinutes ?? 0}
-                  costPaise={cost?.screenSharePaise ?? 0}
-                  freeOf={0}
-                  rate={rates ? `${paiseToINRShort(rates.screenSharePaise)} / participant-min` : 'Loading rate…'}
-                  showCost
+                  credits={credits?.screenShare ?? 0}
+                  rate={rateLabel(rates?.screenShareCreditsPerMinute, "screen share")}
                />
             </div>
          </div>
@@ -414,7 +386,7 @@ export default function UsagePage() {
                   </p>
                   <p className="text-xs text-[#3D3650] mt-0.5">
                      {totalCallsInChart} calls in this period · wall-clock
-                     minutes, not billed participant-minutes
+                     minutes, not participant-minutes
                   </p>
                </div>
             </div>
@@ -463,13 +435,11 @@ export default function UsagePage() {
                      Call analytics
                   </p>
                   <p className="text-xs text-[#3D3650] mt-0.5">
-                     {usage?.isFreeTier
-                        ? `Per-call usage and charge after your free allowance is applied.`
-                        : "Per-call usage and charge for this billing cycle."}
+                     Per-call usage and credits consumed this period.
                   </p>
                   <p className="text-[11px] text-[#3D3650] mt-1">
                      Usage is shown in participant-minutes. Call duration is the
-                     wall-clock duration; billing multiplies each
+                     wall-clock duration; credits are based on each
                      participant&apos;s active media time.
                   </p>
                </div>
@@ -504,7 +474,7 @@ export default function UsagePage() {
                            <th className="py-2 pr-4 font-medium">
                               Participants
                            </th>
-                           <th className="py-2 font-medium">Charge</th>
+                           <th className="py-2 font-medium">Credits</th>
                         </tr>
                      </thead>
                      <tbody>
@@ -557,8 +527,11 @@ export default function UsagePage() {
                                     <td className="py-3 pr-4 text-[#3D3650]">
                                        {c.participants}
                                     </td>
-                                    <td className="py-3 font-medium text-[#170B2E]">
-                                       {paiseToINR(c.billedCostPaise)}
+                                    <td
+                                       className="py-3 font-medium text-[#170B2E] whitespace-nowrap"
+                                       data-testid="call-credits"
+                                    >
+                                       {formatCredits(c.creditsCharged)}
                                     </td>
                                  </tr>
                                  {open && (
@@ -571,7 +544,7 @@ export default function UsagePage() {
                                                 segmentLoading === c.callId
                                              }
                                              segments={segments[c.callId] ?? []}
-                                             showCost={false}
+                                             totalCredits={segmentCredits[c.callId]}
                                           />
                                        </td>
                                     </tr>
@@ -608,15 +581,17 @@ export default function UsagePage() {
             </div>
             <div>
                <p className="text-sm font-medium text-[#170B2E]">
-                  How usage is billed
+                  How usage consumes credits
                </p>
                <p className="text-xs text-[#3D3650] mt-0.5">
                   Usage is calculated to the second, per participant, from when
-                  a call connects until it ends. Anything beyond the free
-                  allowance is billed at{" "}
-                  {rates ? `${paiseToINRShort(rates.audioPaise)} (audio), ${paiseToINRShort(rates.videoPaise)} (video), and ${paiseToINRShort(rates.screenSharePaise)} (screen sharing)` : 'current rates loading'}{" "}
-                  per participant-minute. An invoice is generated
-                  and your card charged on the 1st of each month.
+                  a call connects until it ends, and deducted from your credit
+                  balance at{" "}
+                  {rates
+                     ? `${formatCredits(rates.audioCreditsPerMinute)} (audio), ${formatCredits(rates.videoCreditsPerMinute)} (video) and ${formatCredits(rates.screenShareCreditsPerMinute)} (screen sharing) credits`
+                     : "the current credit rates"}{" "}
+                  per participant-minute. When credits run out, new calls are
+                  paused until you top up or upgrade — there are no surprise usage bills.
                </p>
             </div>
          </div>
@@ -669,24 +644,15 @@ function TypeRow({
    icon,
    label,
    minutes,
-   costPaise,
-   freeOf,
+   credits,
    rate,
-   showCost,
 }: {
    icon: React.ReactNode;
    label: string;
    minutes: number;
-   costPaise: number;
-   freeOf: number;
+   credits: number;
    rate: string;
-   showCost?: boolean;
 }) {
-   const pct =
-      freeOf > 0
-         ? Math.min(100, Math.round((minutes / freeOf) * 100))
-         : Math.min(100, minutes > 0 ? 100 : 0);
-   const remaining = freeOf > 0 ? Math.max(0, freeOf - minutes) : 0;
    return (
       <div
          className="rounded-xl border border-[#E7DFF5] p-4"
@@ -697,43 +663,13 @@ function TypeRow({
             <p className="text-xs text-[#3D3650]">{label}</p>
          </div>
          <p className="text-lg font-bold text-[#170B2E]">
-            {minutes.toFixed(2)}
-            <span className="text-xs font-normal text-[#3D3650]">
-               {" "}
-               participant-min
-            </span>
+            {formatCredits(credits)}
+            <span className="text-xs font-normal text-[#3D3650]"> credits</span>
          </p>
-         {showCost && (
-            <p className="text-xs font-semibold mt-1 text-[#6425C4]">
-               {paiseToINR(costPaise)}
-            </p>
-         )}
-         <p className="text-[11px] text-[#3D3650] mt-0.5">{rate}</p>
-         {freeOf > 0 && (
-            <div className="mt-2.5">
-               <div className="flex items-center justify-between text-[10px] text-[#3D3650] mb-1">
-                  <span>
-                     {remaining.toFixed(2)} / {freeOf} participant-min remaining
-                  </span>
-                  <span>{pct}%</span>
-               </div>
-               <div
-                  className="h-1.5 rounded-full overflow-hidden"
-                  style={{ background: "#E7DFF5" }}
-               >
-                  <div
-                     className="h-full rounded-full"
-                     style={{
-                        width: `${pct}%`,
-                        background:
-                           pct >= 90
-                              ? "linear-gradient(135deg,#f43f5e,#fb7185)"
-                              : "linear-gradient(135deg,#7F40E8,#410686)",
-                     }}
-                  />
-               </div>
-            </div>
-         )}
+         <p className="text-xs text-[#3D3650] mt-0.5">
+            {minutes.toFixed(2)} participant-min
+         </p>
+         <p className="text-[11px] text-[#6425C4] mt-1">{rate}</p>
       </div>
    );
 }
@@ -742,12 +678,12 @@ function SegmentTimeline({
    callId,
    segments,
    loading,
-   showCost,
+   totalCredits,
 }: {
    callId: string;
    segments: SegmentView[];
    loading: boolean;
-   showCost?: boolean;
+   totalCredits?: number;
 }) {
    if (loading) {
       return (
@@ -765,7 +701,6 @@ function SegmentTimeline({
       );
    }
 
-   const totalCost = segments.reduce((acc, s) => acc + (s.costPaise ?? 0), 0);
    const fmtTime = (iso: string) =>
       new Date(iso).toLocaleTimeString("en-IN", {
          hour: "2-digit",
@@ -782,12 +717,12 @@ function SegmentTimeline({
             <p className="text-xs font-semibold text-[#170B2E]">Segment timeline</p>
             <p className="text-xs text-[#3D3650]">
                {segments.length} segments
-               {showCost && (
+               {totalCredits != null && (
                   <>
                      {" "}
                      ·{" "}
-                     <span className="text-[#6425C4]">
-                        {paiseToINR(totalCost)}
+                     <span className="text-[#6425C4]" data-testid="segment-total-credits">
+                        {formatCredits(totalCredits)} credits
                      </span>
                   </>
                )}
@@ -851,11 +786,6 @@ function SegmentTimeline({
                            {segmentUsageLabel(s)}
                         </p>
                      </div>
-                     {showCost && (
-                        <p className="text-xs font-medium text-[#170B2E] whitespace-nowrap">
-                           {paiseToINR(s.costPaise ?? 0)}
-                        </p>
-                     )}
                   </div>
                );
             })}
@@ -878,7 +808,7 @@ function segmentUsageLabel(s: SegmentView) {
       .join(" · ");
 }
 
-// Expanded-row context: billed participant-minutes (primary) alongside the
+// Expanded-row context: rated participant-minutes (primary) alongside the
 // wall-clock call duration and participant count (secondary).
 function CallUsageDetail({ call }: { call: CallUse }) {
    const d = call.durationSeconds;

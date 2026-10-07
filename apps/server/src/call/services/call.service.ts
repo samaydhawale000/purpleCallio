@@ -15,10 +15,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CallSessionService } from '../../call-session/services/call-session.service';
 import { CallGateway } from '../../socket/gateways/call.gateway';
 import { WebhookService } from '../../webhook/webhook.service';
-import { BillingService } from '../../billing/billing.service';
 import { UsageBillingService } from '../../billing/usage-billing.service';
 import { UsageSegmentService } from '../../billing/usage-segment.service';
 import { RatingEngineService } from '../../billing/rating-engine.service';
+import { EntitlementService } from '../../billing/subscriptions/entitlement.service';
+import { FeatureKey } from '../../billing/plans/feature-registry';
 
 @Injectable()
 export class CallService implements OnModuleInit {
@@ -31,10 +32,10 @@ export class CallService implements OnModuleInit {
     private callSessionService: CallSessionService,
     private callGateway: CallGateway,
     private webhookService: WebhookService,
-    private billingService: BillingService,
     private usageBilling: UsageBillingService,
     private segmentService: UsageSegmentService,
     private ratingEngine: RatingEngineService,
+    private entitlements: EntitlementService,
   ) {
     const parsed = Number(process.env.CALL_RING_TIMEOUT_MS);
     this.ringTimeoutMs =
@@ -149,12 +150,9 @@ export class CallService implements OnModuleInit {
       });
     }
 
-    // Resolve the project owner and enforce the usage-based free allowance.
-    // Screen share is always billable (no free allowance), so it is never
-    // blocked. Uses the same UsageBillingService.canStartCall rule as
-    // BillingGuard (free allowance first, then a saved payment method) so
-    // calls created outside the guarded HTTP path (e.g. the playground)
-    // can't diverge from calls created through the API.
+    // Resolve the project owner and enforce prepaid eligibility (credits). Uses the same UsageBillingService.canStartCall rule as
+    // BillingGuard so calls created outside the guarded HTTP path (e.g. the
+    // playground) can't diverge from calls created through the API.
     if (!options?.skipUsageCheck) {
       const project = await this.prisma.project.findUnique({
         where: { id: data.projectId },
@@ -506,8 +504,8 @@ export class CallService implements OnModuleInit {
     });
 
     // Segment-based usage recording: rebuild segments from the live event
-    // stream and rate them so billing is accurate per media state (not a
-    // coarse "whole call is video" aggregate).
+    // stream and rate them so credit consumption is accurate per media state
+    // (not a coarse "whole call is video" aggregate).
     try {
       // Ensure the call has a CALL_STARTED event before rebuilding (the
       // gateway already fires it when signaling starts; here we guarantee it).
@@ -539,7 +537,7 @@ export class CallService implements OnModuleInit {
       const rated = await this.ratingEngine.persistRatedCosts(call.id);
 
       // Peak concurrent participants across the call's media segments —
-      // used for per-participant-minute reporting / invoicing line items.
+      // used for per-participant-minute reporting.
       const peakParticipants = rated.segments.reduce(
         (max, s) => Math.max(max, s.participantCount),
         0,
@@ -673,6 +671,13 @@ export class CallService implements OnModuleInit {
     const isCaller = session?.role === 'CALLER';
     const token = isCaller ? session.callerToken : session.receiverToken;
 
+    // Custom branding is a plan entitlement; without it the hosted UI shows
+    // the project name with default styling. Fails open so a billing
+    // hiccup never breaks a live call page.
+    const branded = await this.entitlements
+      .hasFeature(call.project.ownerId, FeatureKey.CUSTOM_BRANDING)
+      .catch(() => true);
+
     return {
       callId: call.id,
       type: call.type,
@@ -687,13 +692,21 @@ export class CallService implements OnModuleInit {
       token,
       hostedUrl: `${frontend}/call?token=${token}&callId=${call.id}`,
       expiresAt: session?.expiresAt ?? null,
-      branding: {
-        companyName: call.project.companyName ?? call.project.name,
-        logoUrl: call.project.logoUrl,
-        primaryColor: call.project.primaryColor,
-        theme: call.project.theme,
-        waitingRoom: call.project.waitingRoom,
-      },
+      branding: branded
+        ? {
+            companyName: call.project.companyName ?? call.project.name,
+            logoUrl: call.project.logoUrl,
+            primaryColor: call.project.primaryColor,
+            theme: call.project.theme,
+            waitingRoom: call.project.waitingRoom,
+          }
+        : {
+            companyName: call.project.name,
+            logoUrl: null,
+            primaryColor: '#2563EB',
+            theme: call.project.theme,
+            waitingRoom: call.project.waitingRoom,
+          },
     };
   }
 

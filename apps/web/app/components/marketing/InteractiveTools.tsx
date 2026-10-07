@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { api } from "../../lib/api";
-import { useEffect } from "react";
-import { formatPaise, type BillingRates } from "../../lib/pricing";
+import { formatCredits, intervalLabel } from "../../lib/billing";
+import { estimateUsage, gstNote, planCtaHref, planCtaLabel, planPrice, recommendPlan, usePublicPricing } from "../../lib/public-pricing";
+import { useAuthStore } from "../../store/auth.store";
 import { PURPLECALLIO_API_URL } from '../../lib/brand';
 
 const paths = [
@@ -269,134 +269,109 @@ export function ArchitectureExplorer() {
    );
 }
 
-export function PricingCalculator() {
-   const [rates, setRates] = useState<BillingRates | null>(null);
-   const [people, setPeople] = useState(2);
-   const [minutes, setMinutes] = useState(10);
-   const [audio, setAudio] = useState(true);
-   const [video, setVideo] = useState(true);
-   const [screen, setScreen] = useState(false);
-   const [screenPeople, setScreenPeople] = useState(1);
-   const [screenDuration, setScreenDuration] = useState(5);
-   useEffect(() => {
-      api.get("/billing/rates")
-         .then((response) => setRates(response.data))
-         .catch(() => {});
-   }, []);
-   const audioMinutes = audio ? people * minutes : 0;
-   const videoMinutes = video ? people * minutes : 0;
-   const screenMinutes = screen ? screenPeople * screenDuration : 0;
-   const billableAudio = rates ? Math.max(0, audioMinutes - rates.freeAudioMins) : null;
-   const billableVideo = rates ? Math.max(0, videoMinutes - rates.freeVideoMins) : null;
-   const amountPaise = rates && billableAudio !== null && billableVideo !== null
-      ? billableAudio * rates.audioPaise + billableVideo * rates.videoPaise + screenMinutes * rates.screenSharePaise
-      : null;
+function NumberField({ label, value, onChange, min = 0, max }: { label: string; value: number; onChange: (n: number) => void; min?: number; max?: number }) {
    return (
-      <section className="rounded-2xl border border-[#E7DFF5] bg-white p-5 md:p-8">
-         <h2 className="text-2xl font-bold text-[#170B2E]">
-            Estimate participant-minute usage
-         </h2>
+      <label className="text-sm text-[#3D3650]">
+         {label}
+         <input
+            aria-label={label}
+            type="number"
+            min={min}
+            max={max}
+            value={value}
+            onChange={(event) => {
+               const n = Number(event.target.value);
+               const clamped = Math.max(min, Number.isFinite(n) ? n : min);
+               onChange(max === undefined ? clamped : Math.min(max, clamped));
+            }}
+            className="mt-2 w-full rounded-lg border border-[#D6C4EE] bg-[#F8F4FD] p-3 text-[#170B2E]"
+         />
+      </label>
+   );
+}
+
+/** "Which plan fits your usage?" — credits estimated from the API's credit rates. */
+export function PlanEstimator() {
+   const state = usePublicPricing();
+   const token = useAuthStore((s) => s.token);
+   const [calls, setCalls] = useState(100);
+   // Calls are one-to-one (caller → receiver): always two participants.
+  const people = 2;
+   const [minutes, setMinutes] = useState(15);
+   const [videoPct, setVideoPct] = useState(50);
+   const [screenPct, setScreenPct] = useState(10);
+
+   const estimate = state.status === "ready"
+      ? estimateUsage({ callsPerMonth: calls, avgParticipants: people, avgMinutes: minutes, videoPercent: videoPct, screenSharePercent: screenPct }, state.data.creditRates)
+      : null;
+   const rec = estimate && state.status === "ready" ? recommendPlan(estimate.totalCredits, state.data.plans) : null;
+
+   return (
+      <section className="rounded-2xl border border-[#E7DFF5] bg-white p-5 md:p-8" aria-label="Plan estimator">
+         <h2 className="text-2xl font-bold text-[#170B2E]">Which plan fits your usage?</h2>
          <p className="mt-2 text-sm text-[#3D3650]">
-            A participant-minute is one connected participant for one minute.
-            This uses current public rates when available and is an estimate,
-            not an invoice.
+            Describe a typical month. We convert it to participant-minutes and credits using the current credit rates and
+            suggest the smallest plan whose included credits cover it. This is an estimate, not a quote.
          </p>
-         <div className="mt-6 grid gap-5 md:grid-cols-2">
-            <label className="text-sm text-[#3D3650]">
-               Participants{" "}
-               <input
-                  aria-label="Participants"
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={people}
-                  onChange={(event) =>
-                     setPeople(Math.max(1, Number(event.target.value)))
-                  }
-                  className="mt-2 w-full rounded-lg border border-[#D6C4EE] bg-[#F8F4FD] p-3 text-[#170B2E]"
-               />
-            </label>
-            <label className="text-sm text-[#3D3650]">
-               Wall-clock call duration (minutes){" "}
-               <input
-                  aria-label="Call duration in minutes"
-                  type="number"
-                  min="1"
-                  max="1440"
-                  value={minutes}
-                  onChange={(event) =>
-                     setMinutes(Math.max(1, Number(event.target.value)))
-                  }
-                  className="mt-2 w-full rounded-lg border border-[#D6C4EE] bg-[#F8F4FD] p-3 text-[#170B2E]"
-               />
-            </label>
+         <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <NumberField label="Calls per month" value={calls} onChange={setCalls} max={1000000} />
+            <NumberField label="Average call length (minutes)" value={minutes} onChange={setMinutes} min={1} max={1440} />
+            <NumberField label="% of participant-minutes with video" value={videoPct} onChange={setVideoPct} max={100} />
+            <NumberField label="% of call time with screen sharing" value={screenPct} onChange={setScreenPct} max={100} />
          </div>
-         <div className="mt-4 flex flex-wrap gap-4 text-sm">
-            <label>
-               <input
-                  type="checkbox"
-                  checked={audio}
-                  onChange={(event) => setAudio(event.target.checked)}
-               />{" "}
-               Audio
-            </label>
-            <label>
-               <input
-                  type="checkbox"
-                  checked={video}
-                  onChange={(event) => setVideo(event.target.checked)}
-               />{" "}
-               Video
-            </label>
-            <label>
-               <input
-                  type="checkbox"
-                  checked={screen}
-                  onChange={(event) => setScreen(event.target.checked)}
-               />{" "}
-               Screen sharing
-            </label>
-         </div>
-         {screen && (
-            <div className="mt-5 grid max-w-xl gap-5 sm:grid-cols-2">
-               <label className="text-sm text-[#3D3650]">
-                  Screen-sharing participants
-                  <input aria-label="Screen-sharing participants" type="number" min="1" max={people} value={screenPeople} onChange={(event) => setScreenPeople(Math.min(people, Math.max(1, Number(event.target.value))))} className="mt-2 w-full rounded-lg border border-[#D6C4EE] bg-[#F8F4FD] p-3 text-[#170B2E]" />
-               </label>
-               <label className="text-sm text-[#3D3650]">
-                  Screen-share duration (minutes)
-                  <input aria-label="Screen-share duration in minutes" type="number" min="1" max={minutes} value={screenDuration} onChange={(event) => setScreenDuration(Math.min(minutes, Math.max(1, Number(event.target.value))))} className="mt-2 w-full rounded-lg border border-[#D6C4EE] bg-[#F8F4FD] p-3 text-[#170B2E]" />
-               </label>
-            </div>
+
+         {state.status === "loading" && <p role="status" className="mt-6 text-sm text-[#3D3650]">Loading current credit rates…</p>}
+         {state.status === "error" && (
+            <p className="mt-6 text-sm text-[#3D3650]">
+               Credit rates are temporarily unavailable.{" "}
+               <button type="button" onClick={state.retry} className="font-medium text-[#6425C4] underline">Retry</button>
+            </p>
          )}
-         <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-           <div className="rounded-lg bg-[#F8F4FD] p-4">
-               <p className="text-xs text-[#3D3650]">Wall-clock duration</p>
-               <p className="mt-1 text-xl font-bold text-[#170B2E]">{minutes} minutes</p>
-           </div>
-           <div className="rounded-lg bg-[#F8F4FD] p-4">
-               <p className="text-xs text-[#3D3650]">Audio participant-minutes</p>
-               <p className="mt-1 text-xl font-bold text-[#170B2E]">{audioMinutes}</p>
-           </div>
-           <div className="rounded-lg bg-[#F8F4FD] p-4">
-               <p className="text-xs text-[#3D3650]">Video participant-minutes</p>
-               <p className="mt-1 text-xl font-bold text-[#170B2E]">{videoMinutes}</p>
-            </div>
-            <div className="rounded-lg bg-[#F8F4FD] p-4">
-               <p className="text-xs text-[#3D3650]">Screen-sharing minutes</p>
-               <p className="mt-1 text-xl font-bold text-[#170B2E]">{screenMinutes}</p>
-            </div>
-            <div className="rounded-lg bg-[#F8F4FD] p-4">
-               <p className="text-xs text-[#3D3650]">Billable participant-minutes</p>
-               <p className="mt-1 text-xl font-bold text-[#170B2E]">{billableAudio === null || billableVideo === null ? "Loading…" : billableAudio + billableVideo + screenMinutes}</p>
-            </div>
-            <div className="rounded-lg bg-[#F8F4FD] p-4">
-               <p className="text-xs text-[#3D3650]">Estimated usage cost (pre-tax)</p>
-               <p className="mt-1 text-xl font-bold text-[#170B2E]">
-                  {amountPaise === null ? "Loading rates…" : formatPaise(amountPaise)}
-               </p>
-            </div>
-         </div>
+         {estimate && (
+            <>
+               <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-lg bg-[#F8F4FD] p-4">
+                     <p className="text-xs text-[#3D3650]">Audio participant-minutes</p>
+                     <p className="mt-1 text-xl font-bold text-[#170B2E]">{formatCredits(estimate.audioMinutes)}</p>
+                  </div>
+                  <div className="rounded-lg bg-[#F8F4FD] p-4">
+                     <p className="text-xs text-[#3D3650]">Video participant-minutes</p>
+                     <p className="mt-1 text-xl font-bold text-[#170B2E]">{formatCredits(estimate.videoMinutes)}</p>
+                  </div>
+                  <div className="rounded-lg bg-[#F8F4FD] p-4">
+                     <p className="text-xs text-[#3D3650]">Screen-share participant-minutes</p>
+                     <p className="mt-1 text-xl font-bold text-[#170B2E]">{formatCredits(estimate.screenShareMinutes)}</p>
+                  </div>
+                  <div className="rounded-lg bg-[#7F40E8]/10 p-4">
+                     <p className="text-xs text-[#3D3650]">Estimated credits per month</p>
+                     <p className="mt-1 text-xl font-bold text-[#170B2E]" data-testid="estimated-credits">{formatCredits(estimate.totalCredits)}</p>
+                  </div>
+               </div>
+               <div className="mt-5 rounded-xl border border-[#D6C4EE] p-5" data-testid="plan-recommendation">
+                  {rec?.kind === "fits" && rec.plan ? (
+                     <>
+                        <p className="text-sm text-[#3D3650]">Recommended plan</p>
+                        <p className="mt-1 text-lg font-bold text-[#170B2E]">
+                           {rec.plan.name}{" "}
+                           <span className="text-sm font-normal text-[#3D3650]">
+                              — {planPrice(rec.plan).amount}{planPrice(rec.plan).suffix ? ` ${planPrice(rec.plan).suffix}` : ""}, {formatCredits(rec.plan.version?.includedCredits ?? 0)} credits per {intervalLabel(rec.plan.version)}
+                           </span>
+                        </p>
+                        <Link href={planCtaHref(rec.plan, Boolean(token))} className="mt-3 inline-block text-sm font-medium text-[#6425C4] hover:text-[#170B2E]">{planCtaLabel(rec.plan)} →</Link>
+                     </>
+                  ) : rec?.kind === "custom" && rec.plan ? (
+                     <>
+                        <p className="text-sm text-[#3D3650]">Your usage is above our standard plans.</p>
+                        <p className="mt-1 text-lg font-bold text-[#170B2E]">{rec.plan.name} — custom pricing</p>
+                        <Link href={planCtaHref(rec.plan, Boolean(token))} className="mt-3 inline-block text-sm font-medium text-[#6425C4] hover:text-[#170B2E]">{planCtaLabel(rec.plan)} →</Link>
+                     </>
+                  ) : (
+                     <p className="text-sm text-[#3D3650]">Your usage is above our standard plans. Choose the largest plan and add top-ups, or contact us about a custom plan.</p>
+                  )}
+               </div>
+               <p className="mt-3 text-xs text-[#3D3650]">{gstNote(state.data!.creditRates)}</p>
+            </>
+         )}
       </section>
    );
 }
@@ -411,7 +386,7 @@ const quickstartSteps = [
    ["Join the call", "const meeting = new PurpleCallioMeeting({ token, callId, signalUrl });\nawait meeting.join();", "The participant joins the call.", "Test microphone and camera."],
    ["Test audio and video", "await meeting.microphone.enable();\nawait meeting.camera.enable();", "The browser asks for media permission.", "Test screen sharing."],
    ["Test screen sharing", "await meeting.screenShare.start();", "The browser presents its display-selection picker.", "Inspect usage."],
-   ["Inspect usage", "Open Dashboard → Usage to review audio, video, and screen-sharing participant-minutes.", "Usage is shown by category.", "Review pricing and billing."],
+   ["Inspect usage", "Open Dashboard → Usage to review audio, video, and screen-sharing participant-minutes.", "Usage is shown by category.", "Review plans and credits."],
 ] as const;
 
 export function QuickstartStepper() {

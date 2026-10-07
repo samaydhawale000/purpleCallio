@@ -16,9 +16,10 @@ import {
 } from '../../../lib/support';
 import { TicketStatusBadge } from '../../../components/support/TicketStatusBadge';
 import { TicketThread } from '../../../components/support/TicketThread';
+import { CustomPlanBadge } from '../../../components/support/CustomPlanBadge';
 import { ToastHost, ToastState } from '../../billing/Toast';
 
-type TicketDetail = SupportTicket & { messages: SupportMessage[] };
+type TicketDetail = SupportTicket & { messages: SupportMessage[]; type?: 'GENERAL' | 'CUSTOM_PLAN' };
 
 function TicketConversation() {
   const { id } = useParams<{ id: string }>();
@@ -118,6 +119,7 @@ function TicketConversation() {
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="font-mono text-xs text-[#6425C4]">{ticket.ticketNumber}</span>
               <TicketStatusBadge status={ticket.status} />
+              {ticket.type === 'CUSTOM_PLAN' && <CustomPlanBadge />}
             </div>
             <h1 className="text-lg font-bold text-[#170B2E] break-words">{ticket.subject}</h1>
             <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2 text-xs text-[#3D3650]">
@@ -131,6 +133,11 @@ function TicketConversation() {
                 </Link>
               )}
             </div>
+            {ticket.type === 'CUSTOM_PLAN' && (
+              <p className="mt-2 text-xs text-[#3D3650]" data-testid="custom-plan-note">
+                Our team will continue the conversation here.
+              </p>
+            )}
           </>
         }
       />

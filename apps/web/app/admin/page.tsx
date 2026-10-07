@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Building2, CalendarDays, ChartColumn, CircleCheck, Clock3, CreditCard, FileText, FolderKanban, HandCoins, HeartPulse, PhoneCall, Users } from 'lucide-react';
+import { Building2, CalendarDays, Coins, ChartColumn, CircleCheck, Clock3, CreditCard, FileText, FolderKanban, HandCoins, HeartPulse, PhoneCall, Users } from 'lucide-react';
 import { api } from '../lib/api';
 
 type OverviewData = {
@@ -16,7 +16,8 @@ type OverviewData = {
     minutesToday: number;
     minutesMonth: number;
     participantMinutesMonth: number;
-    billableRevenuePaise: number;
+    creditsConsumedMonth: number;
+    revenueMonthPaise: number;
   };
   charts: {
     calls: { label: string; value: number }[];
@@ -28,9 +29,8 @@ type OverviewData = {
 const paiseToINR = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
 // "Platform minutes" (call wall-clock duration) and "participant-minutes"
-// (the actual billing basis) are deliberately shown as separate cards —
-// mixing them makes the numbers on this page disagree with what customers
-// are actually billed.
+// (what credits are consumed for) are deliberately shown as separate cards.
+// Revenue is prepaid payments received this month (plans + top-ups).
 const STAT_CARDS = (s: OverviewData['stats']) => [
   { label: 'Total Companies', value: s.totalCompanies, icon: Building2 },
   { label: 'Free Users', value: s.freeUsers, icon: CircleCheck },
@@ -41,7 +41,8 @@ const STAT_CARDS = (s: OverviewData['stats']) => [
   { label: 'Platform Minutes Today', value: s.minutesToday, icon: Clock3 },
   { label: 'Platform Minutes This Month', value: s.minutesMonth, icon: CalendarDays },
   { label: 'Participant-Minutes This Month', value: Math.round(s.participantMinutesMonth), icon: ChartColumn },
-  { label: 'Billable Revenue This Month', value: paiseToINR(s.billableRevenuePaise), icon: HandCoins },
+  { label: 'Credits Consumed This Month', value: Math.round(s.creditsConsumedMonth ?? 0).toLocaleString('en-IN'), icon: Coins },
+  { label: 'Revenue This Month', value: paiseToINR(s.revenueMonthPaise ?? 0), icon: HandCoins },
 ];
 
 function BarChart({

@@ -1,160 +1,182 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import LegalLayout, { LegalSection, LegalBullets } from "../components/LegalLayout";
-import { api } from "../lib/api";
 import { PricingAuthority } from "../components/PricingAuthority";
 
 export default function BillingTermsPage() {
-  const [rates, setRates] = useState<{
-    audioPaise: number;
-    videoPaise: number;
-    screenSharePaise: number;
-    freeAudioMins: number;
-    freeVideoMins: number;
-    taxPercent: number;
-  } | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    api
-      .get("/billing/rates")
-      .then((res) => { if (active) setRates(res.data); })
-      .catch(() => {});
-    return () => { active = false; };
-  }, []);
-
-  const gst = rates?.taxPercent ?? 18;
-
   return (
     <LegalLayout
       title="Billing & Usage Terms"
-      lastUpdated="24 August 2025"
-      intro="These Billing & Usage Terms explain how PurpleCallio measures, calculates, and charges for usage-based services."
+      lastUpdated="7 October 2026"
+      intro="These Billing & Usage Terms explain how PurpleCallio's prepaid plans, usage credits, top-ups and payments work, and how usage is measured."
     >
-      <LegalSection num="1" title="Usage-Based Pricing">
+      <LegalSection num="1" title="Prepaid Plans">
         <p>
-          PurpleCallio charges customers based on the services they consume according to the rates
-          displayed on the applicable pricing page.
+          PurpleCallio services are provided through prepaid plans. You choose a plan, review the price
+          and included credits, and pay upfront. A paid plan becomes active only after PurpleCallio
+          confirms your payment, at which point the plan's included credits are added to your account.
         </p>
-        <p>There are no subscription fees or up-front costs — you only pay for what you use.</p>
+        <p>
+          The plans, prices, included credits, features, limits and credit rates currently offered are
+          published on the pricing page and are loaded from PurpleCallio's billing service. The terms
+          shown to you at checkout are the terms of your purchase.
+        </p>
         <PricingAuthority className="mt-5" />
       </LegalSection>
 
-      <LegalSection num="2" title="Participant-Minute Billing">
+      <LegalSection num="2" title="Plan Duration and Renewal">
         <p>
-          For communication services billed per participant-minute, one participant using the
-          applicable service for one minute equals one participant-minute.
+          Each paid plan runs for the plan period shown at checkout (for example, one month). Paid plans
+          do not renew automatically, and PurpleCallio does not automatically charge your payment method.
         </p>
-        <p>For example:</p>
+        <p>
+          To continue on a paid plan after its period ends, you renew it manually from the Billing page
+          and pay for the next period. If you do not renew, your account moves to the Free plan when the
+          paid period ends. Renewal is priced at the plan's then-current price and included credits,
+          which are shown to you before you pay.
+        </p>
+        <p>
+          The Free plan includes a monthly amount of credits as published on the pricing page.
+          PurpleCallio may change the Free plan's included credits, features or limits.
+        </p>
+      </LegalSection>
+
+      <LegalSection num="3" title="Usage Credits">
+        <p>
+          Usage consumes credits from your credit balance. Credits are a prepaid allowance for using the
+          Service; they have no cash value, are not transferable and cannot be exchanged for money.
+        </p>
+        <p>
+          Plan credits expire at the end of the plan period they were issued for. Unused plan credits do
+          not carry over unless PurpleCallio states otherwise. Top-up credits expire according to the
+          top-up expiry policy shown at the time of purchase. Your Billing page shows when each set of
+          credits expires. When several sets of credits are available, PurpleCallio may consume the
+          credits that expire soonest first.
+        </p>
+        <p>
+          When your available credits run out, new calls cannot be started until you add credits by
+          purchasing a top-up, renewing or upgrading your plan. Calls already in progress are not
+          disconnected because your balance runs out; credits consumed by such calls are recorded against
+          your account. PurpleCallio may require a minimum available balance to start a call.
+        </p>
+      </LegalSection>
+
+      <LegalSection num="4" title="Participant-Minutes">
+        <p>
+          Usage is measured in participant-minutes. One participant using the applicable service for one
+          minute equals one participant-minute. For example:
+        </p>
         <LegalBullets items={[
           "Audio: 2 participants × 10 minutes = 20 audio participant-minutes",
           "Video: 3 participants × 20 minutes = 60 video participant-minutes",
         ]} />
         <p>
-          This is important because the applicable per-minute rate applies per participant, not per room.
+          Credits are consumed per participant, not per room. Audio, video and screen sharing are
+          independently tracked categories, each with its own credit rate (credits per
+          participant-minute). Screen-sharing participant-minutes are not automatically added as a
+          surcharge to video participant-minutes.
         </p>
       </LegalSection>
 
-      <LegalSection num="3" title="Different Communication Types">
-        <p>PurpleCallio may apply different rates to:</p>
-        <LegalBullets items={[
-          "Audio",
-          "Video",
-          "Screen sharing",
-        ]} />
+      <LegalSection num="5" title="Usage Transitions and Participant Changes">
         <p>
-          The applicable rates are displayed on the pricing page and may vary by currency, region,
-          product, or service.
+          If a session changes communication modes during a call, PurpleCallio calculates usage separately
+          for the applicable periods — for example, 10 minutes of audio + 5 minutes of video + 3 minutes of
+          screen sharing — and each segment consumes credits at its applicable rate.
         </p>
-        <p>
-          Audio, video, and screen sharing are independently tracked usage categories. Screen-sharing
-          participant-minutes are not automatically added as a surcharge to video participant-minutes.
-        </p>
-      </LegalSection>
-
-      <LegalSection num="4" title="Usage Transitions">
-        <p>
-          If a session changes communication modes during a call, PurpleCallio may calculate usage
-          separately for the applicable periods.
-        </p>
-        <p>For example: 10 minutes of Audio + 5 minutes of Video + 3 minutes of Screen Sharing.</p>
-        <p>Each applicable usage segment is rated according to its applicable rate.</p>
-      </LegalSection>
-
-      <LegalSection num="5" title="Participant Changes">
         <p>
           If participants join or leave a session, usage is calculated according to the number of
-          participants using the service during the applicable period.
-        </p>
-        <p>
-          Therefore, a single call can produce different participant-minute totals over its lifetime.
+          participants using the service during each period, so a single call can produce different
+          participant-minute totals over its lifetime.
         </p>
       </LegalSection>
 
-      <LegalSection num="6" title="Usage Records">
-        <p>PurpleCallio's backend usage records are the authoritative source for billing calculations.</p>
+      <LegalSection num="6" title="Usage Records and Rounding">
         <p>
-          Customer dashboards may display estimated or current usage, but final invoices are generated
-          from PurpleCallio's billing records.
+          PurpleCallio's backend usage records are the authoritative source for credit consumption.
+          Dashboards may show current or estimated usage while a call is in progress.
+        </p>
+        <p>
+          PurpleCallio tracks usage in per-second increments. For display, usage may be rounded up to the
+          nearest minute per usage segment.
         </p>
       </LegalSection>
 
-      <LegalSection num="7" title="Usage Rounding">
-        <p>PurpleCallio tracks usage in per-second increments.</p>
+      <LegalSection num="7" title="Top-ups">
         <p>
-          For invoice display, usage is rounded up to the nearest minute per usage segment. Billing is
-          calculated on the underlying per-second usage.
+          Top-ups are one-time purchases of additional credits. Top-up packages, prices and credit amounts
+          are shown on the pricing page and in your dashboard. A top-up does not change your plan.
         </p>
       </LegalSection>
 
-      <LegalSection num="8" title="Free Allowance">
+      <LegalSection num="8" title="Upgrades, Downgrades and Cancellation">
+        <LegalBullets items={[
+          "Upgrade: you pay the full price of the new plan, the new plan starts immediately with its included credits, and any remaining credits from your previous plan stay usable until they expire.",
+          "Downgrade: a downgrade is scheduled for the end of your current paid period. You keep your current plan and its credits until then.",
+          "Cancellation: cancelling takes effect at the end of your current paid period. Your plan remains active, and its credits remain usable, until that date.",
+        ]} />
+      </LegalSection>
+
+      <LegalSection num="9" title="Custom Plans">
         <p>
-          Every account receives a monthly free allowance of{" "}
-          audio and video participant-minutes as shown in the current rates
-          published by the billing service, plus unlimited projects and developers.
-        </p>
-        <p>
-          Screen sharing has no free allowance and is always billable. Usage beyond the free allowance
-          is billed at the applicable rates.
+          Custom plans are available by agreement. Their price, included credits, limits, features and
+          duration are set out in a private offer that you can review and accept from your dashboard.
+          Payment for a custom plan is made upfront in the same way as for other plans unless otherwise
+          agreed in writing.
         </p>
       </LegalSection>
 
-      <LegalSection num="9" title="Usage Alerts">
+      <LegalSection num="10" title="Payments and Taxes">
         <p>
-          PurpleCallio may provide usage notifications when customers approach configured usage or
-          spending thresholds.
-        </p>
-        <p>Customers are responsible for monitoring their usage.</p>
-      </LegalSection>
-
-      <LegalSection num="10" title="Payment Authorization">
-        <p>Customers must maintain a valid payment method for paid usage.</p>
-        <p>
-          Where supported, PurpleCallio may automatically charge the customer's payment method for
-          billable usage.
-        </p>
-        <p>A {gst}% GST applies on billable usage.</p>
-      </LegalSection>
-
-      <LegalSection num="11" title="Failed Payments">
-        <p>
-          If a payment fails, PurpleCallio retries and notifies you, then enters a 7-day grace period.
+          Payments are processed by our third-party payment provider (such as Razorpay). Each payment is
+          a one-time payment that you authorise at checkout. A receipt is available for every successful
+          payment.
         </p>
         <p>
-          During the grace period existing calls continue uninterrupted, but new calls are paused until
-          the payment succeeds.
+          Prices are shown excluding GST. GST at the rate shown at checkout is added to the price of
+          plans, renewals, custom plans and top-ups. Any customer-specific discount agreed with
+          PurpleCallio is applied before GST.
+        </p>
+        <p>
+          If a payment fails or is not completed, the plan or top-up is not activated and no credits are
+          added. You can try again from the Billing page.
         </p>
       </LegalSection>
 
-      <LegalSection num="12" title="Billing Disputes">
-        <p>Customers should report suspected billing errors within 30 days of the applicable invoice.</p>
-        <p>PurpleCallio may review:</p>
+      <LegalSection num="11" title="Refunds">
+        <p>
+          Payments for plans, renewals, custom plans and top-ups are not refunded automatically. Refunds
+          may be issued where required by applicable law, for duplicate or erroneous charges, or at
+          PurpleCallio's discretion, as described in the Refund &amp; Cancellation Policy. If a payment is
+          refunded, the credits it added may be removed and a refunded plan may end.
+        </p>
+      </LegalSection>
+
+      <LegalSection num="12" title="Usage Notifications">
+        <p>
+          PurpleCallio may notify you when your credit balance runs low, when credits are about to expire
+          and when a plan period is about to end. Customers remain responsible for monitoring their
+          credit balance.
+        </p>
+      </LegalSection>
+
+      <LegalSection num="13" title="Legacy Usage Invoices">
+        <p>
+          Before PurpleCallio moved to prepaid plans, some accounts were billed for usage after the fact
+          (pay-as-you-go). Legacy usage invoices issued under that model before the change remain valid
+          historical records, and any amounts due under them remain payable. They remain viewable from the
+          Billing page.
+        </p>
+      </LegalSection>
+
+      <LegalSection num="14" title="Billing Disputes">
+        <p>
+          Customers should report suspected billing errors within 30 days of the applicable payment or
+          receipt. PurpleCallio may review:
+        </p>
         <LegalBullets items={[
           "Call records",
           "Participant events",
           "Usage segments",
-          "Pricing rules",
+          "Credit transactions",
           "Payment records",
         ]} />
       </LegalSection>

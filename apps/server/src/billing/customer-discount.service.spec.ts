@@ -29,7 +29,10 @@ function createFakePrisma() {
         return (
           discounts
             .filter((d) => matchesWhere(d, where))
-            .sort((a, b) => sign * (a[orderField].getTime() - b[orderField].getTime()))[0] ?? null
+            .sort(
+              (a, b) =>
+                sign * (a[orderField].getTime() - b[orderField].getTime()),
+            )[0] ?? null
         );
       }),
       create: jest.fn(async ({ data }: any) => {
@@ -50,7 +53,11 @@ function createFakePrisma() {
     },
     auditLog: {
       create: jest.fn(async ({ data }: any) => {
-        const row = { id: `audit_${auditLogs.length + 1}`, createdAt: new Date(), ...data };
+        const row = {
+          id: `audit_${auditLogs.length + 1}`,
+          createdAt: new Date(),
+          ...data,
+        };
         auditLogs.push(row);
         return row;
       }),
@@ -61,17 +68,22 @@ function createFakePrisma() {
   function matchesWhere(row: any, where: any): boolean {
     return Object.entries(where).every(([key, value]) => {
       if (key === 'effectiveFrom' && value && typeof value === 'object') {
-        if ('lte' in (value as any)) return row.effectiveFrom.getTime() <= (value as any).lte.getTime();
+        if ('lte' in (value as any))
+          return row.effectiveFrom.getTime() <= (value as any).lte.getTime();
       }
       if (key === 'OR') {
         return (value as any[]).some((clause) => matchesWhere(row, clause));
       }
       if (key === 'effectiveUntil' && value && typeof value === 'object') {
         if ('gte' in (value as any)) {
-          return row.effectiveUntil != null && row.effectiveUntil.getTime() >= (value as any).gte.getTime();
+          return (
+            row.effectiveUntil != null &&
+            row.effectiveUntil.getTime() >= (value as any).gte.getTime()
+          );
         }
       }
-      if (key === 'effectiveUntil' && value === null) return row.effectiveUntil === null;
+      if (key === 'effectiveUntil' && value === null)
+        return row.effectiveUntil === null;
       return row[key] === value;
     });
   }
@@ -90,24 +102,30 @@ describe('CustomerDiscountService', () => {
   }
 
   describe('validation', () => {
-    it.each([-1, 101, NaN, 12.5])('rejects percentage %p', async (percentage) => {
-      const { service } = makeService();
-      await expect(
-        service.setDiscount(COMPANY_ID, ADMIN_ID, {
-          percentage: percentage as number,
-          effectiveFrom: new Date('2026-10-01'),
-        }),
-      ).rejects.toThrow(BadRequestException);
-    });
+    it.each([-1, 101, NaN, 12.5])(
+      'rejects percentage %p',
+      async (percentage) => {
+        const { service } = makeService();
+        await expect(
+          service.setDiscount(COMPANY_ID, ADMIN_ID, {
+            percentage: percentage as number,
+            effectiveFrom: new Date('2026-10-01'),
+          }),
+        ).rejects.toThrow(BadRequestException);
+      },
+    );
 
-    it.each([0, 10, 15, 25, 100])('accepts percentage %i', async (percentage) => {
-      const { service } = makeService();
-      const created = await service.setDiscount(COMPANY_ID, ADMIN_ID, {
-        percentage,
-        effectiveFrom: new Date('2026-10-01'),
-      });
-      expect(created.percentage).toBe(percentage);
-    });
+    it.each([0, 10, 15, 25, 100])(
+      'accepts percentage %i',
+      async (percentage) => {
+        const { service } = makeService();
+        const created = await service.setDiscount(COMPANY_ID, ADMIN_ID, {
+          percentage,
+          effectiveFrom: new Date('2026-10-01'),
+        });
+        expect(created.percentage).toBe(percentage);
+      },
+    );
 
     it('rejects effectiveUntil before effectiveFrom', async () => {
       const { service } = makeService();
@@ -202,7 +220,10 @@ describe('CustomerDiscountService', () => {
       });
 
       for (const cycleStart of ['2026-10-01', '2026-11-01', '2026-12-01']) {
-        const resolved = await service.getActiveDiscount(COMPANY_ID, new Date(cycleStart));
+        const resolved = await service.getActiveDiscount(
+          COMPANY_ID,
+          new Date(cycleStart),
+        );
         expect(resolved?.percentage).toBe(15);
       }
     });
@@ -218,7 +239,9 @@ describe('CustomerDiscountService', () => {
         effectiveFrom: new Date('2026-11-01T00:00:00Z'),
       });
 
-      const activeOnes = discounts.filter((d) => d.companyId === COMPANY_ID && d.active);
+      const activeOnes = discounts.filter(
+        (d) => d.companyId === COMPANY_ID && d.active,
+      );
       expect(activeOnes).toHaveLength(1);
       expect(activeOnes[0].id).toBe(second.id);
 
@@ -244,8 +267,14 @@ describe('CustomerDiscountService', () => {
         effectiveFrom: new Date('2026-11-01T00:00:00Z'),
       });
 
-      const octoberCycle = await service.getActiveDiscount(COMPANY_ID, new Date('2026-10-15'));
-      const novemberCycle = await service.getActiveDiscount(COMPANY_ID, new Date('2026-11-15'));
+      const octoberCycle = await service.getActiveDiscount(
+        COMPANY_ID,
+        new Date('2026-10-15'),
+      );
+      const novemberCycle = await service.getActiveDiscount(
+        COMPANY_ID,
+        new Date('2026-11-15'),
+      );
       expect(octoberCycle?.percentage).toBe(15);
       expect(novemberCycle?.percentage).toBe(20);
     });
@@ -260,7 +289,10 @@ describe('CustomerDiscountService', () => {
       });
       await service.disableDiscount(COMPANY_ID, ADMIN_ID);
 
-      const resolved = await service.getActiveDiscount(COMPANY_ID, new Date('2026-10-15'));
+      const resolved = await service.getActiveDiscount(
+        COMPANY_ID,
+        new Date('2026-10-15'),
+      );
       expect(resolved).toBeNull();
     });
 

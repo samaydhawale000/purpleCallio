@@ -35,6 +35,11 @@ export function notificationHref(n: AppNotification, area: NotificationArea): st
     if (n.type === 'INVOICE_PAYMENT_FAILED') {
       return id('customerId') ? `/admin/customers/${id('customerId')}` : '/admin/billing';
     }
+    if (n.type === 'CUSTOM_PLAN_REQUEST_CREATED') {
+      return id('requestId') ? `/admin/billing/custom-plans/${id('requestId')}` : '/admin/billing?tab=custom-plans';
+    }
+    if (n.type === 'PAYMENT_FAILED') return '/admin/billing?tab=payments';
+    if (n.type === 'PLAN_ACTIVATED') return '/admin/billing?tab=subscriptions';
     return null;
   }
 
@@ -50,6 +55,21 @@ export function notificationHref(n: AppNotification, area: NotificationArea): st
     case 'USAGE_LIMIT_APPROACHING':
     case 'USAGE_LIMIT_REACHED':
       return '/dashboard/usage';
+    case 'PAYMENT_SUCCESS':
+    case 'PAYMENT_FAILED':
+      return '/dashboard/billing/payments';
+    case 'PLAN_ACTIVATED':
+    case 'PLAN_EXPIRING':
+    case 'PLAN_EXPIRED':
+      return '/dashboard/billing';
+    case 'CREDITS_LOW':
+    case 'CREDITS_EXHAUSTED':
+    case 'TOPUP_SUCCESS':
+      return '/dashboard/billing/credits';
+    case 'CUSTOM_PLAN_REQUEST_CREATED':
+      return id('ticketId') ? `/dashboard/support/${id('ticketId')}` : '/dashboard/billing';
+    case 'CUSTOM_PLAN_OFFER_RECEIVED':
+      return id('offerId') ? `/dashboard/billing/offers/${id('offerId')}` : '/dashboard/billing';
     case 'API_KEY_CREATED':
     case 'API_KEY_REVOKED':
       return '/dashboard/api-keys';

@@ -11,5 +11,6 @@ import { AdminGuard } from '../admin/guards/admin.guard';
   imports: [JwtModule.register({})],
   controllers: [SupportController, AdminSupportController],
   providers: [SupportService, AdminGuard],
+  exports: [SupportService],
 })
 export class SupportModule {}

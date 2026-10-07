@@ -19,7 +19,7 @@ const faqs = [
    ["What can I build with PurpleCallio?", "Developers can build 1:1 audio calls, 1:1 video calls, screen sharing, custom communication interfaces, and embedded calling experiences."],
    ["Does PurpleCallio support video calls?", "Yes. PurpleCallio supports video calling."],
    ["Does PurpleCallio support audio calls?", "Yes. PurpleCallio supports audio calling and audio participant usage tracking."],
-   ["Does PurpleCallio support screen sharing?", "Yes. Screen sharing is supported and tracked as a separate billable usage category."],
+   ["Does PurpleCallio support screen sharing?", "Yes. Screen sharing is supported and tracked as a separate usage category that consumes credits at its own rate."],
    ["Does PurpleCallio have a JavaScript SDK?", "Yes. @purplecallio/sdk is the official JavaScript and TypeScript SDK."],
    ["Does PurpleCallio have React components?", "Yes. @purplecallio/react provides official React components and hooks."],
    ["How does PurpleCallio pricing work?", "PurpleCallio uses participant-minute usage pricing. Audio, video, and screen sharing are tracked as separate usage categories."],
@@ -130,7 +130,7 @@ Participants`}</pre>
             </div>
          </ContentSection>
          <ContentSection title="Pricing">
-            <p>PurpleCallio uses usage-based participant-minute pricing. Audio, video, and screen sharing are separate usage categories.</p>
+            <p>PurpleCallio uses simple prepaid plans with included usage credits. Usage is measured in participant-minutes, and audio, video, and screen sharing each consume credits at their own rate. Top up when you need more and upgrade as you grow.</p>
             <Link href="/pricing" className="font-medium text-[#6425C4] hover:text-[#170B2E]">View official PurpleCallio pricing →</Link>
          </ContentSection>
          <ContentSection title="Developer resources">

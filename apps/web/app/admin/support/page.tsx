@@ -11,8 +11,10 @@ import { TicketStatusBadge, ticketStatusLabel } from '../../components/support/T
 import { NewMessageTag, UnreadDot } from '../../components/support/UnreadIndicators';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Button } from '../../components/ui/Button';
+import { CustomPlanBadge } from './_components/CustomPlanContext';
 
 type AdminTicket = SupportTicket & {
+  type?: 'GENERAL' | 'CUSTOM_PLAN';
   customer: { id: string; name: string | null; email: string; companyName: string | null };
 };
 
@@ -23,6 +25,7 @@ export default function AdminSupportPage() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<TicketStatus | ''>('');
+  const [type, setType] = useState<'' | 'CUSTOM_PLAN'>('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
@@ -35,6 +38,7 @@ export default function AdminSupportPage() {
     const params = new URLSearchParams({ page: String(page) });
     if (search) params.set('search', search);
     if (status) params.set('status', status);
+    if (type) params.set('type', type);
     api
       .get(`/admin/support/tickets?${params}`)
       .then((res) => {
@@ -45,7 +49,7 @@ export default function AdminSupportPage() {
       })
       .catch(() => setFailed(true))
       .finally(() => setLoading(false));
-  }, [page, search, status]);
+  }, [page, search, status, type]);
 
   useEffect(() => {
     load();
@@ -53,12 +57,13 @@ export default function AdminSupportPage() {
 
   useRealtimeEvent('support:ticket-updated', () => load({ silent: true }));
 
-  const filtered = !!search || !!status;
+  const filtered = !!search || !!status || !!type;
 
   function clearFilters() {
     setSearchInput('');
     setSearch('');
     setStatus('');
+    setType('');
     setPage(1);
   }
 
@@ -98,6 +103,18 @@ export default function AdminSupportPage() {
             <option key={s} value={s}>{ticketStatusLabel(s)}</option>
           ))}
         </select>
+        <select
+          aria-label="Ticket type"
+          value={type}
+          onChange={(e) => {
+            setPage(1);
+            setType(e.target.value as '' | 'CUSTOM_PLAN');
+          }}
+          className="px-3 py-2.5 rounded-lg text-sm text-[#170B2E] bg-white border border-[#D6C4EE] outline-none focus:border-[#7F40E8]/60"
+        >
+          <option value="">All types</option>
+          <option value="CUSTOM_PLAN">Custom plan</option>
+        </select>
       </div>
 
       {loading ? (
@@ -119,7 +136,7 @@ export default function AdminSupportPage() {
           <EmptyState
             icon={SearchX}
             title="No matching tickets"
-            body="No tickets match your search or status filter."
+            body="No tickets match your search or filters."
             action={
               <Button variant="secondary" onClick={clearFilters}>
                 Clear filters
@@ -171,6 +188,7 @@ export default function AdminSupportPage() {
                         >
                           {t.subject}
                         </Link>
+                        {t.type === 'CUSTOM_PLAN' && <CustomPlanBadge />}
                         {t.hasUnread && <NewMessageTag label="New" />}
                       </div>
                     </td>

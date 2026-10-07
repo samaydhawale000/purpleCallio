@@ -23,6 +23,7 @@ describe('CallService playground expiration cleanup', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
 
     await service.expirePlaygroundCalls();
@@ -55,6 +56,7 @@ describe('CallService playground expiration cleanup', () => {
       prisma,
       sessions as any,
       gateway as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,

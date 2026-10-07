@@ -1,10 +1,13 @@
 export type TicketStatus = 'OPEN' | 'PENDING' | 'RESOLVED';
 export type SenderType = 'CUSTOMER' | 'ADMIN';
+/** CUSTOM_PLAN tickets are opened by the custom-plan request flow. */
+export type TicketType = 'GENERAL' | 'CUSTOM_PLAN';
 
 export interface SupportTicket {
   id: string;
   ticketNumber: string;
   subject: string;
+  type?: TicketType;
   documentationId: string | null;
   status: TicketStatus;
   createdAt: string;

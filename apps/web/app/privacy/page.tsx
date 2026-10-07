@@ -8,7 +8,7 @@ export default function PrivacyPage() {
   return (
     <LegalLayout
       title="Privacy Policy"
-      lastUpdated="24 August 2025"
+      lastUpdated="7 October 2026"
       intro="This Privacy Policy explains how PurpleCallio collects, uses, stores, and protects personal information when you use our website and services."
     >
       <LegalSection num="1" title="Information We Collect">
@@ -34,8 +34,9 @@ export default function PrivacyPage() {
           "Billing address",
           "Billing contact",
           "Transaction information",
-          "Subscription information",
-          "Payment status",
+          "Plan and subscription information",
+          "Credit balance and credit transactions",
+          "Payment status and receipts",
         ]} />
         <p>
           Payment card details may be processed directly by our payment provider and may not be
@@ -52,7 +53,7 @@ export default function PrivacyPage() {
           "API requests",
           "WebSocket connections",
           "Error information",
-          "Usage and billing metrics",
+          "Usage, credit consumption, and billing metrics",
         ]} />
         <p className="font-semibold text-[#3D3650]">Technical Information</p>
         <LegalBullets items={[
@@ -89,7 +90,7 @@ export default function PrivacyPage() {
           "Establish communication sessions",
           "Manage projects and API keys",
           "Calculate usage",
-          "Generate invoices",
+          "Manage plans, credits, receipts, and billing records",
           "Process payments",
           "Detect fraud and abuse",
           "Maintain security",

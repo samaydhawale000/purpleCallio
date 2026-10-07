@@ -72,20 +72,12 @@ interface CurrentUsage {
     screenShareMinutes: number;
     participants: number;
   };
-  freeAllowance: { audioMinutes: number; videoMinutes: number };
-  cost: {
-    audioPaise: number;
-    videoPaise: number;
-    screenSharePaise: number;
-    totalPaise: number;
-  };
-estimatedMonthEndPaise: number;
-  isFreeTier?: boolean;
-  hasPaymentMethod?: boolean;
-  freeUsagePercent?: number;
+  credits?: { audio: number; video: number; screenShare: number; total: number };
+  wallet?: { available: number; used: number; usedPercent: number };
+  subscription?: { planName: string | null; planType: string | null; currentPeriodEnd: string | null };
 }
 
-const paiseToINR = (paise: number) => `₹${(paise / 100).toFixed(2)}`;
+const formatCredits = (n: number | null | undefined) => (Number.isFinite(n) ? Number(n) : 0).toLocaleString('en-IN');
 
 const QUICK_ACTIONS = [
   { label: 'Create Project', icon: Plus, href: '#', color: '#7F40E8' },
@@ -259,9 +251,13 @@ const minutesUsed = usage?.minutesUsed ?? 0;
   const audioMins = currentUsage?.usage?.audioMinutes ?? 0;
   const videoMins = currentUsage?.usage?.videoMinutes ?? 0;
   const screenMins = currentUsage?.usage?.screenShareMinutes ?? 0;
-  const totalBillable = audioMins + videoMins + screenMins;
-  const currentCost = currentUsage?.cost?.totalPaise ?? 0;
-  const monthEndCost = currentUsage?.estimatedMonthEndPaise ?? 0;
+  const totalParticipantMinutes = audioMins + videoMins + screenMins;
+  const creditsLeft = currentUsage?.wallet?.available ?? 0;
+  const creditsUsed = currentUsage?.credits?.total ?? currentUsage?.wallet?.used ?? 0;
+  const planName = currentUsage?.subscription?.planName ?? (currentUsage?.subscription?.planType === 'FREE' ? 'Free' : null);
+  const periodEnd = currentUsage?.subscription?.currentPeriodEnd
+    ? new Date(currentUsage.subscription.currentPeriodEnd).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null;
 
   if (loading) {
     return (
@@ -303,26 +299,26 @@ const minutesUsed = usage?.minutesUsed ?? 0;
         >
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-sm font-semibold text-[#170B2E]">
-                {currentUsage?.isFreeTier ? 'Free Tier' : 'Pay as you go'}
+              <p className="text-sm font-semibold text-[#170B2E]" data-testid="home-plan-name">
+                {planName ? `${planName} plan` : 'Your plan'}
               </p>
               <p className="text-xs text-[#3D3650] mt-0.5">
-                Pay only for what you use · {currentUsage?.freeAllowance?.audioMinutes ?? 500} audio + {currentUsage?.freeAllowance?.videoMinutes ?? 200} video participant-min free/month · screen share always paid
+                Prepaid plan with included usage credits{periodEnd ? ` · current period ends ${periodEnd}` : ''}
               </p>
             </div>
             <Link
               href="/dashboard/billing"
               className="inline-flex items-center gap-1 text-xs font-medium text-[#6425C4] hover:text-[#6425C4] transition-colors"
             >
-              Billing &amp; Usage <ArrowUpRight size={14} />
+              Plan &amp; credits <ArrowUpRight size={14} />
             </Link>
           </div>
 
 {/* Per-type summary */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-            <MiniType label="Audio" mins={audioMins} costPaise={currentUsage?.cost?.audioPaise ?? 0} showCost={!currentUsage?.isFreeTier} />
-            <MiniType label="Video" mins={videoMins} costPaise={currentUsage?.cost?.videoPaise ?? 0} showCost={!currentUsage?.isFreeTier} />
-            <MiniType label="Screen Share" mins={screenMins} costPaise={currentUsage?.cost?.screenSharePaise ?? 0} showCost={!currentUsage?.isFreeTier} />
+            <MiniType label="Audio" mins={audioMins} credits={currentUsage?.credits?.audio} />
+            <MiniType label="Video" mins={videoMins} credits={currentUsage?.credits?.video} />
+            <MiniType label="Screen Share" mins={screenMins} credits={currentUsage?.credits?.screenShare} />
           </div>
           <p className="text-[11px] text-[#3D3650] -mt-2 mb-4">
             Shown in participant-minutes (call duration × participants using that media) — not raw call length.
@@ -331,25 +327,23 @@ const minutesUsed = usage?.minutesUsed ?? 0;
           <div className="flex flex-wrap items-center justify-between mt-2 gap-3">
             <div className="flex items-center gap-6">
               <div>
+                <p className="text-xs text-[#3D3650]">Credits remaining</p>
+                <p className="text-lg font-bold" style={{ color: creditsLeft > 0 ? '#10B981' : '#DC2626' }} data-testid="home-credits-left">
+                  {formatCredits(creditsLeft)}
+                </p>
+                {creditsLeft <= 0 && <p className="text-[10px] text-red-600">New calls are paused until you add credits</p>}
+              </div>
+              <div>
+                <p className="text-xs text-[#3D3650]">Credits used</p>
+                <p className="text-lg font-bold text-[#170B2E]">{formatCredits(creditsUsed)}</p>
+              </div>
+              <div>
                 <p className="text-xs text-[#3D3650]">Total usage</p>
                 <p className="text-lg font-bold text-[#170B2E]">
-                  {totalBillable.toFixed(2)}
+                  {totalParticipantMinutes.toFixed(2)}
                   <span className="text-xs font-normal text-[#3D3650]"> participant-min</span>
                 </p>
               </div>
-              {!currentUsage?.isFreeTier && (
-                <>
-                  <div>
-                    <p className="text-xs text-[#3D3650]">Current cost</p>
-                    <p className="text-lg font-bold" style={{ color: '#34D399' }}>{paiseToINR(currentCost)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-[#3D3650]">Est. month-end</p>
-                    <p className="text-lg font-bold text-[#170B2E]">{paiseToINR(monthEndCost)}</p>
-                    <p className="text-[10px] text-[#3D3650]">projected from usage so far this cycle</p>
-                  </div>
-                </>
-              )}
             </div>
             <div
               className="text-xs font-mono px-3 py-1.5 rounded-full"
@@ -703,17 +697,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
   );
 }
 
-function MiniType({
-  label,
-  mins,
-  costPaise,
-  showCost,
-}: {
-  label: string;
-  mins: number;
-  costPaise: number;
-  showCost?: boolean;
-}) {
+function MiniType({ label, mins, credits }: { label: string; mins: number; credits?: number }) {
   return (
     <div className="rounded-xl border border-[#E7DFF5] px-4 py-3 text-center" style={{ background: '#F8F4FD' }}>
       <p className="text-[11px] text-[#3D3650]">{label}</p>
@@ -721,7 +705,7 @@ function MiniType({
         {mins.toFixed(2)}
         <span className="text-xs font-normal text-[#3D3650]"> participant-min</span>
       </p>
-      {showCost && <p className="text-[11px] font-semibold text-[#6425C4]">{paiseToINR(costPaise)}</p>}
+      {credits != null && <p className="text-[11px] font-semibold text-[#6425C4]">{formatCredits(credits)} credits</p>}
     </div>
   );
 }
