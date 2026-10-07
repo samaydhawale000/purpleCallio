@@ -93,6 +93,22 @@ export class RazorpayPaymentService implements PaymentService {
     return customer.id;
   }
 
+  async customerExists(customerId: string): Promise<boolean> {
+    this.assertConfigured();
+    try {
+      await this.razorpay.customers.fetch(customerId);
+      return true;
+    } catch (e: any) {
+      // Razorpay answers 404 for malformed ids and 400 "The id provided does
+      // not exist" for well-formed ids from another account/mode.
+      const description = e?.error?.description ?? '';
+      if (e?.statusCode === 404 || (e?.statusCode === 400 && /does not exist/i.test(description))) {
+        return false;
+      }
+      throw e;
+    }
+  }
+
   /**
    * Razorpay validates the *customer's* contact field before authorising a
    * recurring card mandate for them ("The contact field is required for
