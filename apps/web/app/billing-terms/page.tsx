@@ -24,14 +24,25 @@ export default function BillingTermsPage() {
 
       <LegalSection num="2" title="Plan Duration and Renewal">
         <p>
-          Each paid plan runs for the plan period shown at checkout (for example, one month). Paid plans
-          do not renew automatically, and PurpleCallio does not automatically charge your payment method.
+          Each paid plan runs for the plan period shown at checkout (for example, one month). Each
+          period is paid for at its start, before its credits are added.
         </p>
         <p>
-          To continue on a paid plan after its period ends, you renew it manually from the Billing page
-          and pay for the next period. If you do not renew, your account moves to the Free plan when the
-          paid period ends. Renewal is priced at the plan's then-current price and included credits,
-          which are shown to you before you pay.
+          <strong>Auto-renew.</strong> When you keep auto-renew on (selected by default at checkout), you
+          authorize a recurring payment mandate (card or UPI Autopay) through our payment provider for
+          that plan. At the start of each new period the provider charges the plan price including GST,
+          and your plan and its included credits are renewed once that payment is confirmed. You are
+          notified before each renewal. If the plan's price, GST or your applicable discount changes, the
+          new amount applies from your next renewal and you are notified before it is charged. You can
+          turn auto-renew off at any time from the Billing page; no further renewal is charged after that.
+          If a renewal payment fails, the provider may retry for a few days while your plan stays active;
+          if it still fails, auto-renew stops and your plan ends.
+        </p>
+        <p>
+          <strong>Manual renewal.</strong> With auto-renew off, you renew from the Billing page and pay for
+          the next period. If you do not renew, your account moves to the Free plan when the paid period
+          ends. Renewal is priced at the plan's then-current price and included credits, which are shown to
+          you before you pay.
         </p>
         <p>
           The Free plan includes a monthly amount of credits as published on the pricing page.

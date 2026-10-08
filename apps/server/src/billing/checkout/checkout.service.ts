@@ -29,12 +29,17 @@ import {
 } from '../subscriptions/subscription.service';
 import { TopUpService } from '../topups/topup.service';
 import { BillingFulfillmentService } from './fulfillment.service';
+import { AutoRenewService } from '../subscriptions/auto-renew.service';
 
-export type CheckoutRequest =
+export type CheckoutRequest = (
   | { kind: 'plan'; planId: string }
   | { kind: 'renewal' }
   | { kind: 'topup'; topUpPackageId: string }
-  | { kind: 'offer'; offerId: string };
+  | { kind: 'offer'; offerId: string }
+) & {
+  /** Plan/offer purchases only; omitted = the admin default (on). */
+  autoRenew?: boolean;
+};
 
 interface ResolvedCheckout {
   purpose: PaymentPurpose;
@@ -77,12 +82,48 @@ export class CheckoutService {
     private subscriptions: SubscriptionService,
     private topUps: TopUpService,
     private fulfillment: BillingFulfillmentService,
+    private autoRenew: AutoRenewService,
   ) {}
+
+  /** Whether this checkout sets up an auto-renew mandate. */
+  private async wantsAutoRenew(
+    req: CheckoutRequest,
+    resolved: ResolvedCheckout,
+  ) {
+    const eligible =
+      !!resolved.plan &&
+      resolved.purpose !== PaymentPurpose.SUBSCRIPTION_RENEWAL &&
+      resolved.purpose !== PaymentPurpose.TOPUP;
+    if (!eligible) return { available: false, on: false };
+    const config = await this.config.get();
+    return { available: true, on: req.autoRenew ?? config.autoRenewDefault };
+  }
+
+  private async withAutoRenew(
+    quote: Awaited<ReturnType<CheckoutService['present']>>,
+    req: CheckoutRequest,
+    resolved: ResolvedCheckout,
+  ) {
+    const ar = await this.wantsAutoRenew(req, resolved);
+    return {
+      ...quote,
+      autoRenew: {
+        available: ar.available,
+        on: ar.on,
+        // Each renewal charges the same total, at the start of each period.
+        amountPaise: ar.available ? quote.totalPaise : null,
+      },
+    };
+  }
 
   /** Price breakdown shown on the review screen (no side effects). */
   async quote(userId: string, req: CheckoutRequest) {
     const resolved = await this.resolve(userId, req);
-    return this.present(userId, resolved);
+    return this.withAutoRenew(
+      await this.present(userId, resolved),
+      req,
+      resolved,
+    );
   }
 
   /**
@@ -92,7 +133,12 @@ export class CheckoutService {
    */
   async start(userId: string, req: CheckoutRequest) {
     const resolved = await this.resolve(userId, req);
-    const quote = await this.present(userId, resolved);
+    const quote = await this.withAutoRenew(
+      await this.present(userId, resolved),
+      req,
+      resolved,
+    );
+    const autoRenew = quote.autoRenew.on;
     if (quote.totalPaise < 100)
       throw new BadRequestException(
         'This purchase is below the minimum payable amount.',
@@ -109,7 +155,9 @@ export class CheckoutService {
         userId,
         purpose: resolved.purpose,
         paymentStatus: PaymentStatus.PENDING,
-        providerOrderId: { not: null },
+        ...(autoRenew
+          ? { providerSubscriptionId: { not: null } }
+          : { providerOrderId: { not: null }, providerSubscriptionId: null }),
         amount: quote.totalPaise,
         planVersionId:
           resolved.plan?.currentVersion?.id ??
@@ -121,11 +169,19 @@ export class CheckoutService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    if (reusable?.providerOrderId && reusable.provider === this.provider.name) {
+    if (
+      reusable &&
+      (reusable.providerOrderId || reusable.providerSubscriptionId) &&
+      reusable.provider === this.provider.name
+    ) {
       return {
         paymentId: reusable.id,
+        mode: reusable.providerSubscriptionId
+          ? ('subscription' as const)
+          : ('order' as const),
         provider: reusable.provider,
         providerOrderId: reusable.providerOrderId,
+        providerSubscriptionId: reusable.providerSubscriptionId,
         publicKey: this.provider.isConfigured()
           ? (process.env.RAZORPAY_KEY_ID ?? null)
           : null,
@@ -178,6 +234,45 @@ export class CheckoutService {
     });
 
     try {
+      if (autoRenew && resolved.plan?.currentVersion) {
+        const mandate = await this.autoRenew.createMandateForCheckout({
+          paymentId: payment.id,
+          userId,
+          amountPaise: payment.amount,
+          currency: payment.currency,
+          version: resolved.plan.currentVersion,
+          planName: resolved.plan.name,
+        });
+        await this.prisma.$transaction([
+          this.prisma.payment.update({
+            where: { id: payment.id },
+            data: { providerSubscriptionId: mandate.providerSubscriptionId },
+          }),
+          this.prisma.subscription.update({
+            where: { id: payment.subscriptionId! },
+            data: {
+              providerSubscriptionId: mandate.providerSubscriptionId,
+              providerSubscriptionStatus: mandate.status,
+            },
+          }),
+        ]);
+        return {
+          paymentId: payment.id,
+          mode: 'subscription' as const,
+          provider: this.provider.name,
+          providerOrderId: null,
+          providerSubscriptionId: mandate.providerSubscriptionId,
+          publicKey: this.provider.isConfigured()
+            ? (process.env.RAZORPAY_KEY_ID ?? null)
+            : null,
+          amountPaise: payment.amount,
+          currency: payment.currency,
+          description: resolved.description,
+          mock: !this.provider.isConfigured(),
+          prefill: { name: user.name, email: user.email, contact: user.phone },
+          quote,
+        };
+      }
       const checkout = await this.provider.createCheckout({
         paymentId: payment.id,
         amountPaise: payment.amount,
@@ -192,8 +287,10 @@ export class CheckoutService {
       });
       return {
         paymentId: payment.id,
+        mode: 'order' as const,
         provider: checkout.provider,
         providerOrderId: checkout.providerOrderId,
+        providerSubscriptionId: null,
         publicKey: checkout.publicKey,
         amountPaise: checkout.amountPaise,
         currency: checkout.currency,
@@ -222,7 +319,9 @@ export class CheckoutService {
     userId: string,
     input: {
       paymentId: string;
-      providerOrderId: string;
+      providerOrderId?: string | null;
+      /** Set instead of providerOrderId for auto-renew (mandate) checkouts. */
+      providerSubscriptionId?: string | null;
       providerPaymentId: string;
       signature: string;
     },
@@ -231,10 +330,12 @@ export class CheckoutService {
       where: { id: input.paymentId, userId },
     });
     if (!payment) throw new NotFoundException('Payment not found');
-    if (
-      !payment.providerOrderId ||
-      payment.providerOrderId !== input.providerOrderId
-    ) {
+    const viaMandate = !!payment.providerSubscriptionId;
+    const matches = viaMandate
+      ? payment.providerSubscriptionId === input.providerSubscriptionId
+      : !!payment.providerOrderId &&
+        payment.providerOrderId === input.providerOrderId;
+    if (!matches) {
       throw new BadRequestException(
         'This payment does not belong to that checkout.',
       );
@@ -242,11 +343,17 @@ export class CheckoutService {
     if (payment.paymentStatus === PaymentStatus.PAID)
       return this.fulfillment.describe(payment.id);
 
-    const verified = await this.provider.verifyPayment({
-      providerOrderId: input.providerOrderId,
-      providerPaymentId: input.providerPaymentId,
-      signature: input.signature,
-    });
+    const verified = viaMandate
+      ? await this.provider.verifySubscriptionPayment({
+          providerSubscriptionId: payment.providerSubscriptionId!,
+          providerPaymentId: input.providerPaymentId,
+          signature: input.signature,
+        })
+      : await this.provider.verifyPayment({
+          providerOrderId: payment.providerOrderId!,
+          providerPaymentId: input.providerPaymentId,
+          signature: input.signature,
+        });
     if (!verified)
       throw new BadRequestException(
         'We could not verify this payment. If you were charged, it will be confirmed automatically shortly.',
@@ -308,6 +415,22 @@ export class CheckoutService {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
     });
+    if (
+      payment?.providerSubscriptionId &&
+      payment.purpose !== PaymentPurpose.SUBSCRIPTION_RENEWAL &&
+      [PaymentStatus.PENDING, PaymentStatus.FAILED].includes(
+        payment.paymentStatus as 'PENDING' | 'FAILED',
+      )
+    ) {
+      // The mandate was never paid for — make sure it can't charge later.
+      await this.provider
+        .cancelSubscription(payment.providerSubscriptionId, false)
+        .catch((err) =>
+          this.logger.warn(
+            `Could not cancel abandoned mandate: ${String(err)}`,
+          ),
+        );
+    }
     if (
       !payment ||
       ![PaymentStatus.PENDING, PaymentStatus.FAILED].includes(
@@ -412,6 +535,11 @@ export class CheckoutService {
 
   private async resolveRenewal(userId: string): Promise<ResolvedCheckout> {
     const current = await this.subscriptions.getActiveSubscription(userId);
+    if (current.planType !== PlanType.FREE && current.autoRenew) {
+      throw new ConflictException(
+        `Auto-renew is on — your plan renews automatically on ${current.currentPeriodEnd?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}. Turn auto-renew off to renew manually instead.`,
+      );
+    }
     if (current.planType !== PlanType.FREE && current.planId) {
       const plan = await this.plans.getPlan(current.planId);
       const v = plan.currentVersion;

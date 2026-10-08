@@ -29,6 +29,8 @@ export type BillingConfigUpdate = Partial<
     | 'topUpExpiryDays'
     | 'renewalReminderDays'
     | 'pendingCheckoutTtlHours'
+    | 'autoRenewDefault'
+    | 'autoRenewGraceHours'
   >
 >;
 
@@ -40,6 +42,7 @@ const INT_FIELDS = [
   'minimumCreditsToStartCall',
   'renewalReminderDays',
   'pendingCheckoutTtlHours',
+  'autoRenewGraceHours',
 ] as const;
 
 /** Whole credits for fractional usage, rounding up (tolerant of float noise). */
@@ -125,6 +128,14 @@ export class BillingConfigService {
       throw new BadRequestException(
         'pendingCheckoutTtlHours must be at least 1.',
       );
+    }
+    if (input.autoRenewDefault !== undefined) {
+      if (typeof input.autoRenewDefault !== 'boolean') {
+        throw new BadRequestException(
+          'autoRenewDefault must be true or false.',
+        );
+      }
+      data.autoRenewDefault = input.autoRenewDefault;
     }
     if (input.lowCreditThresholds !== undefined) {
       const t = input.lowCreditThresholds;

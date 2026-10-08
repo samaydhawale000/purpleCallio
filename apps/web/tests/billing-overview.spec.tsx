@@ -35,7 +35,8 @@ describe('Billing overview', () => {
     expect(plan.textContent).toContain('Growth');
     expect(plan.textContent).toContain('₹2,499 / month');
     expect(plan.textContent).toContain('Active until');
-    expect(plan.textContent).toContain('don’t renew automatically');
+    expect(plan.textContent).toContain('Auto-renew is off');
+    expect(screen.getByTestId('auto-renew-control').textContent).toContain('Turn on auto-renew');
     expect(screen.getByTestId('credit-balance').textContent).toContain('9,000');
     expect(screen.getByTestId('usage-by-media').textContent).toContain('2,400');
     expect(screen.getByText('1 video participant-minute = 2 credits')).toBeTruthy();
@@ -44,6 +45,21 @@ describe('Billing overview', () => {
     expect(api.get).toHaveBeenCalledWith('/billing/credits/history', { params: { page: 1, type: 'USAGE_DEBIT' } });
     expect(screen.queryByTestId('credit-alert')).toBeNull();
     expect(document.body.textContent).not.toMatch(/pay as you go|usage invoice|spending limit|auto billing|free tier/i);
+  });
+
+  it('shows an auto-renewing plan with its next charge and a Turn off control instead of Renew', async () => {
+    mockApi(
+      overview({
+        subscription: { ...overview().subscription, autoRenew: true, renewalAmountPaise: 294882 },
+        autoRenew: { autoRenew: true, status: 'active', renewalAmountPaise: 294882, nextChargeAt: overview().subscription.currentPeriodEnd, offReason: null },
+      }),
+    );
+    render(<BillingOverviewPage />);
+    const plan = await screen.findByTestId('current-plan');
+    expect(plan.textContent).toContain('Renews automatically on');
+    expect(plan.textContent).toContain('₹2,948.82');
+    expect(screen.queryByText('Renew')).toBeNull();
+    expect(screen.getByTestId('auto-renew-control').textContent).toContain('Turn off');
   });
 
   it('shows the cancel-at-period-end state with Resume', async () => {

@@ -326,6 +326,23 @@ model Subscription {
   // Set by the one-off prepaid migration (e.g. "legacy_payg").
   migrationSource          String?
 
+  // ── Auto-renew (provider-managed recurring mandate) ──
+  // When on, the payment provider charges the customer at each period end
+  // under an e-mandate they authorized (card / UPI Autopay); our server only
+  // extends the plan after a verified charge webhook. Off = manual renewal.
+  autoRenew                  Boolean   @default(false)
+  providerSubscriptionId     String?   @unique
+  // Provider's mandate state: created | authenticated | active | pending | halted | cancelled | completed
+  providerSubscriptionStatus String?
+  // Version the mandate will charge for at the next renewal (price change or
+  // scheduled downgrade); null = the current snapshot.
+  renewalPlanVersionId       String?
+  // Total (incl. GST, after discount) the mandate is set up to charge.
+  renewalAmountPaise         Int?
+  autoRenewChangedAt         DateTime?
+  // Why auto-renew was switched off by the system (halted, price change failed…).
+  autoRenewOffReason         String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -351,10 +368,12 @@ model Payment {
   user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
   purpose        PaymentPurpose @default(LEGACY)
 
-  provider          String  @default("razorpay")
+  provider               String  @default("razorpay")
   // Unique so a retried webhook / duplicate callback can never fulfill twice.
-  providerOrderId   String? @unique
-  providerPaymentId String? @unique
+  providerOrderId        String? @unique
+  providerPaymentId      String? @unique
+  // Set when this payment is a charge on an auto-renew mandate.
+  providerSubscriptionId String?
 
   // Totals (paise). `amount` = what the customer pays (incl. tax).
   amount          Int           @default(0)
@@ -389,6 +408,7 @@ model Payment {
 
   @@index([userId, createdAt])
   @@index([paymentStatus, createdAt])
+  @@index([providerSubscriptionId])
 }
 
 // Each provider payment attempt against a Payment's order (a customer can
@@ -1056,6 +1076,11 @@ model BillingConfig {
   renewalReminderDays         Int               @default(7)
   // Unpaid checkouts are abandoned after this many hours.
   pendingCheckoutTtlHours     Int               @default(24)
+  // Auto-renew checkbox pre-ticked at checkout.
+  autoRenewDefault            Boolean           @default(true)
+  // How long an auto-renewing plan stays active past its period end while
+  // the provider's renewal charge is pending/retrying.
+  autoRenewGraceHours         Int               @default(72)
   updatedById                 String?
   createdAt                   DateTime          @default(now())
   updatedAt                   DateTime          @updatedAt
@@ -1182,4 +1207,19 @@ model CustomPlanOffer {
   updatedAt     DateTime              @updatedAt
 
   @@index([userId, status])
+}
+
+// Provider-side recurring plan (e.g. a Razorpay Plan) for one exact charge
+// amount + interval. Reused by every mandate with the same terms.
+model ProviderPlan {
+  id              String          @id @default(uuid())
+  provider        String
+  providerPlanId  String          @unique
+  amountPaise     Int
+  currency        String
+  billingInterval BillingInterval
+  intervalCount   Int
+  createdAt       DateTime        @default(now())
+
+  @@unique([provider, amountPaise, currency, billingInterval, intervalCount])
 }

@@ -9,11 +9,13 @@ import { CreditService } from './credits/credit.service';
 import { SubscriptionService } from './subscriptions/subscription.service';
 
 /**
- * Prepaid billing housekeeping. None of these jobs moves money:
+ * Prepaid billing housekeeping. None of these jobs moves money (auto-renew
+ * charges are made by the payment provider on the customer's mandate and
+ * arrive as webhooks):
  *  - roll subscriptions whose period ended (Free refresh, or paid → expired
  *    → Free fallback),
  *  - expire credit buckets past their expiry,
- *  - remind customers before a paid plan ends (renewal is always manual),
+ *  - remind customers before a paid plan ends or auto-renews,
  *  - abandon checkouts that were never paid.
  *
  * The pay-as-you-go jobs that used to live here (close the cycle, generate a

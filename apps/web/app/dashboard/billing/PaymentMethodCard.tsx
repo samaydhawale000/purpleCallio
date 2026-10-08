@@ -43,7 +43,7 @@ export default function PaymentMethodCard({ paymentMethods, onChanged, showToast
     <section id="payment-methods" className="rounded-2xl border border-[#E7DFF5] bg-white p-6 scroll-mt-20" data-testid="payment-methods">
       <h2 className="text-sm font-semibold text-[#170B2E]">Payment methods</h2>
       <p className="text-xs text-[#3D3650] mt-0.5">
-        Choose a payment method (card, UPI, netbanking) when purchasing a plan or adding credits. Saved cards are never charged automatically.
+        Choose a payment method (card, UPI, netbanking) when purchasing a plan or adding credits. Auto-renew charges only the mandate you authorize for your plan; saved cards are never charged otherwise.
       </p>
 
       {paymentMethods.length === 0 ? (

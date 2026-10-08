@@ -18,7 +18,7 @@ describe('Payment methods card', () => {
       />,
     );
     const card = screen.getByTestId('payment-methods');
-    expect(card.textContent).toContain('Saved cards are never charged automatically.');
+    expect(card.textContent).toContain('saved cards are never charged otherwise');
     expect(card.textContent).toContain('VISA •••• 4242');
     expect(card.textContent).toContain('Saved under previous billing — not charged automatically');
     expect(card.textContent).not.toMatch(/add card|add a card|make default|auto billing|₹1/i);

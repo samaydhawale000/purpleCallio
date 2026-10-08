@@ -3,8 +3,11 @@
 import {
   getPaymentOutcome,
   reportPaymentFailure,
+  startAutoRenew,
   startCheckout,
+  verifyAutoRenew,
   verifyPayment,
+  type AutoRenewState,
   type CheckoutRequest,
   type CheckoutSession,
   type PaymentOutcome,
@@ -65,6 +68,7 @@ export async function runCheckout(req: CheckoutRequest, opts: { onOpen?: () => v
     await sleep(700);
     const outcome = await verifyPayment(session.paymentId, {
       providerOrderId: session.providerOrderId,
+      providerSubscriptionId: session.providerSubscriptionId,
       providerPaymentId: `pay_mock_${Date.now()}`,
       signature: 'mock_signature',
     });
@@ -89,11 +93,14 @@ export async function runCheckout(req: CheckoutRequest, opts: { onOpen?: () => v
       }
     };
 
+    const viaMandate = session.mode === 'subscription';
     const rzp = new window.Razorpay({
       key: session.publicKey,
-      order_id: session.providerOrderId,
-      amount: session.amountPaise,
-      currency: session.currency,
+      // Auto-renew: the customer authorizes a recurring mandate (card / UPI
+      // Autopay) and pays the first period in the same step.
+      ...(viaMandate
+        ? { subscription_id: session.providerSubscriptionId }
+        : { order_id: session.providerOrderId, amount: session.amountPaise, currency: session.currency }),
       name: 'PurpleCallio',
       description: session.description,
       prefill: {
@@ -106,7 +113,9 @@ export async function runCheckout(req: CheckoutRequest, opts: { onOpen?: () => v
       handler: async (response: any) => {
         try {
           const outcome = await verifyPayment(session.paymentId, {
-            providerOrderId: response?.razorpay_order_id ?? session.providerOrderId,
+            ...(viaMandate
+              ? { providerSubscriptionId: response?.razorpay_subscription_id ?? session.providerSubscriptionId }
+              : { providerOrderId: response?.razorpay_order_id ?? session.providerOrderId }),
             providerPaymentId: response?.razorpay_payment_id,
             signature: response?.razorpay_signature,
           });
@@ -153,6 +162,72 @@ export async function runCheckout(req: CheckoutRequest, opts: { onOpen?: () => v
     });
 
     opts.onOpen?.();
+    rzp.open();
+  });
+}
+
+export type AutoRenewSetupResult =
+  | { kind: 'enabled'; state: AutoRenewState }
+  | { kind: 'failed'; message: string }
+  | { kind: 'dismissed' };
+
+/**
+ * Turns auto-renew on for a plan that was bought without it. The customer
+ * authorizes a recurring mandate in Razorpay Checkout; nothing is charged
+ * until the current period ends (cards may see a small authorization that
+ * the bank reverses). The server verifies the authorization.
+ */
+export async function runAutoRenewSetup(): Promise<AutoRenewSetupResult> {
+  const session = await startAutoRenew();
+  if (session.mock || !session.publicKey) {
+    await sleep(500);
+    const state = await verifyAutoRenew({
+      providerSubscriptionId: session.providerSubscriptionId,
+      providerPaymentId: `pay_mock_${Date.now()}`,
+      signature: 'mock_signature',
+    });
+    return { kind: 'enabled', state };
+  }
+  if (!(await loadRazorpay())) {
+    return { kind: 'failed', message: 'Could not load the payment window. Check your connection and try again.' };
+  }
+  return new Promise<AutoRenewSetupResult>((resolve) => {
+    let settled = false;
+    let lastFailure: string | null = null;
+    const finish = (r: AutoRenewSetupResult) => {
+      if (!settled) {
+        settled = true;
+        resolve(r);
+      }
+    };
+    const rzp = new window.Razorpay({
+      key: session.publicKey,
+      subscription_id: session.providerSubscriptionId,
+      name: 'PurpleCallio',
+      description: session.description,
+      prefill: {
+        name: session.prefill.name ?? undefined,
+        email: session.prefill.email ?? undefined,
+        contact: session.prefill.contact ?? undefined,
+      },
+      theme: { color: '#7F40E8' },
+      handler: async (response: any) => {
+        try {
+          const state = await verifyAutoRenew({
+            providerSubscriptionId: response?.razorpay_subscription_id ?? session.providerSubscriptionId,
+            providerPaymentId: response?.razorpay_payment_id,
+            signature: response?.razorpay_signature,
+          });
+          finish({ kind: 'enabled', state });
+        } catch (e: any) {
+          finish({ kind: 'failed', message: e?.response?.data?.message ?? 'We could not confirm the auto-renew setup.' });
+        }
+      },
+      modal: { ondismiss: () => finish(lastFailure ? { kind: 'failed', message: lastFailure } : { kind: 'dismissed' }) },
+    });
+    rzp.on('payment.failed', (resp: any) => {
+      lastFailure = resp?.error?.description ?? 'Authorization failed';
+    });
     rzp.open();
   });
 }

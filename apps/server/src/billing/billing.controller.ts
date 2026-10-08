@@ -32,11 +32,15 @@ import { CheckoutService } from './checkout/checkout.service';
 import type { CheckoutRequest } from './checkout/checkout.service';
 import { BillingWebhookService } from './checkout/billing-webhook.service';
 import { CustomPlanService } from './custom-plans/custom-plan.service';
+import { AutoRenewService } from './subscriptions/auto-renew.service';
 import { omit } from './omit.util';
 
 interface VerifyBody {
   paymentId?: string;
-  providerOrderId: string;
+  /** One-time checkout… */
+  providerOrderId?: string | null;
+  /** …or an auto-renew (mandate) checkout. */
+  providerSubscriptionId?: string | null;
   providerPaymentId: string;
   signature: string;
 }
@@ -63,6 +67,7 @@ export class BillingController {
     private checkout: CheckoutService,
     private webhooks: BillingWebhookService,
     private customPlans: CustomPlanService,
+    private autoRenew: AutoRenewService,
   ) {}
 
   // ── Public (pricing page, docs) ─────────────────────
@@ -177,6 +182,34 @@ export class BillingController {
     );
   }
 
+  /**
+   * Auto-renew on/off. Turning it on for a plan bought without it starts a
+   * mandate whose first charge is at the current period's end; the customer
+   * authorizes it in Checkout and we confirm via /auto-renew/verify.
+   */
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('subscription/auto-renew')
+  @UseGuards(JwtGuard)
+  async setAutoRenew(@Req() req: any, @Body() body: { enabled: boolean }) {
+    if (body?.enabled) return this.autoRenew.startEnable(req.user.userId);
+    return this.autoRenew.disableForCustomer(req.user.userId);
+  }
+
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Post('subscription/auto-renew/verify')
+  @UseGuards(JwtGuard)
+  async verifyAutoRenew(
+    @Req() req: any,
+    @Body()
+    body: {
+      providerSubscriptionId: string;
+      providerPaymentId: string;
+      signature: string;
+    },
+  ) {
+    return this.autoRenew.confirmEnable(req.user.userId, body);
+  }
+
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('subscription/resume')
   @UseGuards(JwtGuard)
@@ -215,21 +248,26 @@ export class BillingController {
   @UseGuards(JwtGuard)
   async subscriptionCheckout(
     @Req() req: any,
-    @Body() body: { planId: string },
+    @Body() body: { planId: string; autoRenew?: boolean },
   ) {
     return this.checkout.start(req.user.userId, {
       kind: 'plan',
       planId: body?.planId,
+      autoRenew: body?.autoRenew,
     });
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('subscription/upgrade')
   @UseGuards(JwtGuard)
-  async upgrade(@Req() req: any, @Body() body: { planId: string }) {
+  async upgrade(
+    @Req() req: any,
+    @Body() body: { planId: string; autoRenew?: boolean },
+  ) {
     return this.checkout.start(req.user.userId, {
       kind: 'plan',
       planId: body?.planId,
+      autoRenew: body?.autoRenew,
     });
   }
 
@@ -469,13 +507,22 @@ export class BillingController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('offers/:id/accept')
   @UseGuards(JwtGuard)
-  async acceptOffer(@Req() req: any, @Param('id') id: string) {
-    return this.checkout.start(req.user.userId, { kind: 'offer', offerId: id });
+  async acceptOffer(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { autoRenew?: boolean },
+  ) {
+    return this.checkout.start(req.user.userId, {
+      kind: 'offer',
+      offerId: id,
+      autoRenew: body?.autoRenew,
+    });
   }
 
   // ── Payment methods ─────────────────────────────────
   // Payment is chosen at checkout (cards, UPI, netbanking via Razorpay).
-  // These list/remove cards saved earlier; nothing here can charge them.
+  // Auto-renew charges run only on mandates the customer authorized for a
+  // plan; these endpoints list/remove saved cards and can't charge them.
   @Get('payment-methods')
   @UseGuards(JwtGuard)
   async paymentMethods(@Req() req: any) {

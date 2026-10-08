@@ -21,6 +21,8 @@ import { PlanService, PlanWithVersion } from '../plans/plan.service';
 import { BillingAuditService } from '../billing-audit.service';
 import { BillingNotificationService } from '../billing-notification.service';
 import { addBillingInterval } from './period.util';
+import { BillingConfigService } from '../billing-config.service';
+import { AutoRenewService, LIVE_MANDATE_STATES } from './auto-renew.service';
 
 type Tx = Prisma.TransactionClient;
 type PostCommit = (() => Promise<unknown>)[];
@@ -93,6 +95,8 @@ export class SubscriptionService {
     private plans: PlanService,
     private audit: BillingAuditService,
     private notify: BillingNotificationService,
+    private config: BillingConfigService,
+    private autoRenew: AutoRenewService,
   ) {}
 
   // ── Current subscription ─────────────────────────────────
@@ -229,6 +233,21 @@ export class SubscriptionService {
         : sub;
     }
 
+    // Auto-renewing plan: the provider charges at period end and may retry
+    // for a while. Keep the plan active during the grace window instead of
+    // dropping the customer to Free while their renewal is in flight.
+    if (
+      sub.autoRenew &&
+      sub.providerSubscriptionId &&
+      LIVE_MANDATE_STATES.includes(sub.providerSubscriptionStatus ?? '')
+    ) {
+      const { autoRenewGraceHours } = await this.config.get(tx);
+      const graceEnd =
+        (sub.currentPeriodEnd ?? now).getTime() +
+        autoRenewGraceHours * 3_600_000;
+      if (now.getTime() < graceEnd) return sub;
+    }
+
     // Paid / custom period ended without renewal.
     const endedAt = sub.currentPeriodEnd ?? now;
     const status = sub.cancelAtPeriodEnd
@@ -265,6 +284,15 @@ export class SubscriptionService {
       },
       tx,
     );
+    if (sub.autoRenew || sub.providerSubscriptionId) {
+      // Renewal never arrived: stop the mandate so it can't charge later.
+      postCommit.push(() =>
+        this.autoRenew.disable(sub.id, 'renewal_payment_not_received', {
+          atCycleEnd: false,
+          notifyCustomer: false,
+        }),
+      );
+    }
     postCommit.push(() =>
       this.notify.planEnded(sub, status === BillingStatus.CANCELED),
     );
@@ -340,6 +368,16 @@ export class SubscriptionService {
           replacedBySubscriptionId: pending.id,
         },
       });
+      // The replaced plan must never renew on its old mandate.
+      if (current.autoRenew || current.providerSubscriptionId) {
+        const replacedId = current.id;
+        postCommit.push(() =>
+          this.autoRenew.disable(replacedId, 'replaced', {
+            atCycleEnd: false,
+            notifyCustomer: false,
+          }),
+        );
+      }
     }
 
     const end = addBillingInterval(
@@ -356,6 +394,15 @@ export class SubscriptionService {
         billingAnchorDay: now.getDate(),
         activatedAt: now,
         previousSubscriptionId: current?.id ?? null,
+        ...(pending.providerSubscriptionId
+          ? {
+              autoRenew: true,
+              providerSubscriptionStatus: 'active',
+              renewalAmountPaise: payment.amount,
+              renewalPlanVersionId: null,
+              autoRenewChangedAt: now,
+            }
+          : {}),
       },
     });
     await this.ensureAllocation(tx, activated);
@@ -392,6 +439,8 @@ export class SubscriptionService {
     subscriptionId: string,
     payment: Payment,
     postCommit: PostCommit,
+    /** Provider's cycle end for auto-renew charges (keeps periods aligned). */
+    providerPeriodEnd?: Date | null,
   ) {
     const sub = await tx.subscription.findUnique({
       where: { id: subscriptionId },
@@ -408,12 +457,16 @@ export class SubscriptionService {
           include: { plan: true },
         })
       : null;
-    const newEnd = addBillingInterval(
+    const computedEnd = addBillingInterval(
       sub.currentPeriodEnd,
       version?.billingInterval ?? sub.billingInterval ?? 'MONTH',
       version?.intervalCount ?? sub.intervalCount,
       sub.billingAnchorDay ?? sub.currentPeriodEnd.getDate(),
     );
+    const newEnd =
+      providerPeriodEnd && providerPeriodEnd > sub.currentPeriodEnd
+        ? providerPeriodEnd
+        : computedEnd;
     const updated = await tx.subscription.update({
       where: { id: sub.id },
       data: {
@@ -421,6 +474,13 @@ export class SubscriptionService {
         currentPeriodEnd: newEnd,
         cancelAtPeriodEnd: false,
         scheduledPlanId: null,
+        renewalPlanVersionId: null,
+        ...(payment.providerSubscriptionId
+          ? {
+              providerSubscriptionStatus: 'active',
+              renewalAmountPaise: payment.amount,
+            }
+          : {}),
       },
     });
     const credits = version?.includedCredits ?? sub.includedCredits;
@@ -478,6 +538,14 @@ export class SubscriptionService {
       entityId: sub.id,
       newValue: { cancelAtPeriodEnd: true, activeUntil: sub.currentPeriodEnd },
     });
+    if (sub.autoRenew || sub.providerSubscriptionId) {
+      return (
+        (await this.autoRenew.disable(sub.id, 'customer', {
+          atCycleEnd: true,
+          notifyCustomer: false,
+        })) ?? updated
+      );
+    }
     return updated;
   }
 
@@ -532,6 +600,17 @@ export class SubscriptionService {
         cancelAtPeriodEnd: target.type === PlanType.FREE,
       },
     });
+    if (sub.autoRenew) {
+      if (target.type === PlanType.FREE) {
+        await this.autoRenew.disable(sub.id, 'customer', {
+          atCycleEnd: true,
+          notifyCustomer: false,
+        });
+      } else {
+        // The mandate now renews into the cheaper plan at period end.
+        await this.autoRenew.syncRenewalTerms(sub.id);
+      }
+    }
     await this.audit.log({
       action: 'SUBSCRIPTION_DOWNGRADE_SCHEDULED',
       actorId: userId,
@@ -603,6 +682,8 @@ export class SubscriptionService {
               termsChanged: plan.currentVersionId !== sub.planVersionId,
             }
           : null,
+      autoRenew:
+        sub.planType !== PlanType.FREE ? this.autoRenew.describe(sub) : null,
       scheduledPlan: scheduledPlan
         ? {
             id: scheduledPlan.id,
@@ -644,6 +725,10 @@ export class SubscriptionService {
       expiredAt: sub.expiredAt,
       canceledAt: sub.canceledAt,
       migrationSource: sub.migrationSource,
+      autoRenew: sub.autoRenew,
+      autoRenewStatus: sub.providerSubscriptionStatus,
+      renewalAmountPaise: sub.renewalAmountPaise,
+      autoRenewOffReason: sub.autoRenewOffReason,
     };
   }
 

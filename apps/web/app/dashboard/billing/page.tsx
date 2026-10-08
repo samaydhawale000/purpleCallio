@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Monitor,
   PhoneCall,
+  RefreshCw,
   Sparkles,
   Video,
 } from 'lucide-react';
@@ -29,6 +30,7 @@ import {
   getCreditHistory,
   intervalLabel,
   resumeSubscription,
+  stopAutoRenew,
   billingErrorMessage,
   SUBSCRIPTION_STATUS_LABEL,
   usageBreakdown,
@@ -38,6 +40,7 @@ import {
 } from '../../lib/billing';
 import { BillingHeader, ConfirmDialog, ErrorBanner, PageLoader, SectionCard, useAuthErrorHandler } from './BillingShell';
 import PrepaidExplainer from './PrepaidExplainer';
+import { runAutoRenewSetup } from '../../lib/checkout';
 import { ToastHost, type ToastState } from './Toast';
 
 const STATUS_VARIANT: Record<SubscriptionStatus, 'default' | 'success' | 'warning' | 'error' | 'info' | 'purple'> = {
@@ -61,6 +64,7 @@ export default function BillingOverviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmAutoRenewOff, setConfirmAutoRenewOff] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -94,6 +98,25 @@ export default function BillingOverviewPage() {
     } finally {
       setBusy(false);
       setConfirmCancel(false);
+      setConfirmAutoRenewOff(false);
+    }
+  };
+
+  /** Authorize a recurring mandate for the current plan (nothing charged until period end). */
+  const enableAutoRenew = async () => {
+    setBusy(true);
+    try {
+      const r = await runAutoRenewSetup();
+      if (r.kind === 'enabled') {
+        setToast({ id: Date.now(), type: 'success', message: 'Auto-renew is on.' });
+        await load();
+      } else if (r.kind === 'failed') {
+        setToast({ id: Date.now(), type: 'error', message: r.message });
+      }
+    } catch (e) {
+      if (!handleAuthError(e)) setToast({ id: Date.now(), type: 'error', message: billingErrorMessage(e) });
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -129,6 +152,16 @@ export default function BillingOverviewPage() {
   const sentOffer = data.customPlan?.offers?.find((o) => o.status === 'SENT');
   const openRequest = data.customPlan?.request?.open ? data.customPlan.request : null;
   const ended = data.lastEndedPaidSubscription;
+  const ar = data.autoRenew;
+  const autoRenewOn = !!ar?.autoRenew && !cancelling;
+  const renewalRetrying = autoRenewOn && ar?.status === 'pending';
+  const AUTO_RENEW_OFF_REASON: Record<string, string> = {
+    renewal_failed: 'Auto-renew stopped because renewal payments kept failing.',
+    renewal_terms_changed: 'Auto-renew was switched off because the plan’s price changed and your mandate couldn’t be updated.',
+    plan_unavailable: 'This plan is no longer offered, so it can’t auto-renew.',
+    mandate_cancelled: 'The auto-pay mandate was cancelled with your bank or payment app.',
+  };
+  const offReasonText = !isFree && ar && !ar.autoRenew && ar.offReason ? AUTO_RENEW_OFF_REASON[ar.offReason] : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -228,12 +261,25 @@ export default function BillingOverviewPage() {
                 <p className="text-amber-700">
                   Switches to {scheduledPaid.name} at the end of this period ({periodEnd}). You’ll pay for {scheduledPaid.name} when you renew.
                 </p>
+              ) : autoRenewOn ? (
+                <p className="flex items-center gap-1.5">
+                  <RefreshCw size={13} className="text-[#7F40E8]" />
+                  Renews automatically on {periodEnd}
+                  {ar?.renewalAmountPaise != null ? ` for ${formatMoney(ar.renewalAmountPaise, sub.currency)} (incl. GST)` : ''}.
+                </p>
               ) : (
-                <p>
-                  Active until {periodEnd}. Paid plans don’t renew automatically — renew before then to keep your plan.
+                <p>Active until {periodEnd}. Auto-renew is off — renew before then to keep your plan.</p>
+              )}
+              {scheduledPaid && autoRenewOn && (
+                <p className="text-xs">Auto-renew will charge for {scheduledPaid.name} at the end of this period.</p>
+              )}
+              {renewalRetrying && (
+                <p className="text-xs text-amber-700">
+                  Your last renewal payment didn’t go through — your payment provider is retrying. Your plan stays active meanwhile.
                 </p>
               )}
-              {!isFree && data.renewal && !cancelling && !scheduledPaid && (
+              {offReasonText && <p className="text-xs text-amber-700">{offReasonText}</p>}
+              {!isFree && data.renewal && !cancelling && !scheduledPaid && !autoRenewOn && (
                 <p className="text-xs">
                   Renewal: {formatMoney(data.renewal.pricePaise, sub.currency)} for {formatCredits(data.renewal.includedCredits)} credits
                   {data.renewal.termsChanged ? ' — this plan’s price or included credits have changed since you bought it.' : '.'}
@@ -251,7 +297,7 @@ export default function BillingOverviewPage() {
                   <Link href="/dashboard/billing/plans">
                     <Button size="sm">Upgrade</Button>
                   </Link>
-                  {!isFree && data.renewal && (
+                  {!isFree && data.renewal && !autoRenewOn && (
                     <Link href="/dashboard/billing/checkout?renew=1">
                       <Button size="sm" variant="secondary">Renew</Button>
                     </Link>
@@ -267,6 +313,33 @@ export default function BillingOverviewPage() {
                 </Button>
               )}
             </div>
+
+            {!isFree && !cancelling && (
+              <div
+                className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E7DFF5] bg-[#F8F4FD] px-4 py-3"
+                data-testid="auto-renew-control"
+              >
+                <div className="text-sm">
+                  <p className="font-semibold text-[#170B2E]">Auto-renew {autoRenewOn ? 'on' : 'off'}</p>
+                  <p className="text-xs text-[#3D3650]">
+                    {autoRenewOn
+                      ? 'Your card / UPI mandate is charged at the start of each period. Price changes are announced before they apply.'
+                      : data.renewal
+                        ? 'Turn it on to renew automatically on your saved card or UPI Autopay. Nothing is charged until this period ends.'
+                        : 'This plan is no longer offered, so it can’t renew.'}
+                  </p>
+                </div>
+                {autoRenewOn ? (
+                  <Button size="sm" variant="secondary" onClick={() => setConfirmAutoRenewOff(true)}>
+                    Turn off
+                  </Button>
+                ) : data.renewal ? (
+                  <Button size="sm" loading={busy} onClick={enableAutoRenew}>
+                    Turn on auto-renew
+                  </Button>
+                ) : null}
+              </div>
+            )}
           </div>
         </SectionCard>
 
@@ -431,6 +504,19 @@ export default function BillingOverviewPage() {
       >
         <p>Your plan stays active until {periodEnd}. You keep its credits and features until then, and then move to the Free plan.</p>
         <p>Plan payments are not refunded. You can resume anytime before {periodEnd}.</p>
+        {autoRenewOn && <p>Auto-renew will be turned off, so nothing more will be charged.</p>}
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={confirmAutoRenewOff}
+        title="Turn off auto-renew?"
+        confirmLabel="Turn off"
+        cancelLabel="Keep auto-renew"
+        busy={busy}
+        onCancel={() => setConfirmAutoRenewOff(false)}
+        onConfirm={() => act(stopAutoRenew, `Auto-renew is off. ${planName} stays active until ${periodEnd}.`)}
+      >
+        <p>{planName} stays active until {periodEnd} with all its credits. After that it won’t renew unless you renew it yourself or turn auto-renew back on.</p>
       </ConfirmDialog>
     </div>
   );

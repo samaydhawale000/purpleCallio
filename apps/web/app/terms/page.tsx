@@ -118,8 +118,8 @@ export default function TermsPage() {
           published by PurpleCallio, subject to applicable rounding rules and usage events.
         </p>
         <p>
-          Paid plans run for the plan period shown at checkout and do not renew automatically; you may
-          renew manually. Plan credits expire at the end of the plan period. Top-ups are one-time credit
+          Paid plans run for the plan period shown at checkout and renew automatically at the start of each
+          period while auto-renew is on (you may turn it off at any time, or renew manually). Plan credits expire at the end of the plan period. Top-ups are one-time credit
           purchases whose expiry is shown at the time of purchase. Upgrades start immediately at the new
           plan's price, with remaining credits from the previous plan usable until they expire; downgrades
           and cancellations take effect at the end of the current paid period. Custom plans are available
@@ -130,9 +130,11 @@ export default function TermsPage() {
 
       <LegalSection num="7" title="Payment">
         <p>
-          Payments are processed through third-party payment providers such as Razorpay. Each plan,
-          renewal, custom plan or top-up is a one-time payment that you authorise at checkout.
-          PurpleCallio does not automatically charge your payment method.
+          Payments are processed through third-party payment providers such as Razorpay. Plan, custom
+          plan and top-up purchases are payments you authorise at checkout. If you keep auto-renew on, you
+          also authorise a recurring mandate for that plan only, and each renewal is charged at the start of
+          the period at the price you were notified of; you can turn it off at any time. PurpleCallio does
+          not otherwise charge your payment method.
         </p>
         <p>
           Payments are not refunded automatically. Refunds are issued where required by law, for

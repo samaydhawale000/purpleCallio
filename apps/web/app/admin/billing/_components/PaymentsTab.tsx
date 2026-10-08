@@ -29,7 +29,7 @@ export function PaymentsTab({ userId }: { userId?: string }) {
   );
 
   return (
-    <Panel title="Payments" subtitle="Every checkout attempt. Payments are made upfront; nothing is charged automatically.">
+    <Panel title="Payments" subtitle="Every checkout attempt and auto-renew charge. Each period is paid at its start.">
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
       <div className="flex flex-wrap gap-3 items-center mb-4">
         <SearchBox

@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, Clock, Loader2, ShieldCheck, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock, Loader2, RefreshCw, ShieldCheck, XCircle } from 'lucide-react';
 import { useRequireAuth } from '../../../hooks/useRequireAuth';
 import { Button } from '../../../components/ui/Button';
 import {
@@ -54,6 +54,8 @@ function CheckoutContent() {
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'review' });
   const [notice, setNotice] = useState<string | null>(null);
+  // Plan purchases: auto-renew is pre-ticked (admin default) and can be unticked.
+  const [autoRenew, setAutoRenew] = useState(true);
 
   const load = useCallback(async () => {
     if (!request) {
@@ -64,6 +66,7 @@ function CheckoutContent() {
     try {
       const [q, pricing] = await Promise.all([quoteCheckout(request), getPublicPricing().catch(() => null)]);
       setQuote(q);
+      setAutoRenew(q.autoRenew?.available ? q.autoRenew.on : false);
       setFeatures(pricing?.features ?? []);
       setError(null);
     } catch (e) {
@@ -82,7 +85,8 @@ function CheckoutContent() {
     setNotice(null);
     setPhase({ kind: 'processing' });
     try {
-      const result = await runCheckout(request);
+      const offersAutoRenew = !!quote?.autoRenew?.available;
+      const result = await runCheckout(offersAutoRenew ? { ...request, autoRenew } : request);
       if (result.kind === 'paid') setPhase({ kind: 'paid', outcome: result.outcome });
       else if (result.kind === 'pending') setPhase({ kind: 'pending', outcome: result.outcome });
       else if (result.kind === 'failed') setPhase({ kind: 'failed', message: result.message, outcome: result.outcome });
@@ -103,7 +107,7 @@ function CheckoutContent() {
 
   const header = (
     <div className="flex flex-col gap-4">
-      <BillingHeader title={title} subtitle="Review your order. This is a one-time payment — plans don’t renew automatically." />
+      <BillingHeader title={title} subtitle="Review your order before you pay." />
       {phase.kind === 'review' && (
         <Link href={back} className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E] w-fit">
           <ArrowLeft size={14} /> Back
@@ -133,6 +137,7 @@ function CheckoutContent() {
   if (phase.kind === 'paid') {
     const o = phase.outcome;
     const credits = o.credits || quote.credits;
+    const renewsAutomatically = !!quote.autoRenew?.available && autoRenew;
     return (
       <div className="flex flex-col gap-6">
         {header}
@@ -143,7 +148,13 @@ function CheckoutContent() {
             <>
               <p>You’re now on {o.subscription?.planName ?? quote.summary.planName}.</p>
               <p>{formatCredits(credits)} credits have been added to your account.</p>
-              {o.subscription?.currentPeriodEnd && <p>Active until {formatDate(o.subscription.currentPeriodEnd)}.</p>}
+              {o.subscription?.currentPeriodEnd && (
+                <p>
+                  {renewsAutomatically
+                    ? `Renews automatically on ${formatDate(o.subscription.currentPeriodEnd)} — turn auto-renew off anytime from Billing.`
+                    : `Active until ${formatDate(o.subscription.currentPeriodEnd)}.`}
+                </p>
+              )}
             </>
           )}
           {o.receiptNumber != null && <p className="text-xs">A receipt is available under Payments &amp; receipts.</p>}
@@ -205,6 +216,8 @@ function CheckoutContent() {
 
   const s = quote.summary;
   const processing = phase.kind === 'processing';
+  const offersAutoRenew = !!quote.autoRenew?.available;
+  const autoRenewOn = offersAutoRenew && autoRenew;
 
   return (
     <div className="flex flex-col gap-6">
@@ -242,7 +255,7 @@ function CheckoutContent() {
           <p className="mt-5 text-xs text-[#3D3650]">
             {isTopUp
               ? 'Top-up credits are added to your balance as soon as payment is confirmed.'
-              : 'Your plan activates and its credits are added as soon as payment is confirmed. Paid plans don’t renew automatically — you choose when to renew.'}
+              : 'Your plan activates and its credits are added as soon as payment is confirmed.'}
           </p>
         </section>
 
@@ -262,12 +275,40 @@ function CheckoutContent() {
               <span data-testid="checkout-total">{formatMoneyExact(quote.totalPaise, quote.currency)}</span>
             </div>
           </div>
+          {offersAutoRenew && (
+            <label
+              className={`mt-5 flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm transition-colors ${
+                autoRenew ? 'border-[#7F40E8] bg-[#F8F4FD]' : 'border-[#E7DFF5]'
+              }`}
+              data-testid="auto-renew-option"
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-[#7F40E8]"
+                checked={autoRenew}
+                disabled={processing}
+                onChange={(e) => setAutoRenew(e.target.checked)}
+              />
+              <span>
+                <span className="flex items-center gap-1.5 font-semibold text-[#170B2E]">
+                  <RefreshCw size={13} className="text-[#7F40E8]" /> Auto-renew every {s.intervalLabel ?? 'period'}
+                </span>
+                <span className="mt-0.5 block text-xs text-[#3D3650]">
+                  {autoRenew
+                    ? `We’ll charge ${formatMoneyExact(quote.autoRenew.amountPaise ?? quote.totalPaise, quote.currency)} (incl. GST) at the start of each ${s.intervalLabel ?? 'period'} and add a fresh set of credits. You’re notified before each renewal and can turn it off anytime from Billing.`
+                    : 'Off — your plan ends after this period unless you renew it from Billing.'}
+                </span>
+              </span>
+            </label>
+          )}
           <Button className="w-full mt-5" size="lg" onClick={pay} loading={processing} disabled={processing}>
             {processing ? 'Processing payment…' : `Pay ${formatMoneyExact(quote.totalPaise, quote.currency)}`}
           </Button>
           <p className="mt-3 text-[11px] text-[#3D3650] flex items-start gap-1.5">
             <ShieldCheck size={13} className="shrink-0 mt-0.5 text-emerald-600" />
-            One-time payment by card, UPI or netbanking. Nothing is charged automatically later.
+            {autoRenewOn
+              ? 'Pay by card or UPI Autopay. You authorize a recurring mandate for this plan only; renewals are charged at the price shown, and any price change is announced before it applies.'
+              : 'One-time payment by card, UPI or netbanking. Nothing else is charged later.'}
           </p>
           {processing && (
             <p className="mt-2 text-[11px] text-[#3D3650] inline-flex items-center gap-1.5" role="status">

@@ -109,6 +109,10 @@ export interface BillingConfig {
   topUpExpiryDays: number | null;
   renewalReminderDays: number;
   pendingCheckoutTtlHours: number;
+  /** Auto-renew checkbox pre-ticked at checkout. */
+  autoRenewDefault: boolean;
+  /** Hours an auto-renewing plan stays active past period end while the renewal charge is retried. */
+  autoRenewGraceHours: number;
   updatedAt?: string;
 }
 

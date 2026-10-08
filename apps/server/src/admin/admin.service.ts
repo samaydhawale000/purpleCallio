@@ -6,6 +6,7 @@ import { TurnService } from '../turn/turn.service';
 import { UsageBillingService } from '../billing/usage-billing.service';
 import { SubscriptionService } from '../billing/subscriptions/subscription.service';
 import { CreditService } from '../billing/credits/credit.service';
+import { AutoRenewService } from '../billing/subscriptions/auto-renew.service';
 import {
   CustomerDiscountService,
   SetDiscountInput,
@@ -25,6 +26,7 @@ export class AdminService {
     private callService: CallService,
     private subscriptions: SubscriptionService,
     private credits: CreditService,
+    private autoRenew: AutoRenewService,
   ) {}
 
   // ── Overview ──────────────────────────────────────────
@@ -300,11 +302,19 @@ export class AdminService {
     input: SetDiscountInput,
   ) {
     await this.customerDiscounts.setDiscount(userId, adminId, input);
+    this.autoRenew.inBackground(
+      () => this.autoRenew.syncCustomer(userId),
+      `discount ${userId}`,
+    );
     return this.getCustomerDiscount(userId);
   }
 
   async disableCustomerDiscount(userId: string, adminId: string) {
     await this.customerDiscounts.disableDiscount(userId, adminId);
+    this.autoRenew.inBackground(
+      () => this.autoRenew.syncCustomer(userId),
+      `discount ${userId}`,
+    );
     return this.getCustomerDiscount(userId);
   }
 

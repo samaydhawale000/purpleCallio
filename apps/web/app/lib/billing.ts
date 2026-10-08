@@ -132,6 +132,14 @@ export interface Subscription {
   expiredAt: string | null;
   canceledAt: string | null;
   migrationSource: string | null;
+  /** Renews automatically on a card / UPI Autopay mandate. */
+  autoRenew: boolean;
+  /** Provider mandate state (created | authenticated | active | pending | halted | cancelled …). */
+  autoRenewStatus: string | null;
+  /** What the next automatic renewal will charge (incl. GST). */
+  renewalAmountPaise: number | null;
+  /** Why the system switched auto-renew off (renewal_failed, renewal_terms_changed, …). */
+  autoRenewOffReason: string | null;
 }
 
 export interface CreditBucketView {
@@ -163,6 +171,8 @@ export interface SubscriptionOverview {
   /** A paid plan that ended recently while the customer is back on Free. */
   lastEndedPaidSubscription: Subscription | null;
   pendingCheckout: { id: string; planName: string | null; createdAt: string } | null;
+  /** Null on the Free plan. */
+  autoRenew: AutoRenewState | null;
 }
 
 export interface CurrentUsage {
@@ -218,11 +228,23 @@ export interface AvailablePlans {
   plans: (Plan & { isCurrent: boolean; relation: PlanRelation })[];
 }
 
-export type CheckoutRequest =
+export interface AutoRenewState {
+  autoRenew: boolean;
+  status: string | null;
+  renewalAmountPaise: number | null;
+  nextChargeAt: string | null;
+  offReason: string | null;
+}
+
+export type CheckoutRequest = (
   | { kind: 'plan'; planId: string }
   | { kind: 'renewal' }
   | { kind: 'topup'; topUpPackageId: string }
-  | { kind: 'offer'; offerId: string };
+  | { kind: 'offer'; offerId: string }
+) & {
+  /** Plan/offer purchases: set up auto-renew (defaults to the admin setting, on). */
+  autoRenew?: boolean;
+};
 
 export interface CheckoutQuote {
   purpose: PaymentPurpose;
@@ -237,6 +259,8 @@ export interface CheckoutQuote {
   taxPaise: number;
   totalPaise: number;
   lineItems: { label: string; amountPaise: number; credits?: number }[];
+  /** Auto-renew option for this checkout (plan/offer purchases only). */
+  autoRenew: { available: boolean; on: boolean; amountPaise: number | null };
   summary: {
     type?: 'plan' | 'topup';
     planName?: string;
@@ -252,8 +276,11 @@ export interface CheckoutQuote {
 
 export interface CheckoutSession {
   paymentId: string;
+  /** `order` = one-time payment; `subscription` = first charge of an auto-renew mandate. */
+  mode: 'order' | 'subscription';
   provider: string;
-  providerOrderId: string;
+  providerOrderId: string | null;
+  providerSubscriptionId: string | null;
   /** Publishable key for Checkout (null in mock/dev mode). */
   publicKey: string | null;
   amountPaise: number;
@@ -390,7 +417,12 @@ export const startCheckout = (req: CheckoutRequest) =>
   api.post<CheckoutSession>('/billing/checkout', req).then((r) => r.data);
 export const verifyPayment = (
   paymentId: string,
-  proof: { providerOrderId: string; providerPaymentId: string; signature: string },
+  proof: {
+    providerOrderId?: string | null;
+    providerSubscriptionId?: string | null;
+    providerPaymentId: string;
+    signature: string;
+  },
 ) => api.post<PaymentOutcome>(`/billing/payments/${paymentId}/verify`, proof).then((r) => r.data);
 export const reportPaymentFailure = (
   paymentId: string,
@@ -400,6 +432,26 @@ export const getPaymentOutcome = (paymentId: string) =>
   api.get<PaymentOutcome>(`/billing/payments/${paymentId}`).then((r) => r.data);
 
 export const cancelSubscription = () => api.post<Subscription>('/billing/subscription/cancel').then((r) => r.data);
+export interface MandateSession {
+  mode: 'mandate';
+  provider: string;
+  providerSubscriptionId: string;
+  publicKey: string | null;
+  mock: boolean;
+  description: string;
+  renewalAmountPaise: number;
+  currency: string;
+  firstChargeAt: string | null;
+  prefill: { name: string | null; email: string | null; contact: string | null };
+}
+/** Turn auto-renew on (returns a mandate to authorize) or off. */
+export const startAutoRenew = () =>
+  api.post<MandateSession>('/billing/subscription/auto-renew', { enabled: true }).then((r) => r.data);
+export const stopAutoRenew = () =>
+  api.post<AutoRenewState>('/billing/subscription/auto-renew', { enabled: false }).then((r) => r.data);
+export const verifyAutoRenew = (proof: { providerSubscriptionId: string; providerPaymentId: string; signature: string }) =>
+  api.post<AutoRenewState>('/billing/subscription/auto-renew/verify', proof).then((r) => r.data);
+
 export const resumeSubscription = () => api.post<Subscription>('/billing/subscription/resume').then((r) => r.data);
 export const scheduleDowngrade = (planId: string) =>
   api.post<Subscription>('/billing/subscription/downgrade', { planId }).then((r) => r.data);
@@ -410,7 +462,7 @@ export const getOffer = (id: string) => api.get<CustomPlanOffer>(`/billing/offer
 
 export const getOffers = () => api.get<CustomPlanOffer[]>('/billing/offers').then((r) => r.data);
 
-// ── Saved payment methods (never charged automatically) ────
+// ── Saved payment methods (listing / removal only) ────
 export interface SavedPaymentMethod {
   id: string;
   brand: string | null;

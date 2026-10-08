@@ -13,6 +13,7 @@ import type {
   ProviderWebhookEvent,
 } from '../../payment/providers/payment-provider';
 import { BillingFulfillmentService } from './fulfillment.service';
+import { AutoRenewService } from '../subscriptions/auto-renew.service';
 
 /**
  * Provider webhooks (payment captured / failed, refunds, disputes).
@@ -31,6 +32,7 @@ export class BillingWebhookService {
     @Inject(PAYMENT_PROVIDER) private provider: PaymentProvider,
     private fulfillment: BillingFulfillmentService,
     private notifications: NotificationService,
+    private autoRenew: AutoRenewService,
   ) {}
 
   async handle(
@@ -95,6 +97,25 @@ export class BillingWebhookService {
 
   private async process(event: ProviderWebhookEvent) {
     switch (event.type) {
+      // ── Auto-renew mandates ──
+      case 'subscription.charged': {
+        if (!event.payment || !event.subscription) return;
+        await this.fulfillment.recordMandateCharge(
+          event.payment,
+          event.subscription,
+        );
+        return;
+      }
+      case 'subscription.authenticated':
+      case 'subscription.activated':
+      case 'subscription.pending':
+      case 'subscription.halted':
+      case 'subscription.cancelled':
+      case 'subscription.completed': {
+        if (!event.subscription) return;
+        await this.autoRenew.onMandateEvent(event.type, event.subscription);
+        return;
+      }
       case 'payment.captured':
       case 'order.paid': {
         const payment = await this.findPayment(event);

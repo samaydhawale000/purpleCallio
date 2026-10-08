@@ -255,7 +255,7 @@ function PlansContent() {
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
       <BillingHeader
         title="Plans"
-        subtitle="Simple prepaid plans with included usage credits. Pay upfront — plans don’t renew automatically."
+        subtitle="Simple prepaid plans with included usage credits. Pay upfront each period — auto-renew optional."
       />
 
       {assigned.length > 0 && (
@@ -331,7 +331,7 @@ function PlansContent() {
         ) : (
           <p>
             You stay on {data.current.planName ?? 'your current plan'} until {periodEnd}. At the end of the period you can renew on{' '}
-            {downgradeTarget?.name} ({downgradeTarget ? priceLabel(downgradeTarget) : ''}). Nothing is charged automatically.
+            {downgradeTarget?.name} ({downgradeTarget ? priceLabel(downgradeTarget) : ''}). If auto-renew is on, it will charge the new plan's price from then.
           </p>
         )}
       </ConfirmDialog>

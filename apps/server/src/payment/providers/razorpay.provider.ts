@@ -8,6 +8,9 @@ import {
   ProviderPayment,
   ProviderPaymentState,
   ProviderPaymentVerification,
+  ProviderRecurringPlanInput,
+  ProviderSubscription,
+  ProviderSubscriptionInput,
   ProviderWebhookEvent,
 } from './payment-provider';
 
@@ -36,6 +39,14 @@ export class RazorpayProvider implements PaymentProvider {
   private readonly mockOrders = new Map<
     string,
     { amountPaise: number; currency: string }
+  >();
+  private readonly mockPlans = new Map<
+    string,
+    { amountPaise: number; currency: string }
+  >();
+  private readonly mockSubscriptions = new Map<
+    string,
+    { providerPlanId: string; startAt: Date | null }
   >();
 
   constructor() {
@@ -191,8 +202,16 @@ export class RazorpayProvider implements PaymentProvider {
       'order.paid',
       'refund.processed',
       'payment.dispute.created',
+      'subscription.authenticated',
+      'subscription.activated',
+      'subscription.charged',
+      'subscription.pending',
+      'subscription.halted',
+      'subscription.cancelled',
+      'subscription.completed',
     ];
     const paymentEntity = body.payload?.payment?.entity;
+    const subscriptionEntity = body.payload?.subscription?.entity;
     const refundEntity = body.payload?.refund?.entity;
     // Razorpay sends a unique id per event in x-razorpay-event-id; fall back
     // to a content hash so a redelivered body still dedupes.
@@ -207,6 +226,9 @@ export class RazorpayProvider implements PaymentProvider {
         : 'unknown',
       rawType,
       payment: paymentEntity ? this.toProviderPayment(paymentEntity) : null,
+      subscription: subscriptionEntity
+        ? this.toProviderSubscription(subscriptionEntity)
+        : null,
       refund: refundEntity
         ? {
             providerRefundId: refundEntity.id,
@@ -215,6 +237,131 @@ export class RazorpayProvider implements PaymentProvider {
           }
         : null,
       raw: body,
+    };
+  }
+
+  // ── Recurring mandates (Razorpay Subscriptions) ─────────────────────
+  async createRecurringPlan(
+    input: ProviderRecurringPlanInput,
+  ): Promise<string> {
+    if (!this.razorpay) {
+      const id = `plan_mock_${input.amountPaise}_${input.billingInterval}_${input.intervalCount}`;
+      this.mockPlans.set(id, {
+        amountPaise: input.amountPaise,
+        currency: input.currency,
+      });
+      return id;
+    }
+    const period =
+      input.billingInterval === 'YEAR'
+        ? 'yearly'
+        : input.billingInterval === 'CUSTOM'
+          ? 'daily'
+          : 'monthly';
+    const plan = await this.razorpay.plans.create({
+      period,
+      interval: Math.max(1, input.intervalCount),
+      item: {
+        name: input.name.slice(0, 80),
+        amount: input.amountPaise,
+        currency: input.currency,
+      },
+    });
+    return plan.id;
+  }
+
+  async createSubscription(
+    input: ProviderSubscriptionInput,
+  ): Promise<ProviderSubscription> {
+    if (!this.razorpay) {
+      const id = `sub_mock_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+      this.mockSubscriptions.set(id, {
+        providerPlanId: input.providerPlanId,
+        startAt: input.startAt ?? null,
+      });
+      return {
+        providerSubscriptionId: id,
+        status: 'created',
+        currentEnd: null,
+      };
+    }
+    const sub = await this.razorpay.subscriptions.create({
+      plan_id: input.providerPlanId,
+      // Razorpay needs a finite cycle count; this is effectively "until cancelled".
+      total_count: 120,
+      customer_notify: 1,
+      ...(input.startAt
+        ? { start_at: Math.floor(input.startAt.getTime() / 1000) }
+        : {}),
+      notes: input.notes,
+    });
+    return this.toProviderSubscription(sub);
+  }
+
+  async verifySubscriptionPayment(input: {
+    providerSubscriptionId: string;
+    providerPaymentId: string;
+    signature: string;
+  }): Promise<ProviderPayment | null> {
+    if (!this.razorpay) {
+      const sub = this.mockSubscriptions.get(input.providerSubscriptionId);
+      if (!sub || input.signature !== MOCK_SIGNATURE) return null;
+      const plan = this.mockPlans.get(sub.providerPlanId);
+      return {
+        providerPaymentId: input.providerPaymentId,
+        providerOrderId: null,
+        // A future-start mandate only authorizes; nothing is charged yet.
+        status: sub.startAt ? 'authorized' : 'captured',
+        amountPaise: sub.startAt ? 0 : (plan?.amountPaise ?? 0),
+        currency: plan?.currency ?? 'INR',
+        method: 'mock',
+      };
+    }
+    const expected = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET as string)
+      .update(`${input.providerPaymentId}|${input.providerSubscriptionId}`)
+      .digest('hex');
+    if (!safeEqual(expected, input.signature)) return null;
+    return this.getPayment(input.providerPaymentId);
+  }
+
+  async changeSubscriptionPlan(
+    providerSubscriptionId: string,
+    providerPlanId: string,
+  ) {
+    if (!this.razorpay) {
+      const sub = this.mockSubscriptions.get(providerSubscriptionId);
+      if (sub) sub.providerPlanId = providerPlanId;
+      return;
+    }
+    await this.razorpay.subscriptions.update(providerSubscriptionId, {
+      plan_id: providerPlanId,
+      schedule_change_at: 'cycle_end',
+      customer_notify: 1,
+    });
+  }
+
+  async cancelSubscription(
+    providerSubscriptionId: string,
+    atCycleEnd: boolean,
+  ) {
+    if (!this.razorpay) {
+      this.mockSubscriptions.delete(providerSubscriptionId);
+      return;
+    }
+    await this.razorpay.subscriptions.cancel(
+      providerSubscriptionId,
+      atCycleEnd,
+    );
+  }
+
+  private toProviderSubscription(sub: any): ProviderSubscription {
+    return {
+      providerSubscriptionId: sub.id,
+      status: sub.status ?? 'created',
+      currentEnd: sub.current_end
+        ? new Date(Number(sub.current_end) * 1000)
+        : null,
     };
   }
 

@@ -13,6 +13,7 @@ import { EntitlementService } from '../subscriptions/entitlement.service';
 import { SubscriptionService } from '../subscriptions/subscription.service';
 import { TopUpService } from '../topups/topup.service';
 import { UsageBillingService } from '../usage-billing.service';
+import { AutoRenewService } from '../subscriptions/auto-renew.service';
 import { SupportService } from '../../support/support.service';
 import type {
   PaymentProvider,
@@ -20,6 +21,9 @@ import type {
   ProviderCheckoutInput,
   ProviderPayment,
   ProviderPaymentVerification,
+  ProviderRecurringPlanInput,
+  ProviderSubscription,
+  ProviderSubscriptionInput,
   ProviderWebhookEvent,
 } from '../../payment/providers/payment-provider';
 
@@ -43,6 +47,14 @@ export class FakeProvider implements PaymentProvider {
   >();
   payments = new Map<string, ProviderPayment>();
   refunds: { providerPaymentId: string; amountPaise: number }[] = [];
+  recurringPlans = new Map<string, { amountPaise: number; currency: string }>();
+  mandates = new Map<
+    string,
+    { providerPlanId: string; startAt: Date | null }
+  >();
+  cancelledMandates: { id: string; atCycleEnd: boolean }[] = [];
+  planChanges: { id: string; providerPlanId: string }[] = [];
+  failNextPlanChange = false;
   private seq = 0;
 
   isConfigured() {
@@ -110,6 +122,104 @@ export class FakeProvider implements PaymentProvider {
     };
   }
 
+  // ── Recurring mandates ──
+  async createRecurringPlan(input: ProviderRecurringPlanInput) {
+    const id = `rplan_${++this.seq}`;
+    this.recurringPlans.set(id, {
+      amountPaise: input.amountPaise,
+      currency: input.currency,
+    });
+    return id;
+  }
+
+  async createSubscription(
+    input: ProviderSubscriptionInput,
+  ): Promise<ProviderSubscription> {
+    const id = `rsub_${++this.seq}`;
+    this.mandates.set(id, {
+      providerPlanId: input.providerPlanId,
+      startAt: input.startAt ?? null,
+    });
+    return { providerSubscriptionId: id, status: 'created', currentEnd: null };
+  }
+
+  async verifySubscriptionPayment(input: {
+    providerSubscriptionId: string;
+    providerPaymentId: string;
+    signature: string;
+  }) {
+    if (
+      input.signature !==
+      `sig:${input.providerPaymentId}|${input.providerSubscriptionId}`
+    )
+      return null;
+    return this.payments.get(input.providerPaymentId) ?? null;
+  }
+
+  async changeSubscriptionPlan(id: string, providerPlanId: string) {
+    if (this.failNextPlanChange) {
+      this.failNextPlanChange = false;
+      throw new Error('provider refused plan change');
+    }
+    this.planChanges.push({ id, providerPlanId });
+    const m = this.mandates.get(id);
+    if (m) m.providerPlanId = providerPlanId;
+  }
+
+  async cancelSubscription(id: string, atCycleEnd: boolean) {
+    this.cancelledMandates.push({ id, atCycleEnd });
+  }
+
+  /** Amount the mandate currently charges. */
+  mandateAmount(id: string) {
+    const m = this.mandates.get(id)!;
+    return this.recurringPlans.get(m.providerPlanId)!.amountPaise;
+  }
+
+  /** A charge on a mandate (first payment or a renewal). */
+  chargeMandate(
+    id: string,
+    opts: { status?: 'captured' | 'failed'; amountPaise?: number } = {},
+  ) {
+    const providerPaymentId = `pay_${++this.seq}`;
+    const p: ProviderPayment = {
+      providerPaymentId,
+      providerOrderId: `order_rzp_${this.seq}`,
+      status: opts.status ?? 'captured',
+      amountPaise: opts.amountPaise ?? this.mandateAmount(id),
+      currency: 'INR',
+      method: 'upi',
+    };
+    this.payments.set(providerPaymentId, p);
+    return { ...p, signature: `sig:${providerPaymentId}|${id}` };
+  }
+
+  mandateWebhook(
+    eventId: string,
+    type: string,
+    mandate: {
+      providerSubscriptionId: string;
+      status: string;
+      currentEnd?: Date | null;
+    },
+    payment?: ProviderPayment,
+  ) {
+    return {
+      raw: Buffer.from(
+        JSON.stringify({
+          id: eventId,
+          event: type,
+          payment: payment ?? null,
+          subscription: {
+            ...mandate,
+            currentEnd: mandate.currentEnd?.toISOString() ?? null,
+          },
+        }),
+      ),
+      headers: { 'x-sig': `sig:${eventId}`, 'x-event-id': eventId },
+    };
+  }
+
   webhookBody(eventId: string, type: string, payment: ProviderPayment) {
     return {
       raw: Buffer.from(JSON.stringify({ id: eventId, event: type, payment })),
@@ -128,6 +238,14 @@ export class FakeProvider implements PaymentProvider {
       type: body.event,
       rawType: body.event,
       payment: body.payment,
+      subscription: body.subscription
+        ? {
+            ...body.subscription,
+            currentEnd: body.subscription.currentEnd
+              ? new Date(body.subscription.currentEnd)
+              : null,
+          }
+        : null,
       refund: body.refund ?? null,
       raw: body,
     };
@@ -150,12 +268,23 @@ export function createHarness() {
   const plans = new PlanService(prisma, audit);
   const credits = new CreditService(prisma);
   const notify = new BillingNotificationService(notifications as any);
+  const discounts = new CustomerDiscountService(prisma);
+  const autoRenew = new AutoRenewService(
+    prisma,
+    provider,
+    config,
+    discounts,
+    notify,
+    audit,
+  );
   const subscriptions = new SubscriptionService(
     prisma,
     credits,
     plans,
     audit,
     notify,
+    config,
+    autoRenew,
   );
   const entitlements = new EntitlementService(
     prisma,
@@ -173,8 +302,8 @@ export function createHarness() {
     audit,
     notify,
     notifications as any,
+    autoRenew,
   );
-  const discounts = new CustomerDiscountService(prisma);
   const checkout = new CheckoutService(
     prisma,
     provider,
@@ -184,12 +313,14 @@ export function createHarness() {
     subscriptions,
     topUps,
     fulfillment,
+    autoRenew,
   );
   const webhooks = new BillingWebhookService(
     prisma,
     provider,
     fulfillment,
     notifications as any,
+    autoRenew,
   );
   const support = new SupportService(
     prisma,
@@ -231,12 +362,14 @@ export function createHarness() {
     support,
     customPlans,
     usage,
+    autoRenew,
   };
 }
 
 export type Harness = ReturnType<typeof createHarness>;
 
 const TABLES = [
+  'ProviderPlan',
   'CreditTransaction',
   'CreditBucket',
   'CreditWallet',
@@ -273,6 +406,11 @@ export async function resetDb(h: Harness) {
     `TRUNCATE ${TABLES.map((t) => `"${t}"`).join(', ')} CASCADE`,
   );
   await h.plans.ensureDefaults();
+  // Most tests exercise one-time checkout; auto-renew tests opt in explicitly.
+  await h.prisma.billingConfig.update({
+    where: { key: 'default' },
+    data: { autoRenewDefault: false },
+  });
 }
 
 export async function createUser(
@@ -297,10 +435,10 @@ export async function buyPlan(h: Harness, userId: string, slug: string) {
     kind: 'plan',
     planId: plan.id,
   });
-  const paid = h.provider.pay(started.providerOrderId);
+  const paid = h.provider.pay(started.providerOrderId!);
   const result = await h.checkout.verify(userId, {
     paymentId: started.paymentId,
-    providerOrderId: started.providerOrderId,
+    providerOrderId: started.providerOrderId!,
     providerPaymentId: paid.providerPaymentId,
     signature: paid.signature,
   });
