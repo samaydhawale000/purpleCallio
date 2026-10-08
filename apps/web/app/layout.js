@@ -1,3 +1,4 @@
+import Script from "next/script";
 import "./globals.css";
 import SiteHeader from "./components/layout/SiteHeader";
 import SiteFooter from "./components/layout/SiteFooter";
@@ -14,6 +15,9 @@ export const metadata = {
   twitter: { card: "summary_large_image", images: ["/opengraph-image"] },
 };
 
+// Google Analytics 4 (gtag.js).
+const GA_MEASUREMENT_ID = "G-PDQPD5RJ6C";
+
 export default function RootLayout({ children }) {
   return (
     <html
@@ -25,6 +29,18 @@ export default function RootLayout({ children }) {
         <SiteHeader />
         {children}
         <SiteFooter />
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA_MEASUREMENT_ID}');
+          `}
+        </Script>
       </body>
     </html>
   );
