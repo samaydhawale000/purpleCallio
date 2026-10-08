@@ -448,7 +448,7 @@ export function HowCreditsWork({ pricing }: { pricing: PublicPricing }) {
       <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-[#3D3650]">
         <li>Plan credits are added when your payment is confirmed and expire at the end of the plan period.</li>
         <li>When credits run out, new calls cannot start until you top up, renew or upgrade. Calls already in progress are never cut off.</li>
-        <li>Paid plans do not renew automatically — you choose when to renew and pay.</li>
+        <li>Paid plans auto-renew at the start of each period on your card or UPI Autopay — you are notified first and can turn it off anytime.</li>
       </ul>
     </div>
   );

@@ -1114,9 +1114,9 @@ meeting.microphone.enable();`} />
             <div className="space-y-3 mb-6">
               {[
                 { t: 'Start on the Free plan', d: 'Every account starts on the Free plan with a monthly amount of included credits for building and testing.' },
-                { t: 'Choose a plan and pay upfront', d: 'Pick a paid plan in Dashboard → Billing and pay once at checkout (GST added). Credits are added as soon as the payment is confirmed. Nothing is charged automatically.' },
+                { t: 'Choose a plan and pay upfront', d: 'Pick a paid plan in Dashboard → Billing and pay once at checkout (GST added). Credits are added as soon as the payment is confirmed. Keep auto-renew on to renew automatically each period, or turn it off and renew manually.' },
                 { t: 'Usage consumes credits', d: 'Audio, video, and screen-sharing participant-minutes consume credits from your balance. Track usage and your credit balance in the dashboard.' },
-                { t: 'Top up, renew, or upgrade', d: 'Buy a one-time top-up when you need more credits, renew manually when your plan period ends, or upgrade at any time. When credits run out, new calls cannot start — active calls are never interrupted.' },
+                { t: 'Top up, renew, or upgrade', d: 'Buy a one-time top-up when you need more credits, let your plan auto-renew (or renew manually), or upgrade at any time. When credits run out, new calls cannot start — active calls are never interrupted.' },
               ].map((s) => (
                 <div key={s.t} className="flex gap-3 rounded-xl border border-[#E7DFF5] p-4" style={{ background: '#FFFFFF' }}>
                   <span className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center font-mono text-xs font-bold" style={{ background: 'linear-gradient(135deg, rgba(127,64,232,0.2), rgba(65,6,134,0.2))', color: '#6425C4', border: '1px solid rgba(127,64,232,0.25)' }}>✓</span>

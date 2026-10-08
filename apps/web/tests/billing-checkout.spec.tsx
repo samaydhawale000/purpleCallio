@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
 const { router, api, runCheckout, search } = vi.hoisted(() => ({
@@ -103,6 +103,32 @@ describe('Checkout', () => {
     expect(runCheckout).toHaveBeenCalledWith({ kind: 'plan', planId: 'plan-growth' });
     expect(screen.getByText('You’re now on Growth.')).toBeTruthy();
     expect(screen.getByText('12,000 credits have been added to your account.')).toBeTruthy();
+  });
+
+  it('pre-ticks auto-renew for plan purchases and passes the choice to checkout', async () => {
+    search.value = new URLSearchParams('plan=plan-growth');
+    mockApi({ ...planQuote, autoRenew: { available: true, on: true, amountPaise: planQuote.totalPaise } });
+    render(<CheckoutPage />);
+    const option = await screen.findByTestId('auto-renew-option');
+    const box = option.querySelector('input') as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    expect(option.textContent).toContain('₹2,653.94');
+    runCheckout.mockResolvedValue({ kind: 'paid', outcome: outcome() });
+    fireEvent.click(screen.getByRole('button', { name: /^Pay / }));
+    await waitFor(() => expect(runCheckout).toHaveBeenCalledWith({ kind: 'plan', planId: 'plan-growth', autoRenew: true }));
+    expect(await screen.findByText(/Renews automatically on/)).toBeTruthy();
+  });
+
+  it('lets the customer untick auto-renew for a one-time payment', async () => {
+    search.value = new URLSearchParams('plan=plan-growth');
+    mockApi({ ...planQuote, autoRenew: { available: true, on: true, amountPaise: planQuote.totalPaise } });
+    render(<CheckoutPage />);
+    const option = await screen.findByTestId('auto-renew-option');
+    fireEvent.click(option.querySelector('input')!);
+    expect(option.textContent).toContain('your plan ends after this period');
+    runCheckout.mockResolvedValue({ kind: 'paid', outcome: outcome() });
+    fireEvent.click(screen.getByRole('button', { name: /^Pay / }));
+    await waitFor(() => expect(runCheckout).toHaveBeenCalledWith({ kind: 'plan', planId: 'plan-growth', autoRenew: false }));
   });
 
   it('shows the failure state with Try again', async () => {

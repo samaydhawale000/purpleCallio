@@ -29,6 +29,7 @@ import type { TopUpInput } from './topups/topup.service';
 import { UsageBillingService } from './usage-billing.service';
 import type { BillingRates } from './usage-billing.service';
 import { UsageSegmentService } from './usage-segment.service';
+import { AutoRenewService } from './subscriptions/auto-renew.service';
 
 type FeatureBody = Parameters<PlanService['upsertFeature']>[0];
 
@@ -53,6 +54,7 @@ export class AdminBillingController {
     private segments: UsageSegmentService,
     private ratingEngine: RatingEngineService,
     private audit: BillingAuditService,
+    private autoRenew: AutoRenewService,
   ) {}
 
   // ── Plans ───────────────────────────────────────────
@@ -72,17 +74,29 @@ export class AdminBillingController {
   }
 
   @Patch('plans/:id')
-  updatePlan(
+  async updatePlan(
     @Req() req: any,
     @Param('id') id: string,
     @Body() body: PlanInput,
   ) {
-    return this.plans.updatePlan(id, body, req.user.userId);
+    const updated = await this.plans.updatePlan(id, body, req.user.userId);
+    // Price changes apply to auto-renewing customers from their next renewal.
+    this.autoRenew.inBackground(
+      () => this.autoRenew.syncPlan(id),
+      `plan ${id}`,
+    );
+    return updated;
   }
 
   @Post('plans/:id/archive')
-  archivePlan(@Req() req: any, @Param('id') id: string) {
-    return this.plans.archivePlan(id, req.user.userId);
+  async archivePlan(@Req() req: any, @Param('id') id: string) {
+    const archived = await this.plans.archivePlan(id, req.user.userId);
+    // Archived plans can't renew: their mandates are stopped at period end.
+    this.autoRenew.inBackground(
+      () => this.autoRenew.syncPlan(id),
+      `archive ${id}`,
+    );
+    return archived;
   }
 
   @Post('plans/:id/duplicate')
@@ -133,8 +147,12 @@ export class AdminBillingController {
   }
 
   @Patch('credit-rates')
-  updateCreditRates(@Req() req: any, @Body() body: BillingConfigUpdate) {
-    return this.config.update(body, req.user.userId);
+  async updateCreditRates(@Req() req: any, @Body() body: BillingConfigUpdate) {
+    const updated = await this.config.update(body, req.user.userId);
+    if (body?.taxPercent !== undefined) {
+      this.autoRenew.inBackground(() => this.autoRenew.syncAll(), 'tax change');
+    }
+    return updated;
   }
 
   @Get('settings')
@@ -143,8 +161,12 @@ export class AdminBillingController {
   }
 
   @Patch('settings')
-  updateSettings(@Req() req: any, @Body() body: BillingConfigUpdate) {
-    return this.config.update(body, req.user.userId);
+  async updateSettings(@Req() req: any, @Body() body: BillingConfigUpdate) {
+    const updated = await this.config.update(body, req.user.userId);
+    if (body?.taxPercent !== undefined) {
+      this.autoRenew.inBackground(() => this.autoRenew.syncAll(), 'tax change');
+    }
+    return updated;
   }
 
   // ── Subscriptions ───────────────────────────────────

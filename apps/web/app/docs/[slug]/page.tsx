@@ -402,7 +402,7 @@ const docs = {
          ],
          [
             "Renewals, top-ups and upgrades",
-            "Paid plans do not renew automatically — renew from the Billing page when the period ends. Plan credits expire at the end of the plan period. Buy one-time top-ups when you need more credits, or upgrade at any time. When credits run out, new calls cannot start; active calls are never interrupted.",
+            "Paid plans auto-renew at the start of each period while auto-renew is on (default at checkout; turn it off anytime in Billing), or renew manually from the Billing page. Plan credits expire at the end of the plan period. Buy one-time top-ups when you need more credits, or upgrade at any time. When credits run out, new calls cannot start; active calls are never interrupted.",
          ],
          [
             "Track usage",

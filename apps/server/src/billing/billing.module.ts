@@ -18,6 +18,7 @@ import { PlanService } from './plans/plan.service';
 import { CreditService } from './credits/credit.service';
 import { SubscriptionService } from './subscriptions/subscription.service';
 import { EntitlementService } from './subscriptions/entitlement.service';
+import { AutoRenewService } from './subscriptions/auto-renew.service';
 import { TopUpService } from './topups/topup.service';
 import { CheckoutService } from './checkout/checkout.service';
 import { BillingFulfillmentService } from './checkout/fulfillment.service';
@@ -50,6 +51,7 @@ import { SupportModule } from '../support/support.module';
     CreditService,
     SubscriptionService,
     EntitlementService,
+    AutoRenewService,
     TopUpService,
     CheckoutService,
     BillingFulfillmentService,
@@ -82,6 +84,7 @@ import { SupportModule } from '../support/support.module';
     CustomerDiscountService,
     SubscriptionService,
     EntitlementService,
+    AutoRenewService,
     CreditService,
     BillingGuard,
   ],

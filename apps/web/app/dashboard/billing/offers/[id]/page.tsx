@@ -140,7 +140,7 @@ export default function OfferPage() {
             : offer.expiresAt
               ? `${expired ? 'Expired' : 'Valid until'} ${formatDate(offer.expiresAt)}.`
               : 'Sent ' + formatDate(offer.createdAt) + '.'}{' '}
-          One-time payment for the plan period — it doesn’t renew automatically.
+          You can choose auto-renew at checkout, or pay for this period only.
         </p>
 
         <div className="mt-5 flex flex-wrap gap-2">

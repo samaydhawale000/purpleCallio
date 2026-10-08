@@ -4,7 +4,7 @@ import { CreditCard, Gauge, LayoutList, PlusCircle, Sparkles } from 'lucide-reac
 
 const STEPS = [
   { icon: LayoutList, title: 'Choose a plan', body: 'Pick the plan that fits your team.' },
-  { icon: CreditCard, title: 'Pay upfront', body: 'One-time payment for the plan period. Nothing renews automatically.' },
+  { icon: CreditCard, title: 'Pay upfront', body: 'Pay for each period at its start. Keep auto-renew on, or renew yourself.' },
   { icon: Sparkles, title: 'Credits are added', body: 'Your plan’s included credits land in your balance right away.' },
   { icon: Gauge, title: 'Usage consumes credits', body: 'Calls use credits per participant-minute of audio, video and screen share.' },
   { icon: PlusCircle, title: 'Top up or upgrade', body: 'Add credits or move to a bigger plan anytime.' },

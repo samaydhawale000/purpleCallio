@@ -14,8 +14,8 @@ export default function RefundPage() {
         <p>
           You can cancel a paid plan at any time from the Billing page or by contacting support.
           Cancellation takes effect at the end of your current paid period: your plan remains active, and
-          its credits remain usable, until that date. Because paid plans do not renew automatically, no
-          further payment is taken after cancellation.
+          its credits remain usable, until that date. Cancelling also turns off auto-renew, so no further
+          payment is taken after cancellation.
         </p>
         <p>
           You may also close your PurpleCallio account. Cancellation or account closure does not by itself

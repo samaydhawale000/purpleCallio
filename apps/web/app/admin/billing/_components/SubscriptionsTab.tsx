@@ -100,11 +100,19 @@ export function SubscriptionsTab() {
                   <td className={tdCls}>{formatCredits(s.includedCredits)}</td>
                   <td className={`${tdCls} whitespace-nowrap`}>{formatDate(s.currentPeriodEnd)}</td>
                   <td className={tdCls}>
+                    {s.planType !== 'FREE' && (
+                      <div className={`text-[11px] ${s.autoRenew ? 'text-emerald-700' : 'text-[#3D3650]'}`}>
+                        Auto-renew {s.autoRenew ? 'on' : 'off'}
+                        {s.autoRenew && s.renewalAmountPaise != null ? ` · ${formatMoney(s.renewalAmountPaise, s.currency)}` : ''}
+                        {s.autoRenewStatus === 'pending' ? ' · retrying' : ''}
+                        {!s.autoRenew && s.autoRenewOffReason ? ` (${s.autoRenewOffReason.replace(/_/g, ' ')})` : ''}
+                      </div>
+                    )}
                     {s.cancelAtPeriodEnd && <div className="text-[11px] text-amber-700">Cancels at period end</div>}
                     {s.scheduledPlanId && (
                       <div className="text-[11px] text-[#6425C4]">Downgrade to {planNames.get(s.scheduledPlanId) ?? 'another plan'} at period end</div>
                     )}
-                    {!s.cancelAtPeriodEnd && !s.scheduledPlanId && '—'}
+                    {s.planType === 'FREE' && !s.cancelAtPeriodEnd && !s.scheduledPlanId && '—'}
                   </td>
                 </tr>
               );

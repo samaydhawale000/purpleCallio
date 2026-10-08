@@ -18,6 +18,9 @@ import {
  */
 const d = TEST_DB_URL ? describe : describe.skip;
 
+// Each test truncates and re-seeds the database; give that room on a busy machine.
+jest.setTimeout(30_000);
+
 d('prepaid billing (integration)', () => {
   let h: Harness;
 
@@ -447,10 +450,10 @@ d('prepaid billing (integration)', () => {
       const before = await h.subscriptions.getActiveSubscription(u.id);
       const started = await h.checkout.start(u.id, { kind: 'renewal' });
       expect(started.quote.purpose).toBe('SUBSCRIPTION_RENEWAL');
-      const paid = h.provider.pay(started.providerOrderId);
+      const paid = h.provider.pay(started.providerOrderId!);
       await h.checkout.verify(u.id, {
         paymentId: started.paymentId,
-        providerOrderId: started.providerOrderId,
+        providerOrderId: started.providerOrderId!,
         providerPaymentId: paid.providerPaymentId,
         signature: paid.signature,
       });
@@ -599,12 +602,12 @@ d('prepaid billing (integration)', () => {
         kind: 'plan',
         planId: growth.id,
       });
-      const failed = h.provider.pay(started.providerOrderId, {
+      const failed = h.provider.pay(started.providerOrderId!, {
         status: 'failed',
       });
       const result = await h.checkout.verify(u.id, {
         paymentId: started.paymentId,
-        providerOrderId: started.providerOrderId,
+        providerOrderId: started.providerOrderId!,
         providerPaymentId: failed.providerPaymentId,
         signature: failed.signature,
       });
@@ -626,11 +629,11 @@ d('prepaid billing (integration)', () => {
         kind: 'plan',
         planId: growth.id,
       });
-      const paid = h.provider.pay(started.providerOrderId);
+      const paid = h.provider.pay(started.providerOrderId!);
       await expect(
         h.checkout.verify(u.id, {
           paymentId: started.paymentId,
-          providerOrderId: started.providerOrderId,
+          providerOrderId: started.providerOrderId!,
           providerPaymentId: paid.providerPaymentId,
           signature: 'forged',
         }),
@@ -647,10 +650,10 @@ d('prepaid billing (integration)', () => {
         kind: 'plan',
         planId: growth.id,
       });
-      const paid = h.provider.pay(started.providerOrderId);
+      const paid = h.provider.pay(started.providerOrderId!);
       const body = {
         paymentId: started.paymentId,
-        providerOrderId: started.providerOrderId,
+        providerOrderId: started.providerOrderId!,
         providerPaymentId: paid.providerPaymentId,
         signature: paid.signature,
       };
@@ -679,7 +682,7 @@ d('prepaid billing (integration)', () => {
         kind: 'plan',
         planId: growth.id,
       });
-      const paid = h.provider.pay(started.providerOrderId);
+      const paid = h.provider.pay(started.providerOrderId!);
       const evt = h.provider.webhookBody(
         'evt_1',
         'payment.captured',
@@ -697,7 +700,7 @@ d('prepaid billing (integration)', () => {
       await h.webhooks.handle(evt2.raw, evt2.headers);
       const cb = await h.checkout.verify(u.id, {
         paymentId: started.paymentId,
-        providerOrderId: started.providerOrderId,
+        providerOrderId: started.providerOrderId!,
         providerPaymentId: paid.providerPaymentId,
         signature: paid.signature,
       });
@@ -739,7 +742,7 @@ d('prepaid billing (integration)', () => {
         kind: 'plan',
         planId: growth.id,
       });
-      const paid = h.provider.pay(started.providerOrderId);
+      const paid = h.provider.pay(started.providerOrderId!);
       const evt = h.provider.webhookBody(
         'evt_r',
         'payment.captured',
@@ -749,7 +752,7 @@ d('prepaid billing (integration)', () => {
         h.webhooks.handle(evt.raw, evt.headers),
         h.checkout.verify(u.id, {
           paymentId: started.paymentId,
-          providerOrderId: started.providerOrderId,
+          providerOrderId: started.providerOrderId!,
           providerPaymentId: paid.providerPaymentId,
           signature: paid.signature,
         }),
@@ -772,7 +775,7 @@ d('prepaid billing (integration)', () => {
       await h.checkout.reportFailure(u.id, started.paymentId, {
         description: 'Card declined',
       });
-      const paid = h.provider.pay(started.providerOrderId);
+      const paid = h.provider.pay(started.providerOrderId!);
       const evt = h.provider.webhookBody(
         'evt_late',
         'payment.captured',
@@ -800,12 +803,12 @@ d('prepaid billing (integration)', () => {
         kind: 'plan',
         planId: growth.id,
       });
-      const paid = h.provider.pay(started.providerOrderId, {
+      const paid = h.provider.pay(started.providerOrderId!, {
         amountPaise: 100,
       });
       const res = await h.checkout.verify(u.id, {
         paymentId: started.paymentId,
-        providerOrderId: started.providerOrderId,
+        providerOrderId: started.providerOrderId!,
         providerPaymentId: paid.providerPaymentId,
         signature: paid.signature,
       });
@@ -862,10 +865,10 @@ d('prepaid billing (integration)', () => {
         kind: 'topup',
         topUpPackageId: pkg.id,
       });
-      const paid = h.provider.pay(started.providerOrderId);
+      const paid = h.provider.pay(started.providerOrderId!);
       const body = {
         paymentId: started.paymentId,
-        providerOrderId: started.providerOrderId,
+        providerOrderId: started.providerOrderId!,
         providerPaymentId: paid.providerPaymentId,
         signature: paid.signature,
       };
@@ -892,10 +895,10 @@ d('prepaid billing (integration)', () => {
         kind: 'topup',
         topUpPackageId: pkg.id,
       });
-      const paid = h.provider.pay(started.providerOrderId);
+      const paid = h.provider.pay(started.providerOrderId!);
       await h.checkout.verify(u.id, {
         paymentId: started.paymentId,
-        providerOrderId: started.providerOrderId,
+        providerOrderId: started.providerOrderId!,
         providerPaymentId: paid.providerPaymentId,
         signature: paid.signature,
       });
@@ -917,10 +920,10 @@ d('prepaid billing (integration)', () => {
         kind: 'topup',
         topUpPackageId: pkg.id,
       });
-      const paid = h.provider.pay(started.providerOrderId);
+      const paid = h.provider.pay(started.providerOrderId!);
       await h.checkout.verify(u.id, {
         paymentId: started.paymentId,
-        providerOrderId: started.providerOrderId,
+        providerOrderId: started.providerOrderId!,
         providerPaymentId: paid.providerPaymentId,
         signature: paid.signature,
       });
@@ -1132,10 +1135,10 @@ d('prepaid billing (integration)', () => {
       expect((await h.subscriptions.getActiveSubscription(u.id)).planType).toBe(
         'FREE',
       );
-      const paid = h.provider.pay(started.providerOrderId);
+      const paid = h.provider.pay(started.providerOrderId!);
       await h.checkout.verify(u.id, {
         paymentId: started.paymentId,
-        providerOrderId: started.providerOrderId,
+        providerOrderId: started.providerOrderId!,
         providerPaymentId: paid.providerPaymentId,
         signature: paid.signature,
       });

@@ -67,7 +67,38 @@ export type ProviderEventType =
   | 'order.paid'
   | 'refund.processed'
   | 'payment.dispute.created'
+  | 'subscription.authenticated'
+  | 'subscription.activated'
+  | 'subscription.charged'
+  | 'subscription.pending'
+  | 'subscription.halted'
+  | 'subscription.cancelled'
+  | 'subscription.completed'
   | 'unknown';
+
+// ── Recurring mandates (auto-renew) ─────────────────────────────────────
+export interface ProviderRecurringPlanInput {
+  amountPaise: number;
+  currency: string;
+  /** MONTH | YEAR | CUSTOM (CUSTOM = intervalCount days). */
+  billingInterval: 'MONTH' | 'YEAR' | 'CUSTOM';
+  intervalCount: number;
+  name: string;
+}
+
+export interface ProviderSubscriptionInput {
+  providerPlanId: string;
+  /** First charge at this time; omitted = charge now on authorization. */
+  startAt?: Date | null;
+  notes: Record<string, string>;
+}
+
+export interface ProviderSubscription {
+  providerSubscriptionId: string;
+  status: string;
+  /** End of the provider's current billing cycle, when known. */
+  currentEnd: Date | null;
+}
 
 export interface ProviderWebhookEvent {
   /** Provider's unique event id — the idempotency key for redeliveries. */
@@ -75,6 +106,7 @@ export interface ProviderWebhookEvent {
   type: ProviderEventType;
   rawType: string;
   payment: ProviderPayment | null;
+  subscription: ProviderSubscription | null;
   refund: {
     providerRefundId: string;
     providerPaymentId: string;
@@ -104,6 +136,31 @@ export interface PaymentProvider {
     rawBody: Buffer,
     headers: Record<string, string | undefined>,
   ): Promise<ProviderWebhookEvent>;
+
+  /**
+   * Recurring mandates for auto-renew. The provider owns the charging
+   * schedule, e-mandate registration (card / UPI Autopay), pre-debit
+   * notices and retries; we only react to its verified webhooks.
+   */
+  createRecurringPlan(input: ProviderRecurringPlanInput): Promise<string>;
+  createSubscription(
+    input: ProviderSubscriptionInput,
+  ): Promise<ProviderSubscription>;
+  /** Verifies the Checkout proof for a subscription's first (or auth) payment. */
+  verifySubscriptionPayment(input: {
+    providerSubscriptionId: string;
+    providerPaymentId: string;
+    signature: string;
+  }): Promise<ProviderPayment | null>;
+  /** Moves the mandate to another recurring plan from the next cycle. */
+  changeSubscriptionPlan(
+    providerSubscriptionId: string,
+    providerPlanId: string,
+  ): Promise<void>;
+  cancelSubscription(
+    providerSubscriptionId: string,
+    atCycleEnd: boolean,
+  ): Promise<void>;
 }
 
 export const PAYMENT_PROVIDER = 'PAYMENT_PROVIDER';

@@ -73,14 +73,77 @@ export class BillingNotificationService {
   }
 
   planExpiringSoon(sub: Subscription) {
+    if (sub.autoRenew) {
+      const amount = sub.renewalAmountPaise ?? sub.pricePaise;
+      return this.notifications.createNotification({
+        userId: sub.companyId,
+        type: NotificationType.PLAN_EXPIRING,
+        title: `${sub.planName} renews on ${fmtDate(sub.currentPeriodEnd)}`,
+        message: `Auto-renew will charge ${fmtINR(amount)} (incl. GST) to your saved payment method and add a fresh set of credits. You can turn auto-renew off from Billing before then.`,
+        metadata: { subscriptionId: sub.id },
+        dedupeKey: `plan-renewing:${sub.id}:${sub.currentPeriodEnd?.toISOString()}`,
+      });
+    }
     return this.notifications.createNotification({
       userId: sub.companyId,
       type: NotificationType.PLAN_EXPIRING,
       title: `${sub.planName} ends on ${fmtDate(sub.currentPeriodEnd)}`,
       message:
-        'Renew from Billing to keep your plan and get a fresh set of credits. Plans never renew automatically.',
+        'Auto-renew is off for this plan. Renew from Billing (or turn auto-renew on) to keep your plan and get a fresh set of credits.',
       metadata: { subscriptionId: sub.id },
       dedupeKey: `plan-expiring:${sub.id}:${sub.currentPeriodEnd?.toISOString()}`,
+    });
+  }
+
+  autoRenewChanged(sub: Subscription, on: boolean, reason?: string) {
+    const why: Record<string, string> = {
+      renewal_terms_changed:
+        "We couldn't update your auto-renew to the plan's new price, so it has been switched off.",
+      plan_unavailable: 'Your plan is no longer offered, so it will not renew.',
+      renewal_payment_not_received:
+        "We didn't receive your renewal payment in time.",
+      mandate_cancelled:
+        'The auto-pay mandate was cancelled with your bank or payment app.',
+    };
+    return this.notifications.createNotification({
+      userId: sub.companyId,
+      type: NotificationType.PLAN_ACTIVATED,
+      title: on ? 'Auto-renew is on' : 'Auto-renew is off',
+      message: on
+        ? `${sub.planName} will renew automatically on ${fmtDate(sub.currentPeriodEnd)}${sub.renewalAmountPaise ? ` for ${fmtINR(sub.renewalAmountPaise)}` : ''}. You can turn it off anytime from Billing.`
+        : `${why[reason ?? ''] ?? ''} ${sub.planName} stays active until ${fmtDate(sub.currentPeriodEnd)}; renew manually from Billing to continue.`.trim(),
+      metadata: { subscriptionId: sub.id },
+      dedupeKey: `auto-renew:${sub.id}:${on ? 'on' : 'off'}:${(sub.autoRenewChangedAt ?? new Date()).toISOString()}`,
+    });
+  }
+
+  renewalPriceChanged(
+    sub: Subscription,
+    planName: string,
+    amountPaise: number,
+  ) {
+    return this.notifications.createNotification({
+      userId: sub.companyId,
+      type: NotificationType.PLAN_EXPIRING,
+      title: 'Your renewal price is changing',
+      message: `From your next renewal on ${fmtDate(sub.currentPeriodEnd)}, ${planName} will auto-renew at ${fmtINR(amountPaise)} (incl. GST). Your current period is unchanged. You can turn auto-renew off from Billing before then.`,
+      metadata: { subscriptionId: sub.id },
+      dedupeKey: `renewal-price:${sub.id}:${sub.currentPeriodEnd?.toISOString()}:${amountPaise}`,
+    });
+  }
+
+  renewalChargeFailed(sub: Subscription, retrying: boolean) {
+    return this.notifications.createNotification({
+      userId: sub.companyId,
+      type: NotificationType.PAYMENT_FAILED,
+      title: retrying
+        ? 'Renewal payment failed — retrying'
+        : 'Auto-renew stopped',
+      message: retrying
+        ? `We couldn't charge your renewal for ${sub.planName}. Your payment provider will retry over the next few days; you can also renew manually from Billing.`
+        : `Your renewal payments for ${sub.planName} kept failing, so auto-renew has stopped. Renew manually from Billing to keep your plan.`,
+      metadata: { subscriptionId: sub.id },
+      dedupeKey: `renewal-failed:${sub.id}:${sub.currentPeriodEnd?.toISOString()}:${retrying ? 'retry' : 'halted'}`,
     });
   }
 

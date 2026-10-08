@@ -236,7 +236,7 @@ export class LegacyBillingMigrationService implements OnApplicationBootstrap {
       type: NotificationType.PLAN_ACTIVATED,
       title: 'Billing is now prepaid',
       message:
-        `PurpleCallio now uses prepaid plans with included credits — no more usage invoices or automatic card charges. ` +
+        `PurpleCallio now uses prepaid plans with included credits — no more usage invoices after the fact. ` +
         `You're on the Free plan with ${fmt(freeCredits)} credits each month` +
         (transitionCredits > 0
           ? `, plus ${fmt(transitionCredits)} transition credits (valid ${TRANSITION_DAYS} days) based on your recent usage.`

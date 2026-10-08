@@ -14,6 +14,8 @@ interface Form {
   topUpExpiryDays: string;
   renewalReminderDays: string;
   pendingCheckoutTtlHours: string;
+  autoRenewDefault: boolean;
+  autoRenewGraceHours: string;
 }
 
 const whole = (s: string) => /^\d+$/.test(s.trim());
@@ -35,6 +37,8 @@ export function SettingsTab() {
       topUpExpiryDays: data.topUpExpiryDays ? String(data.topUpExpiryDays) : '',
       renewalReminderDays: String(data.renewalReminderDays),
       pendingCheckoutTtlHours: String(data.pendingCheckoutTtlHours),
+      autoRenewDefault: data.autoRenewDefault ?? true,
+      autoRenewGraceHours: String(data.autoRenewGraceHours ?? 72),
     });
   }, [data]);
 
@@ -56,6 +60,7 @@ export function SettingsTab() {
     if (!whole(form.pendingCheckoutTtlHours) || Number(form.pendingCheckoutTtlHours) < 1) {
       return setSaveError('Abandoned checkout expiry must be at least 1 hour.');
     }
+    if (!whole(form.autoRenewGraceHours)) return setSaveError('Auto-renew grace must be a whole number of hours.');
     setSaving(true);
     try {
       await updateBillingSettings({
@@ -65,6 +70,8 @@ export function SettingsTab() {
         topUpExpiryDays: form.topUpExpiryPolicy === 'DAYS' ? Number(form.topUpExpiryDays) : form.topUpExpiryDays ? Number(form.topUpExpiryDays) : null,
         renewalReminderDays: Number(form.renewalReminderDays),
         pendingCheckoutTtlHours: Number(form.pendingCheckoutTtlHours),
+        autoRenewDefault: form.autoRenewDefault,
+        autoRenewGraceHours: Number(form.autoRenewGraceHours),
       });
       setToast({ id: Date.now(), type: 'success', message: 'Billing settings saved' });
     } catch (err) {
@@ -142,12 +149,27 @@ export function SettingsTab() {
 
       <Panel title="Renewals & checkout">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
-          <Field label="Renewal reminder (days before period end)" hint="Paid plans never renew automatically; customers are reminded to renew.">
+          <Field label="Renewal reminder (days before period end)" hint="Customers get a reminder (auto-renew: an upcoming-charge notice) this many days before period end.">
             <input type="number" min={0} className={inputCls} value={form.renewalReminderDays} onChange={(e) => setForm({ ...form, renewalReminderDays: e.target.value })} />
           </Field>
           <Field label="Abandoned checkout expiry (hours)" hint="Unpaid checkouts are cancelled after this long.">
             <input type="number" min={1} className={inputCls} value={form.pendingCheckoutTtlHours} onChange={(e) => setForm({ ...form, pendingCheckoutTtlHours: e.target.value })} />
           </Field>
+          <Field label="Auto-renew grace (hours)" hint="An auto-renewing plan stays active this long past period end while the renewal payment is retried.">
+            <input type="number" min={0} className={inputCls} value={form.autoRenewGraceHours} onChange={(e) => setForm({ ...form, autoRenewGraceHours: e.target.value })} />
+          </Field>
+          <label className="sm:col-span-2 flex items-start gap-2 text-sm text-[#170B2E]">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-[#7F40E8]"
+              checked={form.autoRenewDefault}
+              onChange={(e) => setForm({ ...form, autoRenewDefault: e.target.checked })}
+            />
+            <span>
+              Pre-select auto-renew at checkout
+              <span className="block text-xs text-[#3D3650]">Customers can always untick it, and turn it off later from Billing.</span>
+            </span>
+          </label>
         </div>
       </Panel>
 

@@ -30,6 +30,7 @@ import {
   SubscriptionService,
   snapshotData,
 } from '../subscriptions/subscription.service';
+import { AutoRenewService } from '../subscriptions/auto-renew.service';
 
 type Tx = Prisma.TransactionClient;
 type PostCommit = (() => Promise<unknown>)[];
@@ -65,6 +66,7 @@ export class BillingFulfillmentService {
     private audit: BillingAuditService,
     private notify: BillingNotificationService,
     private notifications: NotificationService,
+    private autoRenew: AutoRenewService,
   ) {}
 
   private async lockPayment(tx: Tx, paymentId: string): Promise<Payment> {
@@ -82,6 +84,7 @@ export class BillingFulfillmentService {
     paymentId: string,
     providerPayment: ProviderPayment,
     source: 'callback' | 'webhook',
+    opts: { providerPeriodEnd?: Date | null } = {},
   ) {
     const head = await this.prisma.payment.findUnique({
       where: { id: paymentId },
@@ -158,7 +161,12 @@ export class BillingFulfillmentService {
         subscriptionId = sub.id;
         if (paid.customOfferId) await this.acceptOffer(tx, paid.customOfferId);
       } else if (paid.purpose === PaymentPurpose.SUBSCRIPTION_RENEWAL) {
-        subscriptionId = await this.renew(tx, paid, postCommit);
+        subscriptionId = await this.renew(
+          tx,
+          paid,
+          postCommit,
+          opts.providerPeriodEnd,
+        );
       } else if (paid.purpose === PaymentPurpose.TOPUP) {
         await this.grantTopUp(tx, paid);
         postCommit.push(() =>
@@ -209,6 +217,7 @@ export class BillingFulfillmentService {
     tx: Tx,
     payment: Payment,
     postCommit: PostCommit,
+    providerPeriodEnd?: Date | null,
   ): Promise<string> {
     const sub = payment.subscriptionId
       ? await tx.subscription.findUnique({
@@ -221,6 +230,7 @@ export class BillingFulfillmentService {
         sub.id,
         payment,
         postCommit,
+        providerPeriodEnd,
       );
       return renewed.id;
     }
@@ -230,12 +240,25 @@ export class BillingFulfillmentService {
       where: { id: payment.planVersionId },
       include: { plan: true },
     });
+    // A late auto-renew charge keeps its mandate on the new subscription.
+    const mandateId =
+      payment.providerSubscriptionId &&
+      sub?.providerSubscriptionId === payment.providerSubscriptionId
+        ? sub.providerSubscriptionId
+        : null;
+    if (mandateId && sub) {
+      await tx.subscription.update({
+        where: { id: sub.id },
+        data: { providerSubscriptionId: null, autoRenew: false },
+      });
+    }
     const pending = await tx.subscription.create({
       data: {
         companyId: payment.userId!,
         status: BillingStatus.PENDING_PAYMENT,
         ...snapshotData(version.plan, version),
         previousSubscriptionId: sub?.id ?? null,
+        ...(mandateId ? { providerSubscriptionId: mandateId } : {}),
       },
     });
     await tx.payment.update({
@@ -296,6 +319,117 @@ export class BillingFulfillmentService {
         data: { status: 'ACCEPTED', closedAt: new Date() },
       });
     }
+  }
+
+  /**
+   * A charge on an auto-renew mandate (provider `subscription.charged`).
+   * The first charge of a new mandate completes its pending checkout; later
+   * charges become renewal payments. Idempotent by provider payment id, so
+   * redelivered webhooks and the browser callback can arrive in any order.
+   */
+  async recordMandateCharge(
+    providerPayment: ProviderPayment,
+    mandate: { providerSubscriptionId: string; currentEnd: Date | null },
+  ) {
+    if (providerPayment.status !== 'captured') return { ignored: true };
+    const sub = await this.prisma.subscription.findUnique({
+      where: { providerSubscriptionId: mandate.providerSubscriptionId },
+    });
+    if (!sub) return { ignored: true };
+
+    const known = await this.prisma.payment.findUnique({
+      where: { providerPaymentId: providerPayment.providerPaymentId },
+    });
+    if (known) {
+      if (known.paymentStatus !== PaymentStatus.PAID) {
+        await this.fulfill(known.id, providerPayment, 'webhook', {
+          providerPeriodEnd: mandate.currentEnd,
+        });
+      }
+      return { paymentId: known.id };
+    }
+
+    // First charge of a mandate created at checkout.
+    const checkout = await this.prisma.payment.findFirst({
+      where: {
+        providerSubscriptionId: mandate.providerSubscriptionId,
+        purpose: { not: PaymentPurpose.SUBSCRIPTION_RENEWAL },
+        paymentStatus: {
+          in: [
+            PaymentStatus.PENDING,
+            PaymentStatus.FAILED,
+            PaymentStatus.EXPIRED,
+          ],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (checkout && sub.status !== BillingStatus.ACTIVE) {
+      await this.fulfill(checkout.id, providerPayment, 'webhook');
+      return { paymentId: checkout.id };
+    }
+
+    // Renewal charge.
+    const versionId = sub.renewalPlanVersionId ?? sub.planVersionId;
+    const version = versionId
+      ? await this.prisma.planVersion.findUnique({
+          where: { id: versionId },
+          include: { plan: true },
+        })
+      : null;
+    const config = await this.config.get();
+    const amount = providerPayment.amountPaise;
+    const subtotalPaise = Math.round(
+      (amount * 100) / (100 + config.taxPercent),
+    );
+    let renewal: Payment;
+    try {
+      renewal = await this.prisma.payment.create({
+        data: {
+          userId: sub.companyId,
+          subscriptionId: sub.id,
+          purpose: PaymentPurpose.SUBSCRIPTION_RENEWAL,
+          provider: this.provider.name,
+          providerPaymentId: providerPayment.providerPaymentId,
+          providerSubscriptionId: mandate.providerSubscriptionId,
+          amount,
+          subtotalPaise,
+          taxPercent: config.taxPercent,
+          taxPaise: amount - subtotalPaise,
+          currency: providerPayment.currency,
+          credits: version?.includedCredits ?? sub.includedCredits,
+          planVersionId: version?.id ?? null,
+          description: `${version?.plan.name ?? sub.planName} plan renewal (auto-renew)`,
+          lineItems: [
+            {
+              label: `${version?.plan.name ?? sub.planName} plan renewal (auto-renew)`,
+              amountPaise: subtotalPaise,
+              credits: version?.includedCredits ?? sub.includedCredits,
+            },
+            {
+              label: `GST (${config.taxPercent}%)`,
+              amountPaise: amount - subtotalPaise,
+            },
+          ],
+        },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002') return { duplicate: true };
+      throw e;
+    }
+    if (sub.renewalAmountPaise != null && amount !== sub.renewalAmountPaise) {
+      await this.notifications.notifyAdmins({
+        type: NotificationType.PAYMENT_FAILED,
+        title: 'Auto-renew charged an unexpected amount',
+        message: `Mandate ${mandate.providerSubscriptionId} charged ${amount} paise; expected ${sub.renewalAmountPaise}. The renewal was honored — review the customer's terms.`,
+        metadata: { paymentId: renewal.id, customerId: sub.companyId },
+        dedupeKey: `admin:mandate-amount:${renewal.id}`,
+      });
+    }
+    await this.fulfill(renewal.id, providerPayment, 'webhook', {
+      providerPeriodEnd: mandate.currentEnd,
+    });
+    return { paymentId: renewal.id };
   }
 
   /** Records a failed attempt. Never touches a PAID payment. */
@@ -466,6 +600,14 @@ export class BillingFulfillmentService {
               payment.userId!,
               postCommit,
             );
+            if (sub.autoRenew || sub.providerSubscriptionId) {
+              postCommit.push(() =>
+                this.autoRenew.disable(sub.id, 'refunded', {
+                  atCycleEnd: false,
+                  notifyCustomer: false,
+                }),
+              );
+            }
           }
         }
       }
