@@ -3,6 +3,21 @@
 import { Suspense, useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { socket } from "../lib/socket";
+import {
+   IceRecovery,
+   candidateMatchesRemote,
+   readMediaBytes,
+   readSelectedPath,
+   type ConnectivityFailureReason,
+   type MediaPath,
+} from "../lib/webrtc-connectivity";
+
+/** TURN credentials must not hold up the call indefinitely. */
+const ICE_SERVERS_TIMEOUT_MS = 5000;
+/** Report the media path this long after connecting even without inbound media. */
+const MEDIA_WAIT_MS = 5000;
+/** Inbound media silent this long on a connected call → recover. */
+const MEDIA_STALL_MS = 10000;
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -273,6 +288,10 @@ function CallPageContent() {
    const searchParams = useSearchParams();
    const token = searchParams.get("token");
    const urlCallId = searchParams.get("callId");
+   // Normal calls use "all" (direct first, TURN fallback). "relay" forces
+   // TURN and exists only for testing relay connectivity.
+   const iceTransportPolicy: RTCIceTransportPolicy =
+      searchParams.get("iceTransportPolicy") === "relay" ? "relay" : "all";
 
    const [state, setState] = useState<CallState>("connecting");
    const [callType, setCallType] = useState<"AUDIO" | "VIDEO">("VIDEO");
@@ -329,17 +348,35 @@ function CallPageContent() {
    const callTypeRef = useRef<"AUDIO" | "VIDEO">("VIDEO");
    const selfParticipantIdRef = useRef<string | null>(null);
    const selfRoleRef = useRef<"CALLER" | "RECEIVER" | null>(null);
-   const reconnectFailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-      null,
-   );
-   const negotiatingRef = useRef(false);
+   // Recovery gave up (neither a direct nor a relay path came back):
+   // assigned below once the call-lifecycle helpers exist.
+   const giveUpRef = useRef<() => void>(() => {});
    const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
    const lifecycleEndedRef = useRef(false);
    const prevStatsRef = useRef<{ lost: number; received: number } | null>(null);
    const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
-   // Reported once per call, the first time ICE connects — not on every
-   // reconnect/restart, so a single flaky renegotiation can't double-count.
+   const seenCandidatesRef = useRef(new Set<string>());
+   // Settles once the real STUN/TURN configuration is applied to the peer
+   // connection. Offers and answers wait for it, so the first ICE gathering
+   // already includes relay candidates for the TURN fallback.
+   const iceReadyRef = useRef<Promise<void>>(Promise.resolve());
+   const recoveryRef = useRef<IceRecovery | null>(null);
+   // Offer, answer and candidates are applied strictly in arrival order.
+   const signalingQueueRef = useRef<Promise<void>>(Promise.resolve());
+   // The call room this socket joined; re-joined after a socket reconnect,
+   // since the gateway drops signaling from sockets outside the room.
+   const roomCallIdRef = useRef<string | null>(null);
+   const timingRef = useRef({
+      negotiationStartedAt: null as number | null,
+      connectedAt: null as number | null,
+      firstInboundAt: null as number | null,
+      lastInbound: 0,
+      lastInboundChangeAt: 0,
+   });
+   // Reported when the path is first known and again only if an ICE
+   // restart moved the call to a different path (P2P ↔ TURN).
    const transportReportedRef = useRef(false);
+   const reportedPathRef = useRef<MediaPath | null>(null);
    // Independent one-shot flags (not a single shared lock) so a call that
    // hits a definitive ICE failure and then recovers via restart reports
    // BOTH — the failure is still true history, but the call still counts as
@@ -416,15 +453,23 @@ function CallPageContent() {
    }, [token, urlCallId, apiUrl]);
 
    const fetchIceServers = useCallback(async (): Promise<RTCIceServer[]> => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), ICE_SERVERS_TIMEOUT_MS);
       try {
          const res = await fetch(`${apiUrl}/turn/credentials`, {
             headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
          });
          if (!res.ok) throw new Error();
          const data = (await res.json()) as { iceServers: RTCIceServer[] };
+         if (!data.iceServers?.length) throw new Error();
          return data.iceServers;
       } catch {
+         // STUN-only still allows direct connections; no TURN fallback.
+         console.warn("TURN credentials unavailable; continuing with STUN only");
          return [{ urls: "stun:stun.l.google.com:19302" }];
+      } finally {
+         clearTimeout(timer);
       }
    }, [token, apiUrl]);
 
@@ -440,30 +485,26 @@ function CallPageContent() {
    // since call start — a cumulative ratio dilutes to near-zero after a
    // couple minutes and would never reflect a fresh problem) and round-trip
    // time on the active candidate pair, and classifies it into a simple
-   // Good/Unstable/Poor tier for the UI.
+   // Good/Unstable/Poor tier for the UI. The same poll confirms media is
+   // actually arriving (a "connected" ICE state alone is not proof), hands a
+   // stalled call to the recovery policy, and reports the media path.
    const startStatsPolling = useCallback(
       (pc: RTCPeerConnection) => {
          stopStatsPolling();
-         statsIntervalRef.current = setInterval(async () => {
+         const poll = async () => {
             try {
+               if (pcRef.current !== pc) return;
                const report = await pc.getStats();
-               let rtt: number | null = null;
                let lost = 0;
                let received = 0;
                report.forEach((entry: any) => {
-                  if (
-                     entry.type === "candidate-pair" &&
-                     entry.state === "succeeded" &&
-                     entry.nominated
-                  ) {
-                     if (typeof entry.currentRoundTripTime === "number")
-                        rtt = entry.currentRoundTripTime * 1000;
-                  }
                   if (entry.type === "inbound-rtp" && !entry.isRemote) {
                      lost += entry.packetsLost ?? 0;
                      received += entry.packetsReceived ?? 0;
                   }
                });
+               const path = readSelectedPath(report);
+               const rtt = path.rttMs ?? null;
 
                let lossRate = 0;
                if (prevStatsRef.current) {
@@ -483,24 +524,50 @@ function CallPageContent() {
                else if (lossRate > 0.02 || (rtt !== null && rtt > 150))
                   quality = "unstable";
                setConnectionQuality(quality);
+
+               const now = Date.now();
+               const timing = timingRef.current;
+               const { inbound } = readMediaBytes(report);
+               if (inbound > timing.lastInbound) {
+                  timing.lastInbound = inbound;
+                  timing.lastInboundChangeAt = now;
+                  if (timing.firstInboundAt === null) timing.firstInboundAt = now;
+               }
+               const recovery = recoveryRef.current;
+               if (
+                  recovery?.isConnected &&
+                  timing.firstInboundAt !== null &&
+                  now - timing.lastInboundChangeAt > MEDIA_STALL_MS
+               ) {
+                  timing.lastInboundChangeAt = now;
+                  recovery.onMediaStalled();
+               }
+               if (recovery?.isConnected) reportWebrtcTransport(pc, path, now);
             } catch {
                // getStats is best-effort — never let it break the call.
             }
-         }, 3000);
+         };
+         statsIntervalRef.current = setInterval(poll, 2000);
+         void poll();
       },
       [stopStatsPolling],
    );
 
    // Populated after attemptIceRestart is defined further below (it needs
-   // createOffer, which is declared later) — kept as a ref so createPeer's
-   // ICE-state handler can call it without a circular declaration order.
-   const iceRestartRef = useRef<() => void>(() => {});
+   // the signaling helpers declared later) — kept as a ref so createPeer's
+   // recovery policy can call it without a circular declaration order.
+   const iceRestartRef = useRef<(pc: RTCPeerConnection) => Promise<void>>(
+      async () => {},
+   );
 
    // Create the RTCPeerConnection synchronously so nothing blocks the accept
-   // flow. ICE servers are applied in the background via setConfiguration().
+   // flow. The STUN/TURN configuration is applied in the background via
+   // setConfiguration(); createOffer/answer wait for it (iceReadyRef) so
+   // gathering never starts without the TURN relay candidates.
    const createPeer = useCallback((): RTCPeerConnection => {
       const pc = new RTCPeerConnection({
          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+         iceTransportPolicy,
       });
       pcRef.current = pc;
 
@@ -536,58 +603,60 @@ function CallPageContent() {
             socket.emit("ice-candidate", { candidate: event.candidate });
       };
 
-      // A network blip (disconnected) gets a grace period to self-heal, then
-      // an active ICE restart; a hard 'failed' restarts immediately. Either
-      // way, if we're not back within the watchdog window, this is a real
-      // failure, not a blip — surface it instead of hanging forever.
+      // P2P first, TURN fallback: TURN stays in the configuration, so every
+      // gathering (initial and after an ICE restart) offers host, srflx and
+      // relay candidates and ICE picks a direct pair whenever one works. A
+      // blip gets a grace period, a hard failure or a stuck setup gets
+      // bounded ICE restarts, and if nothing connects in time the call ends
+      // with a clear error instead of an endless spinner.
+      const recovery = new IceRecovery({
+         canRestart: () =>
+            pcRef.current === pc &&
+            selfRoleRef.current === "CALLER" &&
+            socket.connected &&
+            roomCallIdRef.current !== null,
+         restart: () => iceRestartRef.current(pc),
+         onStatus: (status) => {
+            if (pcRef.current !== pc) return;
+            if (status === "recovering") setConnectionIssue("reconnecting");
+            else if (status === "connected") setConnectionIssue("none");
+         },
+         onGiveUp: (reason) => {
+            if (pcRef.current !== pc) return;
+            void reportIceOutcome(pc, "FAILED", reason, true);
+            giveUpRef.current();
+         },
+      });
+      recoveryRef.current = recovery;
+
       pc.oniceconnectionstatechange = () => {
+         if (pcRef.current !== pc) return;
          const iceState = pc.iceConnectionState;
-         if (iceState === "disconnected" || iceState === "failed") {
-            setConnectionIssue("reconnecting");
-
-            // Only a hard 'failed' is a definitive ICE failure — a network
-            // blip commonly bounces disconnected → connected on its own, and
-            // reporting that as a failure would misrepresent reliability.
-            if (iceState === "failed") reportIceOutcome(pc, "FAILED");
-
-            if (!reconnectFailTimerRef.current) {
-               const restartDelay = iceState === "failed" ? 0 : 3000;
-               setTimeout(() => {
-                  if (pcRef.current === pc) iceRestartRef.current();
-               }, restartDelay);
-
-               reconnectFailTimerRef.current = setTimeout(() => {
-                  const p = pcRef.current;
-                  if (
-                     p === pc &&
-                     p.iceConnectionState !== "connected" &&
-                     p.iceConnectionState !== "completed"
-                  ) {
-                     setConnectionIssue("none");
-                     setState("connection-failed");
-                  }
-                  reconnectFailTimerRef.current = null;
-               }, 15000);
-            }
-         } else if (iceState === "connected" || iceState === "completed") {
-            setConnectionIssue("none");
-            if (reconnectFailTimerRef.current) {
-               clearTimeout(reconnectFailTimerRef.current);
-               reconnectFailTimerRef.current = null;
-            }
+         recovery.onIceState(iceState);
+         // Only a hard 'failed' is a definitive ICE failure — a network
+         // blip commonly bounces disconnected → connected on its own, and
+         // reporting that as a failure would misrepresent reliability.
+         if (iceState === "failed") reportIceOutcome(pc, "FAILED", "ICE_FAILED");
+         else if (iceState === "connected" || iceState === "completed") {
+            const now = Date.now();
+            if (timingRef.current.connectedAt === null)
+               timingRef.current.connectedAt = now;
+            // Media silence before this (re)connection is not a stall.
+            timingRef.current.lastInboundChangeAt = now;
             startStatsPolling(pc);
-            reportWebrtcTransport(pc);
             reportIceOutcome(pc, "SUCCESS");
          }
       };
 
-      // Apply real ICE/TURN servers in the background (never blocks the call).
-      fetchIceServers()
-         .then((servers) => pc.setConfiguration({ iceServers: servers }))
+      iceReadyRef.current = fetchIceServers()
+         .then((servers) => {
+            if (pcRef.current === pc && pc.signalingState !== "closed")
+               pc.setConfiguration({ iceServers: servers, iceTransportPolicy });
+         })
          .catch(() => {});
 
       return pc;
-   }, [fetchIceServers, startStatsPolling]);
+   }, [fetchIceServers, startStatsPolling, iceTransportPolicy]);
 
    // Acquire media (bounded by a timeout so it can never hang) and attach the
    // local tracks to the peer connection. Best-effort: falls back to audio-only.
@@ -641,29 +710,46 @@ function CallPageContent() {
    const joinCallRoom = useCallback(
       async (callId: string | null) => {
          expectRoomJoin();
-         await socket
+         const joined = await socket
             .timeout(5000)
             .emitWithAck("join-call", { callId })
             .catch(() => undefined);
+         if ((joined as { success?: boolean } | undefined)?.success)
+            roomCallIdRef.current = callId;
          roomJoinRef.current?.resolve();
       },
       [expectRoomJoin],
    );
 
-   const createOffer = useCallback(async () => {
-      if (!pcRef.current) return;
-      const offer = await pcRef.current.createOffer();
-      await pcRef.current.setLocalDescription(offer);
-      socket.emit("offer", { offer });
+   const markNegotiationStarted = useCallback(() => {
+      if (timingRef.current.negotiationStartedAt === null)
+         timingRef.current.negotiationStartedAt = Date.now();
+      recoveryRef.current?.start();
    }, []);
+
+   const createOffer = useCallback(async () => {
+      const pc = pcRef.current;
+      if (!pc) return;
+      await iceReadyRef.current;
+      if (pcRef.current !== pc) return;
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      markNegotiationStarted();
+      socket.emit("offer", { offer });
+   }, [markNegotiationStarted]);
 
    // Drains ICE candidates that arrived before setRemoteDescription resolved
    // (trickle ICE races with signaling — a candidate can beat the offer/answer
-   // over the wire).
+   // over the wire). Candidates of a newer ICE generation (after a restart)
+   // stay queued until the description carrying their ufrag is applied.
    const flushPendingCandidates = useCallback(async (pc: RTCPeerConnection) => {
       const queued = pendingCandidatesRef.current;
       pendingCandidatesRef.current = [];
       for (const candidate of queued) {
+         if (!candidateMatchesRemote(candidate, pc.remoteDescription)) {
+            pendingCandidatesRef.current.push(candidate);
+            continue;
+         }
          await pc
             .addIceCandidate(new RTCIceCandidate(candidate))
             .catch((err) => {
@@ -672,25 +758,19 @@ function CallPageContent() {
       }
    }, []);
 
-   // Actively try to recover a degraded connection. Only the original
-   // offerer (the CALLER) re-negotiates — if both sides tried, they'd race
-   // (signaling glare); the other side's existing 'offer' handler already
-   // treats a renegotiation offer the same as the initial one.
-   const attemptIceRestart = useCallback(async () => {
-      const pc = pcRef.current;
-      if (!pc || negotiatingRef.current) return;
-      if (selfRoleRef.current !== "CALLER") return;
-
-      negotiatingRef.current = true;
-      try {
-         const offer = await pc.createOffer({ iceRestart: true });
-         await pc.setLocalDescription(offer);
-         socket.emit("offer", { offer });
-      } catch (err) {
-         console.error("ICE restart failed", err);
-      } finally {
-         negotiatingRef.current = false;
-      }
+   // ICE restart: new ICE credentials, so host, srflx and relay candidates
+   // are gathered again and ICE re-runs its checks — this recovers both a
+   // changed network (new direct path) and a lost direct path (TURN). Only
+   // the original offerer (the CALLER) restarts — if both sides offered
+   // they'd race (signaling glare); the other side's 'offer' handler already
+   // treats a restart offer the same as the initial one.
+   const attemptIceRestart = useCallback(async (pc: RTCPeerConnection) => {
+      if (pcRef.current !== pc || pc.signalingState === "closed") return;
+      await iceReadyRef.current;
+      const offer = await pc.createOffer({ iceRestart: true });
+      if (pcRef.current !== pc) return;
+      await pc.setLocalDescription(offer);
+      socket.emit("offer", { offer });
    }, []);
 
    useEffect(() => {
@@ -702,19 +782,30 @@ function CallPageContent() {
       roomJoinRef.current = null;
       screenStreamRef.current?.getTracks().forEach((t) => t.stop());
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      recoveryRef.current?.dispose();
+      recoveryRef.current = null;
       pcRef.current?.close();
       pcRef.current = null;
       localStreamRef.current = null;
       remoteStreamRef.current = null;
       screenStreamRef.current = null;
       pendingCandidatesRef.current = [];
+      seenCandidatesRef.current.clear();
+      signalingQueueRef.current = Promise.resolve();
+      roomCallIdRef.current = null;
+      iceReadyRef.current = Promise.resolve();
+      timingRef.current = {
+         negotiationStartedAt: null,
+         connectedAt: null,
+         firstInboundAt: null,
+         lastInbound: 0,
+         lastInboundChangeAt: 0,
+      };
+      transportReportedRef.current = false;
+      reportedPathRef.current = null;
       stopStatsPolling();
       ringback.stop();
       ringtone.stop();
-      if (reconnectFailTimerRef.current) {
-         clearTimeout(reconnectFailTimerRef.current);
-         reconnectFailTimerRef.current = null;
-      }
       setRemoteStream(null);
       setHasRemoteVideo(false);
       setConnectionIssue("none");
@@ -731,6 +822,9 @@ function CallPageContent() {
       }
 
       socket.on("incoming-call", (data: IncomingCallData) => {
+         // The gateway repeats incoming-call when a receiver's socket
+         // re-authenticates; mid-call that is a reconnect, not a new ring.
+         if (stateRef.current === "in-call") return;
          setIncomingData(data);
          setCallType(data.type);
          setState("incoming");
@@ -784,11 +878,20 @@ function CallPageContent() {
          setState("missed");
       });
 
-      socket.on(
-         "offer",
-         async ({ offer }: { offer: RTCSessionDescriptionInit }) => {
-            if (!pcRef.current) return;
+      // Offer, answer and candidates run one at a time, in arrival order:
+      // an ICE-restart offer can never interleave with the previous
+      // negotiation's answer or candidates.
+      const enqueue = (task: () => Promise<void>) => {
+         signalingQueueRef.current = signalingQueueRef.current
+            .then(task)
+            .catch((err) => console.error("WebRTC signaling failed", err));
+      };
+
+      socket.on("offer", ({ offer }: { offer: RTCSessionDescriptionInit }) =>
+         enqueue(async () => {
             const pc = pcRef.current;
+            if (!pc || pc.signalingState === "closed") return;
+            if (pc.remoteDescription?.sdp === offer.sdp) return; // duplicate
 
             // Ensure local media is attached before answering so the answer carries
             // the receiver's audio/video tracks. Bounded by a timeout (never hangs).
@@ -800,52 +903,77 @@ function CallPageContent() {
             }
 
             // Answer (and the ICE candidates that follow setLocalDescription)
-            // only once this socket is in the call room.
+            // only once this socket is in the call room, and only with the
+            // real STUN/TURN configuration applied.
             await roomJoinRef.current?.promise;
+            await iceReadyRef.current;
+            if (pcRef.current !== pc) return;
             await pc.setRemoteDescription(new RTCSessionDescription(offer));
+            markNegotiationStarted();
             await flushPendingCandidates(pc);
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             socket.emit("answer", { answer });
-         },
+         }),
       );
 
-      socket.on(
-         "answer",
-         async ({ answer }: { answer: RTCSessionDescriptionInit }) => {
-            if (!pcRef.current) return;
-            await pcRef.current.setRemoteDescription(
-               new RTCSessionDescription(answer),
-            );
-            await flushPendingCandidates(pcRef.current);
-         },
+      socket.on("answer", ({ answer }: { answer: RTCSessionDescriptionInit }) =>
+         enqueue(async () => {
+            const pc = pcRef.current;
+            // Only an answer to our outstanding offer applies; a duplicate
+            // or stale one would throw or corrupt the negotiation.
+            if (!pc || pc.signalingState !== "have-local-offer") return;
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            await flushPendingCandidates(pc);
+         }),
       );
 
       // Trickle ICE races with signaling: a candidate can arrive before the
-      // remote description is set (addIceCandidate throws InvalidStateError
-      // if so) — queue it and flush once setRemoteDescription resolves,
-      // instead of dropping/erroring on it.
+      // remote description it belongs to is set (addIceCandidate throws, or
+      // after an ICE restart silently drops it, if so) — queue it and flush
+      // once setRemoteDescription resolves, instead of losing it.
       socket.on(
          "ice-candidate",
-         async ({ candidate }: { candidate: RTCIceCandidateInit }) => {
-            const pc = pcRef.current;
-            if (!pc) return;
-            if (!pc.remoteDescription) {
-               pendingCandidatesRef.current.push(candidate);
-               return;
-            }
-            await pc
-               .addIceCandidate(new RTCIceCandidate(candidate))
-               .catch((err) => {
-                  console.error("addIceCandidate failed", err);
-               });
-         },
+         ({ candidate }: { candidate: RTCIceCandidateInit }) =>
+            enqueue(async () => {
+               const pc = pcRef.current;
+               if (!pc || !candidate || pc.signalingState === "closed") return;
+               const key = JSON.stringify(candidate);
+               if (seenCandidatesRef.current.has(key)) return;
+               seenCandidatesRef.current.add(key);
+               if (!candidateMatchesRemote(candidate, pc.remoteDescription)) {
+                  if (pendingCandidatesRef.current.length >= 256)
+                     pendingCandidatesRef.current.shift();
+                  pendingCandidatesRef.current.push(candidate);
+                  return;
+               }
+               await pc
+                  .addIceCandidate(new RTCIceCandidate(candidate))
+                  .catch((err) => {
+                     console.error("addIceCandidate failed", err);
+                  });
+            }),
       );
 
+      // The other participant (re)joined the room — e.g. after its socket
+      // reconnected. A restart offer sent while it was away was dropped.
+      socket.on("participant.joined", (d: { participantId?: string }) => {
+         if (d?.participantId === selfParticipantIdRef.current) return;
+         recoveryRef.current?.onSignalingRestored();
+      });
+
       socket.on("call-ended", () => {
-         if (stateRef.current === "ended") return;
+         // A connection failure already shown stays shown: the peer giving
+         // up too ends the call, which is not new information.
+         if (stateRef.current === "ended" || stateRef.current === "connection-failed")
+            return;
+         // The other side ended the call while our media connection was
+         // still recovering — typically its own recovery gave up. Say what
+         // actually happened instead of a plain "Call ended".
+         const connectionLost =
+            stateRef.current === "in-call" && !!recoveryRef.current?.isRecovering;
          cleanup();
-         setState("ended");
+         setState(connectionLost ? "connection-failed" : "ended");
       });
 
       socket.on("call.expired", () => {
@@ -916,6 +1044,17 @@ function CallPageContent() {
                   setState("error");
                   return;
                }
+               // Socket reconnected mid-call: a new socket is outside the
+               // call room, and the gateway drops its signaling until it
+               // re-joins. Re-join, then let a pending recovery resend.
+               if (stateRef.current === "in-call") {
+                  const roomCallId = roomCallIdRef.current;
+                  if (roomCallId)
+                     void joinCallRoom(roomCallId).then(() =>
+                        recoveryRef.current?.onSignalingRestored(),
+                     );
+                  return;
+               }
                // Receiver keeps the original behavior exactly: stay on
                // "connecting" until 'incoming-call' arrives, no extra step.
                // Only the caller gets a lobby — ringing (and the ringback
@@ -947,6 +1086,7 @@ function CallPageContent() {
             "microphone.disabled",
             "screenShare.started",
             "screenShare.stopped",
+            "participant.joined",
             "connect",
          ].forEach((e) => socket.off(e));
          socket.disconnect();
@@ -1032,51 +1172,70 @@ function CallPageContent() {
 
    // Classifies this call as P2P or TURN from the browser's own WebRTC
    // stats — the only place that actually knows which candidate pair won.
-   // "relay" means media is flowing through the TURN server; "host"/"srflx"
-   // means the two peers connected directly. Best-effort: a stats-shape
-   // surprise here should never affect the call itself.
-   async function reportWebrtcTransport(pc: RTCPeerConnection) {
-      if (transportReportedRef.current || !urlCallId) return;
-      try {
-         const stats = await pc.getStats();
-         let selectedPair: any = null;
-         stats.forEach((report: any) => {
-            if (report.type === "candidate-pair" && report.state === "succeeded") {
-               if (report.nominated || !selectedPair) selectedPair = report;
-            }
-         });
-         if (!selectedPair) return;
-
-         let candidateType: string | undefined;
-         stats.forEach((report: any) => {
-            if (report.id === selectedPair.localCandidateId) {
-               candidateType = report.candidateType;
-            }
-         });
-         if (!candidateType) return;
-
-         transportReportedRef.current = true;
-         const transport = candidateType === "relay" ? "TURN" : "P2P";
-         await sessionPost(`/calls/${urlCallId}/webrtc-transport`, {
-            transport,
-            candidateType,
-         }).catch(() => {});
-      } catch {
-         // getStats() shape varies across browsers — never let this block the call.
-      }
+   // TURN if either selected candidate is a relay; P2P otherwise (the server
+   // combines both participants' reports before counting a call as direct).
+   // Sent once media arrives (or after a short wait), and again only if an
+   // ICE restart moved the call to a different path. Best-effort: a
+   // stats-shape surprise here should never affect the call itself.
+   function reportWebrtcTransport(
+      pc: RTCPeerConnection,
+      path: ReturnType<typeof readSelectedPath>,
+      now: number,
+   ) {
+      if (!urlCallId || pcRef.current !== pc || path.path === "UNKNOWN") return;
+      if (transportReportedRef.current && reportedPathRef.current === path.path)
+         return;
+      const timing = timingRef.current;
+      const mediaSeen = timing.firstInboundAt !== null;
+      const waited =
+         timing.connectedAt !== null && now - timing.connectedAt >= MEDIA_WAIT_MS;
+      if (!transportReportedRef.current && !mediaSeen && !waited) return;
+      transportReportedRef.current = true;
+      reportedPathRef.current = path.path;
+      const started = timing.negotiationStartedAt;
+      void sessionPost(`/calls/${urlCallId}/webrtc-transport`, {
+         transport: path.path,
+         candidateType: path.localCandidateType,
+         remoteCandidateType: path.remoteCandidateType,
+         protocol: path.protocol,
+         relayProtocol: path.relayProtocol,
+         rttMs: path.rttMs,
+         availableOutgoingBitrate: path.availableOutgoingBitrate,
+         setupMs:
+            started !== null && timing.connectedAt !== null
+               ? Math.max(0, timing.connectedAt - started)
+               : undefined,
+         firstMediaMs:
+            started !== null && timing.firstInboundAt !== null
+               ? Math.max(0, timing.firstInboundAt - started)
+               : undefined,
+         mediaVerified: mediaSeen,
+         iceRestarts: recoveryRef.current?.restartCount ?? 0,
+      }).catch(() => {});
    }
 
    // Reports at most once per outcome per call (see the two refs' comment) —
    // a call can legitimately report both a FAILED and a later SUCCESS.
-   async function reportIceOutcome(pc: RTCPeerConnection, outcome: "SUCCESS" | "FAILED") {
+   // `final` is recovery giving up: always reported, with what failed.
+   async function reportIceOutcome(
+      pc: RTCPeerConnection,
+      outcome: "SUCCESS" | "FAILED",
+      reason?: ConnectivityFailureReason,
+      final = false,
+   ) {
       if (!urlCallId) return;
-      const reportedRef = outcome === "SUCCESS" ? iceSuccessReportedRef : iceFailureReportedRef;
-      if (reportedRef.current) return;
-      reportedRef.current = true;
+      if (!final) {
+         const reportedRef = outcome === "SUCCESS" ? iceSuccessReportedRef : iceFailureReportedRef;
+         if (reportedRef.current) return;
+         reportedRef.current = true;
+      }
       await sessionPost(`/calls/${urlCallId}/webrtc-ice`, {
          outcome,
          iceConnectionState: pc.iceConnectionState,
          connectionState: pc.connectionState,
+         ...(reason ? { reason: final ? "RECOVERY_EXHAUSTED" : reason } : {}),
+         ...(final ? { cause: reason } : {}),
+         iceRestarts: recoveryRef.current?.restartCount ?? 0,
       }).catch(() => {});
    }
 
@@ -1136,6 +1295,21 @@ function CallPageContent() {
       cleanup();
       setState("ended");
    }
+
+   // Neither a direct nor a relay path could be (re)established within the
+   // recovery deadline: end the call (as leaving the page would) and say so,
+   // instead of leaving the user on a frozen call or an endless spinner.
+   giveUpRef.current = () => {
+      if (!urlCallId || stateRef.current !== "in-call") return;
+      lifecycleEndedRef.current = true;
+      // Synchronously: our own /end echoes back as call-ended before the
+      // re-render would update stateRef, and must not relabel this "ended".
+      stateRef.current = "connection-failed";
+      socket.emit("call.ended", { callId: urlCallId });
+      void sessionPost(`/calls/${urlCallId}/end`).catch(() => {});
+      cleanup();
+      setState("connection-failed");
+   };
 
    useEffect(() => {
       if (!token || !urlCallId) return;

@@ -114,6 +114,40 @@ Coturn limits are **global**, shared by customer and Playground traffic:
 8 Mbps total covers only a few relayed HD calls, so tune it after measuring
 the OCI network.
 
+Every participant allocates on TURN while ICE gathers, even on calls that end
+up direct (one allocation per TURN URL: `turn:` UDP and `turns:` TLS), and an
+ICE restart allocates again. At 20 concurrent calls that is up to ~80
+allocations during setup peaks, so the default quota of 64 can deny relay
+candidates, and with them the TURN fallback, exactly when it is needed.
+Allocations are cheap, and bandwidth is bounded separately by
+`--bps-capacity`. Set `TURN_TOTAL_QUOTA` to about 5 × your peak concurrent
+calls (e.g. 100–200).
+
+### P2P first, TURN fallback (client behaviour)
+
+The hosted call page and `@purplecallio/sdk` (packages/sdk/src/webrtc/connectivity.ts):
+- Create every peer connection with STUN and TURN and `iceTransportPolicy: "all"`.
+  ICE tests direct (host/srflx) pairs and the relay together and picks a
+  working direct pair whenever one exists. TURN is only used when no direct pair works.
+- Apply the TURN credentials before the first offer/answer, so the first gathering already has relay candidates.
+- Recover with bounded ICE restarts on the same peer connection:
+  - a 3 s grace period for `disconnected`;
+  - an immediate restart on `failed`;
+  - a restart at 15 s if setup is stuck in `checking`;
+  - a restart when media stops arriving on a "connected" call.
+
+  Restarts back off over 0 / 2 / 5 s, up to 3 attempts. If nothing connects
+  within 35 s of the trouble starting, the call fails with a clear error (the
+  hosted page ends the call and shows "Unable to connect").
+- Report the selected path to `/calls/:id/webrtc-transport`: types, protocols
+  and timings only, never IPs or SDP. The admin health screen counts a call
+  as P2P only when both sides confirm a non-relay path.
+
+`?iceTransportPolicy=relay` on the hosted page, or the SDK's
+`iceTransportPolicy: 'relay'`, forces TURN, for testing relay connectivity
+only. `scripts/webrtc-e2e/` runs these scenarios in real Chromium against a
+local Coturn.
+
 Application-level Playground protection, all enforced server-side:
 - A kill switch.
 - The 60 s cap.

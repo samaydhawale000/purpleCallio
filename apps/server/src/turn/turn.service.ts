@@ -112,13 +112,26 @@ export class TurnService {
       ? createHmac('sha1', secret).update(username).digest('base64')
       : '';
 
+    // An IPv6 literal must be bracketed inside a STUN/TURN URI.
+    const host = isIP(server) === 6 ? `[${server}]` : server;
+
+    // STUN discovers server-reflexive candidates for direct P2P. Coturn
+    // answers STUN on 3478 too, so with TURN configured it is offered first
+    // and the public server remains a second, independent source.
     const iceServers: RTCIceServer[] = [
-      { urls: 'stun:stun.l.google.com:19302' },
+      {
+        urls: secret
+          ? [`stun:${host}:3478`, 'stun:stun.l.google.com:19302']
+          : 'stun:stun.l.google.com:19302',
+      },
     ];
 
     if (secret) {
+      // TURN is the fallback when no direct pair works. Browsers still
+      // prefer a working host/srflx pair, so offering it costs nothing on
+      // calls that connect directly.
       iceServers.push({
-        urls: `turn:${server}:3478`,
+        urls: `turn:${host}:3478`,
         username,
         credential,
       });
@@ -127,7 +140,7 @@ export class TurnService {
       // advertise it (plain TURN on 3478 still works).
       if (isIP(server) === 0) {
         iceServers.push({
-          urls: `turns:${server}:5349`,
+          urls: `turns:${host}:5349`,
           username,
           credential,
         });

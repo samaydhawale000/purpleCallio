@@ -13,6 +13,7 @@ import {
 } from '../billing/customer-discount.service';
 import { OciMonitoringService } from '../oci/oci-monitoring.service';
 import { CallService } from '../call/services/call.service';
+import { summarizeWebrtcEvents } from './webrtc-stats';
 
 @Injectable()
 export class AdminService {
@@ -590,26 +591,10 @@ export class AdminService {
   }
 
   /**
-   * Two independent client-reported classifications, computed from one scan
-   * of CallEvent so a single busy month doesn't cost two full queries:
-   *
-   *  - P2P vs TURN, from WEBRTC_TRANSPORT (see CallService.
-   *    recordWebrtcTransport). A 1:1 call can get up to two reports, one per
-   *    participant, that don't necessarily agree — if EITHER side reported
-   *    TURN, media relayed through TURN for at least that leg, so the call
-   *    counts as TURN ("sticky": a later P2P report never downgrades it).
-   *
-   *  - ICE success/failure, from WEBRTC_ICE_SUCCESS / WEBRTC_ICE_FAILED (see
-   *    CallService.recordWebrtcIceOutcome). A call that failed and then
-   *    recovered via ICE restart has both events — it counts as successful
-   *    (a SUCCESS report always wins over a FAILED one), since what this
-   *    reliability number is for is "did the call eventually connect".
-   *
-   * Each percentage is independently null when its own event type has zero
-   * reports this month — a month with transport data but no ICE data yet
-   * (e.g. rolled out mid-month) shows P2P/TURN numbers with ICE still
-   * "not available", rather than either faking one from the other's
-   * presence or hiding both behind one shared flag.
+   * Client-reported P2P/TURN path, ICE outcome, setup times, restarts and
+   * failure reasons, from one scan of CallEvent — see summarizeWebrtcEvents
+   * for how each call is classified. Each percentage is independently null
+   * when its own event type has no reports this month.
    */
   private async getWebrtcStats(since: Date) {
     const events = await this.prisma.callEvent.findMany({
@@ -619,63 +604,14 @@ export class AdminService {
         },
         createdAt: { gte: since },
       },
-      select: { callId: true, event: true, metadata: true },
+      select: {
+        callId: true,
+        event: true,
+        participantId: true,
+        metadata: true,
+      },
     });
-
-    const transportByCall = new Map<string, 'P2P' | 'TURN'>();
-    const iceByCall = new Map<string, 'SUCCESS' | 'FAILED'>();
-
-    for (const e of events) {
-      if (e.event === 'WEBRTC_TRANSPORT') {
-        const metadata = e.metadata as { transport?: unknown } | null;
-        const transport = metadata?.transport;
-        if (transport !== 'P2P' && transport !== 'TURN') continue;
-        if (transport === 'TURN' || transportByCall.get(e.callId) !== 'TURN') {
-          transportByCall.set(e.callId, transport);
-        }
-      } else {
-        const outcome = e.event === 'WEBRTC_ICE_SUCCESS' ? 'SUCCESS' : 'FAILED';
-        if (outcome === 'SUCCESS' || iceByCall.get(e.callId) !== 'SUCCESS') {
-          iceByCall.set(e.callId, outcome);
-        }
-      }
-    }
-
-    let p2pCalls = 0;
-    let turnCalls = 0;
-    for (const t of transportByCall.values()) {
-      if (t === 'TURN') turnCalls++;
-      else p2pCalls++;
-    }
-    const totalTransport = p2pCalls + turnCalls;
-
-    let iceSuccessful = 0;
-    let iceFailed = 0;
-    for (const o of iceByCall.values()) {
-      if (o === 'SUCCESS') iceSuccessful++;
-      else iceFailed++;
-    }
-    const totalIce = iceSuccessful + iceFailed;
-
-    return {
-      available: totalTransport > 0 || totalIce > 0,
-      p2pCalls,
-      turnCalls,
-      p2pPercent:
-        totalTransport > 0
-          ? Math.round((p2pCalls / totalTransport) * 1000) / 10
-          : null,
-      turnPercent:
-        totalTransport > 0
-          ? Math.round((turnCalls / totalTransport) * 1000) / 10
-          : null,
-      iceSuccessRate:
-        totalIce > 0
-          ? Math.round((iceSuccessful / totalIce) * 1000) / 10
-          : null,
-      iceFailureRate:
-        totalIce > 0 ? Math.round((iceFailed / totalIce) * 1000) / 10 : null,
-    };
+    return summarizeWebrtcEvents(events);
   }
 
   private async getDbConnectionCount(): Promise<number | null> {

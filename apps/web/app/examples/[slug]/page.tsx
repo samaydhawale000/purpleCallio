@@ -75,7 +75,7 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
    const { slug } = await params;
    const example = examples[slug as ExampleSlug];
-   return example ? pageMetadata({ title: `${example.title} | PurpleCallio`, description: example.intro, path: `/examples/${slug}` }) : {};
+   return example ? pageMetadata({ title: example.title, description: example.intro, path: `/examples/${slug}` }) : {};
 }
 
 export default async function ExamplePage({ params }: { params: Promise<{ slug: string }> }) {

@@ -87,14 +87,14 @@ beforeEach(() => {
 });
 
 describe('Usage page — call analytics in participant-minutes', () => {
-  it('shows a 10-minute, 2-participant video call as 20.00 participant-min, not 10 min', async () => {
+  it('shows a 10-minute, 2-participant video call as 20m 00s of participant time, not 10 min', async () => {
     render(<UsagePage />);
 
     const videoCell = await screen.findByTestId('call-video');
-    expect(videoCell.textContent).toBe('20.00 participant-min');
+    expect(videoCell.textContent).toBe('20m 00s');
     expect(videoCell.textContent).not.toContain('10 min');
-    expect(screen.getByTestId('call-audio').textContent).toBe('0.00 participant-min');
-    expect(screen.getByTestId('call-screen').textContent).toBe('0.00 participant-min');
+    expect(screen.getByTestId('call-audio').textContent).toBe('0s');
+    expect(screen.getByTestId('call-screen').textContent).toBe('0s');
     expect(screen.getByText(/Usage is shown in participant-minutes/)).toBeTruthy();
     // Money is gone: credits per call and credit rates per participant-minute.
     expect(screen.getByTestId('call-credits').textContent).toBe('40');
@@ -108,13 +108,13 @@ describe('Usage page — call analytics in participant-minutes', () => {
     fireEvent.click(await screen.findByText(/call-abcdef1/));
 
     const detail = await screen.findByTestId('call-usage-detail');
-    expect(detail.textContent).toContain('10 min wall-clock');
+    expect(detail.textContent).toContain('10m 00s wall-clock');
     expect(detail.textContent).toContain('Participants: 2');
-    expect(within(detail).getByText('20.00 participant-min')).toBeTruthy();
+    expect(within(detail).getByText('20m 00s participant time')).toBeTruthy();
 
     await waitFor(() => expect(screen.getByTestId('segment-participant-minutes')).toBeTruthy());
-    expect(screen.getByTestId('segment-participant-minutes').textContent).toBe('Video 20.00 participant-min');
-    expect(screen.getByText(/10 min wall-clock · 2 participants/)).toBeTruthy();
+    expect(screen.getByTestId('segment-participant-minutes').textContent).toBe('Video 20m 00s');
+    expect(screen.getByText(/10m 00s wall-clock · 2 participants/)).toBeTruthy();
     expect(screen.getByTestId('segment-total-credits').textContent).toBe('40 credits');
   });
 });

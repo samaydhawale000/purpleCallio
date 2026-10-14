@@ -153,16 +153,43 @@ The meeting engine exposes `setAudioInput(deviceId)`, `setVideoInput(deviceId)`,
 
 ### Signaling lifecycle
 
-The SDK sends the participant token in Socket.IO handshake auth and repeats the existing `authenticate` event for compatibility with older server versions. The gateway authenticates the handshake token before accepting call operations; every signaling event remains scoped to that participant's call. On `join-call`, it returns a canonical `call.state` participant snapshot and continues to emit `participant.joined` / `participant.left` updates. `call.started` is broadcast to the room as a lifecycle notification; it is not the media negotiation trigger. The CALLER role creates exactly one offer once the call room holds two participants, while the RECEIVER answers it — `join()` completes this flow on its own, with no app-level `connected` or `join-call` handling. This avoids both peers racing to create an offer. ICE candidates received before the remote description are queued until it is set.
+The SDK sends the participant token in Socket.IO handshake auth and repeats the existing `authenticate` event for compatibility with older server versions. The gateway authenticates the handshake token before accepting call operations; every signaling event remains scoped to that participant's call. On `join-call`, it returns a canonical `call.state` participant snapshot and continues to emit `participant.joined` / `participant.left` updates. `call.started` is broadcast to the room as a lifecycle notification; it is not the media negotiation trigger. The CALLER role creates exactly one offer once the call room holds two participants, while the RECEIVER answers it — `join()` completes this flow on its own, with no app-level `connected` or `join-call` handling. This avoids both peers racing to create an offer. ICE candidates received before the remote description they belong to, including the new ICE generation after a restart, are queued until it is set. If the other participant rejoins with a new peer connection (for example, after reloading the page), the engine renegotiates on a fresh connection.
+
+### Connectivity: P2P first, TURN fallback
+
+The peer connection is created with the STUN and TURN servers from `/turn/credentials` and `iceTransportPolicy: "all"`. ICE tests direct pairs (host, server-reflexive) and the TURN relay together. It uses a direct path whenever one works, and the relay only when none does.
+
+If the connection drops or never forms, the engine recovers on its own, using ICE restarts on the same peer connection (the CALLER sends them, so the two sides never race). Recovery is triggered when any of these happens:
+
+- `disconnected` lasts longer than 3 s;
+- ICE reports `failed`;
+- setup is still not connected after 15 s;
+- media stops arriving on a "connected" call.
+
+Restarts are bounded: at most 3, backing off over 0, 2 and 5 s. Each restart re-gathers direct and relay candidates. A restart offer that was lost while signaling was down is re-sent once the socket rejoins. If nothing connects within 35 s of the trouble starting, the engine reports a failure; it never hangs.
+
+```ts
+meeting.on('connection.status', ({ status, reason, path, restarts }) => {
+  // status: 'connecting' | 'connected' | 'recovering' | 'failed'
+  // path (on 'connected', once media is flowing): 'P2P' | 'TURN'
+  // reason (on 'recovering' / 'failed'): 'SETUP_TIMEOUT' | 'ICE_FAILED' | 'ICE_DISCONNECTED' | 'MEDIA_STALLED'
+});
+```
+
+On `failed`, decide in the app whether to `leave()` or let the user retry. Tune the deadlines with `iceRecovery: { setupTimeoutMs, disconnectGraceMs, restartBackoffMs, restartCheckMs, maxRestarts, failDeadlineMs }`. `iceTransportPolicy: 'relay'` forces TURN. Use it only to test relay connectivity.
 
 ### Call-quality telemetry
 
-When ICE connects, the meeting engine posts two small best-effort reports to your PurpleCallio API (`apiUrl`, or the base resolved from `signalUrl` as described in [Meeting configuration](#meeting-configuration)), authenticated with the participant token:
+The meeting engine posts small best-effort reports to your PurpleCallio API (`apiUrl`, or the base resolved from `signalUrl` as described in [Meeting configuration](#meeting-configuration)), authenticated with the participant token:
 
-- `POST /calls/:callId/webrtc-transport` — `{ transport: "P2P" | "TURN", candidateType }`, from the selected candidate pair in `getStats()`.
-- `POST /calls/:callId/webrtc-ice` — `{ outcome: "SUCCESS" | "FAILED", iceConnectionState, connectionState }`. Only a hard ICE `failed` counts as a failure; a call that recovers reports both.
+- `POST /calls/:callId/webrtc-transport`: sent once media is flowing, or 5 s after connecting. It is sent again only if an ICE restart moves the call to another path. Fields:
+  - `transport`: `"P2P"` or `"TURN"`. TURN if either selected candidate is a relay.
+  - From the selected candidate pair in `getStats()`: `candidateType`, `remoteCandidateType`, `protocol`, `relayProtocol`, `rttMs`.
+  - Timings: `setupMs`, `firstMediaMs`.
+  - `mediaVerified`, `iceRestarts`.
+- `POST /calls/:callId/webrtc-ice`: `{ outcome: "SUCCESS" | "FAILED", iceConnectionState, connectionState, reason?, cause?, iceRestarts }`. Only a hard ICE `failed` counts as a failure. A call that recovers reports both. When recovery gives up, it sends `reason: "RECOVERY_EXHAUSTED"` with the `cause`.
 
-Each is sent at most once per peer connection. They contain no media, IP addresses, or candidate details, and a failed report never affects the call. They feed the P2P/TURN and ICE success figures on the PurpleCallio health dashboard.
+They contain no media, IP addresses, SDP or candidate strings, and a failed report never affects the call. They feed the P2P/TURN, setup-time and failure-reason figures on the PurpleCallio health dashboard. A call counts as P2P there only when both sides confirm a non-relay path.
 
 ---
 

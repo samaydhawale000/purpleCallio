@@ -12,10 +12,10 @@ import {
   type InternalRates,
 } from '../../../lib/admin-billing';
 import { formatCredits, formatDate, formatMoney, PURPOSE_LABEL } from '../../../lib/billing';
+import { formatMinutes as mins } from '../../../lib/duration';
 import { Button } from '../../../components/ui/Button';
 import { ErrorText, Field, inputCls, Panel, rowCls, Spinner, Stat, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
-const mins = (n: number) => `${Math.round(n ?? 0).toLocaleString('en-IN')} min`;
 
 export function OverviewTab() {
   const { data, loading, error } = useResource(
@@ -54,9 +54,9 @@ export function OverviewTab() {
 
       <Panel title="Usage this month" subtitle={`Since ${formatDate(usage.since)}`}>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Stat label="Audio" value={mins(usage.lineItems.audioMinutes)} hint="participant-minutes" />
-          <Stat label="Video" value={mins(usage.lineItems.videoMinutes)} hint="participant-minutes" />
-          <Stat label="Screen share" value={mins(usage.lineItems.screenShareMinutes)} hint="participant-minutes" />
+          <Stat label="Audio" value={mins(usage.lineItems.audioMinutes)} hint="participant time" />
+          <Stat label="Video" value={mins(usage.lineItems.videoMinutes)} hint="participant time" />
+          <Stat label="Screen share" value={mins(usage.lineItems.screenShareMinutes)} hint="participant time" />
           <Stat label="Calls" value={usage.lineItems.calls.toLocaleString('en-IN')} hint={`${usage.usage.activeAccounts} active accounts`} />
         </div>
       </Panel>

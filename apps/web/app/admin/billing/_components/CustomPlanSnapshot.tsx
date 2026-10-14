@@ -3,8 +3,8 @@
 import type { CustomPlanDetail } from '../../../lib/admin-billing';
 import { formatCredits, formatDate, formatMoney, PURPOSE_LABEL } from '../../../lib/billing';
 import { StatusBadge } from './ui';
+import { formatMinutes as mins } from '../../../lib/duration';
 
-const mins = (n: number) => `${Math.round(n ?? 0).toLocaleString('en-IN')}`;
 
 /** Current plan, credit balance, last-30-day usage and recent payments for a custom plan request. */
 export function CustomPlanSnapshot({ detail, compact }: { detail: CustomPlanDetail; compact?: boolean }) {
@@ -36,7 +36,7 @@ export function CustomPlanSnapshot({ detail, compact }: { detail: CustomPlanDeta
           {formatCredits(u.credits)} credits · {u.calls} calls
         </p>
         <p className="text-xs text-[#3D3650]">
-          {mins(u.audioMinutes)} audio · {mins(u.videoMinutes)} video · {mins(u.screenShareMinutes)} screen-share participant-min
+          {mins(u.audioMinutes)} audio · {mins(u.videoMinutes)} video · {mins(u.screenShareMinutes)} screen-share participant time
         </p>
       </div>
       <div>

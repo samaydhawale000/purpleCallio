@@ -42,6 +42,7 @@ import { BillingHeader, ConfirmDialog, ErrorBanner, PageLoader, SectionCard, use
 import PrepaidExplainer from './PrepaidExplainer';
 import { runAutoRenewSetup } from '../../lib/checkout';
 import { ToastHost, type ToastState } from './Toast';
+import { formatMinutes } from '../../lib/duration';
 
 const STATUS_VARIANT: Record<SubscriptionStatus, 'default' | 'success' | 'warning' | 'error' | 'info' | 'purple'> = {
   DRAFT: 'default',
@@ -476,7 +477,7 @@ export default function BillingOverviewPage() {
                       <td className="py-2.5 pr-4 font-mono text-xs text-[#3D3650]">{callId ? `${callId.slice(0, 12)}…` : '—'}</td>
                       <td className="py-2.5 pr-4 text-[#3D3650]">{parts.map((p) => p.label).join(', ') || '—'}</td>
                       <td className="py-2.5 pr-4 text-[#3D3650] whitespace-nowrap">
-                        {parts.reduce((s, p) => s + p.minutes, 0).toFixed(2)} participant-min
+                        {formatMinutes(parts.reduce((s, p) => s + p.minutes, 0))} participant time
                       </td>
                       <td className="py-2.5 text-right font-medium text-[#170B2E]" title={describeCreditTransaction(row)}>
                         {formatCredits(Math.abs(row.amount))}
@@ -547,7 +548,7 @@ function MediaTile({
         {formatCredits(credits)}
         <span className="text-xs font-normal text-[#3D3650]"> credits</span>
       </p>
-      <p className="text-[11px] text-[#3D3650]">{minutes.toFixed(2)} participant-min</p>
+      <p className="text-[11px] text-[#3D3650]">{formatMinutes(minutes)} participant time</p>
       <p className="text-[11px] text-[#6425C4] mt-1">
         1 {unit} participant-minute = {formatCredits(rate)} credit{rate === 1 ? '' : 's'}
       </p>

@@ -18,6 +18,7 @@ import {
 import { useAuthStore } from "../../store/auth.store";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import { api } from "../../lib/api";
+import { formatMinutes } from "../../lib/duration";
 import { Badge } from "../../components/ui/Badge";
 import { Pagination } from "../../components/ui/Pagination";
 
@@ -92,18 +93,13 @@ const rateLabel = (rate: number | undefined, media: string) =>
 // participant count. Use this for per-call display; credits are always
 // computed from participant-minutes.
 function formatDuration(totalSecondsRaw: number) {
-   const totalSeconds = Math.max(0, Math.round(totalSecondsRaw));
-   const wholeMinutes = Math.floor(totalSeconds / 60);
-   const seconds = totalSeconds % 60;
-   if (wholeMinutes === 0) return `${seconds} sec`;
-   if (seconds === 0) return `${wholeMinutes} min`;
-   return `${wholeMinutes} min ${seconds} sec`;
+   return formatMinutes(totalSecondsRaw / 60);
 }
 
 // Participant-minutes are rated values from the backend rating engine;
-// this only formats them for display (no rounding of stored values).
+// shown as minutes and seconds (3.89 → "3m 53s"), never as a decimal.
 function formatParticipantMinutes(value: number | null | undefined) {
-   return (Number.isFinite(value) ? Number(value) : 0).toFixed(2);
+   return formatMinutes(value);
 }
 
 export default function UsagePage() {
@@ -309,8 +305,8 @@ export default function UsagePage() {
             <UsageCard
                icon={Clock}
                label="Total Usage"
-               value={totalParticipantMinutes.toFixed(2)}
-               unit="participant-min"
+               value={formatMinutes(totalParticipantMinutes)}
+               unit="participant time"
                color="#410686"
                hint="Sum of duration × participants using that media, across audio/video/screen share — not raw call length."
             />
@@ -402,7 +398,7 @@ export default function UsagePage() {
                         className="flex h-full flex-1 min-w-0 flex-col items-center justify-end gap-2"
                      >
                         <span className="text-[10px] text-[#3D3650]">
-                           {d.minutes > 0 ? d.minutes.toFixed(2) : ""}
+                           {d.minutes > 0 ? formatMinutes(d.minutes) : ""}
                         </span>
                         <div className="flex h-full w-full items-end">
                            <div
@@ -412,7 +408,7 @@ export default function UsagePage() {
                                  background:
                                     "linear-gradient(180deg, #7F40E8, rgba(127,64,232,0.25))",
                               }}
-                              title={`${d.label}: ${d.minutes.toFixed(2)} min call time, ${d.calls} calls`}
+                              title={`${d.label}: ${formatMinutes(d.minutes)} call time, ${d.calls} calls`}
                            />
                         </div>
                         <span className="text-[10px] text-[#3D3650]">
@@ -461,15 +457,15 @@ export default function UsagePage() {
                            <th className="py-2 pr-4 font-medium">Call</th>
                            <th className="py-2 pr-4 font-medium">
                               Audio{" "}
-                              <span className="font-normal">(participant-min)</span>
+                              <span className="font-normal">(participant time)</span>
                            </th>
                            <th className="py-2 pr-4 font-medium">
                               Video{" "}
-                              <span className="font-normal">(participant-min)</span>
+                              <span className="font-normal">(participant time)</span>
                            </th>
                            <th className="py-2 pr-4 font-medium">
                               Screen{" "}
-                              <span className="font-normal">(participant-min)</span>
+                              <span className="font-normal">(participant time)</span>
                            </th>
                            <th className="py-2 pr-4 font-medium">
                               Participants
@@ -505,15 +501,13 @@ export default function UsagePage() {
                                        className="py-3 pr-4 text-[#3D3650] whitespace-nowrap"
                                        data-testid="call-audio"
                                     >
-                                       {formatParticipantMinutes(c.audioMinutes)}{" "}
-                                       participant-min
+                                       {formatParticipantMinutes(c.audioMinutes)}
                                     </td>
                                     <td
                                        className="py-3 pr-4 text-[#3D3650] whitespace-nowrap"
                                        data-testid="call-video"
                                     >
-                                       {formatParticipantMinutes(c.videoMinutes)}{" "}
-                                       participant-min
+                                       {formatParticipantMinutes(c.videoMinutes)}
                                     </td>
                                     <td
                                        className="py-3 pr-4 text-[#3D3650] whitespace-nowrap"
@@ -521,8 +515,7 @@ export default function UsagePage() {
                                     >
                                        {formatParticipantMinutes(
                                           c.screenShareMinutes,
-                                       )}{" "}
-                                       participant-min
+                                       )}
                                     </td>
                                     <td className="py-3 pr-4 text-[#3D3650]">
                                        {c.participants}
@@ -667,7 +660,7 @@ function TypeRow({
             <span className="text-xs font-normal text-[#3D3650]"> credits</span>
          </p>
          <p className="text-xs text-[#3D3650] mt-0.5">
-            {minutes.toFixed(2)} participant-min
+            {formatMinutes(minutes)} participant time
          </p>
          <p className="text-[11px] text-[#6425C4] mt-1">{rate}</p>
       </div>
@@ -795,16 +788,16 @@ function SegmentTimeline({
 }
 
 // Per-media participant-minutes for a segment, as rated by the backend
-// (each participant's own media state), e.g. "Video 1.10 participant-min".
+// (each participant's own media state), e.g. "Video 1m 06s".
 function segmentUsageLabel(s: SegmentView) {
    const parts = [
       { label: "Audio", value: s.audioMinutes ?? 0 },
       { label: "Video", value: s.videoMinutes ?? 0 },
       { label: "Screen share", value: s.screenShareMinutes ?? 0 },
    ].filter((p) => p.value > 0);
-   if (parts.length === 0) return "0.00 participant-min";
+   if (parts.length === 0) return "0s";
    return parts
-      .map((p) => `${p.label} ${formatParticipantMinutes(p.value)} participant-min`)
+      .map((p) => `${p.label} ${formatParticipantMinutes(p.value)}`)
       .join(" · ");
 }
 
@@ -857,7 +850,7 @@ function CallUsageDetail({ call }: { call: CallUse }) {
                <div key={r.label}>
                   <p className="text-[11px] text-[#3D3650]">{r.label}</p>
                   <p className="text-sm font-semibold text-[#170B2E]">
-                     {formatParticipantMinutes(r.value)} participant-min
+                     {formatParticipantMinutes(r.value)} participant time
                   </p>
                   <p className="text-[10px] text-[#3D3650]">
                      {formatDuration(r.activeSeconds)} with {r.label.toLowerCase()}{" "}

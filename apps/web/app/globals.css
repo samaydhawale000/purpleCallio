@@ -216,3 +216,69 @@ body {
 }
 
 
+
+/* Pricing plan cards: a thin gradient border whose direction slowly rotates.
+   The ring is a masked ::before, so the card's own background is untouched.
+   Browsers without @property show the same gradient, static. */
+@property --plan-border-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.plan-card-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(
+    var(--plan-border-angle),
+    rgba(127, 64, 232, 0.12) 0%,
+    rgba(127, 64, 232, 0.12) 30%,
+    #7f40e8 45%,
+    #c4a1f7 50%,
+    #7f40e8 55%,
+    rgba(127, 64, 232, 0.12) 70%,
+    rgba(127, 64, 232, 0.12) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: plan-border-rotate 8s linear infinite;
+  pointer-events: none;
+}
+
+/* On the dark card the resting ring is a soft lavender, not translucent
+   white, so the border stays visible between passes of the highlight. */
+.plan-card-border--featured::before {
+  background: linear-gradient(
+    var(--plan-border-angle),
+    rgba(216, 180, 254, 0.4) 0%,
+    rgba(216, 180, 254, 0.4) 28%,
+    #e9d5ff 42%,
+    #ffffff 50%,
+    #e9d5ff 58%,
+    rgba(216, 180, 254, 0.4) 72%,
+    rgba(216, 180, 254, 0.4) 100%
+  );
+}
+
+.plan-card-border:hover::before {
+  animation-duration: 4s;
+}
+
+@keyframes plan-border-rotate {
+  to {
+    --plan-border-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plan-card-border::before {
+    animation: none;
+    --plan-border-angle: 135deg;
+  }
+}
