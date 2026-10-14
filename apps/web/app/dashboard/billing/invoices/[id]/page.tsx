@@ -9,6 +9,7 @@ import { useRequireAuth } from '../../../../hooks/useRequireAuth';
 import { api } from '../../../../lib/api';
 import { Card } from '../../../../components/ui/Card';
 import { Badge } from '../../../../components/ui/Badge';
+import { formatMinutes } from '../../../../lib/duration';
 
 interface LineItem {
   id: string;
@@ -191,9 +192,9 @@ export default function InvoiceDetailPage() {
         <div className="border-t border-[#E7DFF5] pt-4 mb-4">
           <p className="text-sm font-semibold text-[#170B2E] mb-3">Usage</p>
           <div className="flex flex-col gap-2 text-sm">
-            <Row label={`Audio — ${invoice.audioMinutes.toLocaleString('en-IN')} participant-min`} value={paiseToINR(invoice.audioPaise)} />
-            <Row label={`Video — ${invoice.videoMinutes.toLocaleString('en-IN')} participant-min`} value={paiseToINR(invoice.videoPaise)} />
-            <Row label={`Screen share — ${invoice.screenShareMinutes.toLocaleString('en-IN')} participant-min`} value={paiseToINR(invoice.screenSharePaise)} />
+            <Row label={`Audio — ${formatMinutes(invoice.audioMinutes)} participant time`} value={paiseToINR(invoice.audioPaise)} />
+            <Row label={`Video — ${formatMinutes(invoice.videoMinutes)} participant time`} value={paiseToINR(invoice.videoPaise)} />
+            <Row label={`Screen share — ${formatMinutes(invoice.screenShareMinutes)} participant time`} value={paiseToINR(invoice.screenSharePaise)} />
           </div>
         </div>
 

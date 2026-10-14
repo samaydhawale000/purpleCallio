@@ -70,13 +70,50 @@ function commonFeatureKeys(plans: Plan[]): string[] {
 
 /** "≈ 25,000 video or 1,00,000 audio participant-minutes" from the live rates. */
 function minutesHint(credits: number, rates: CreditRates) {
-  const audio = rates.audioCreditsPerMinute > 0 ? Math.floor(credits / rates.audioCreditsPerMinute) : null;
-  const video = rates.videoCreditsPerMinute > 0 ? Math.floor(credits / rates.videoCreditsPerMinute) : null;
-  if (audio == null && video == null) return null;
-  if (audio != null && video != null) {
-    return `≈ ${formatCredits(video)} video or ${formatCredits(audio)} audio participant-minutes`;
-  }
-  return `≈ ${formatCredits((video ?? audio)!)} ${video != null ? 'video' : 'audio'} participant-minutes`;
+  const parts = [
+    ['video', rates.videoCreditsPerMinute],
+    ['audio', rates.audioCreditsPerMinute],
+  ]
+    .filter(([, rate]) => (rate as number) > 0)
+    .map(([label, rate]) => `${formatCredits(Math.floor(credits / (rate as number)))} ${label}`);
+  if (parts.length === 0) return null;
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} or ${parts.at(-1)}` : parts[0];
+  return `≈ ${list} participant-minutes`;
+}
+
+/**
+ * What each media type consumes, shown right under the plan cards so the
+ * credit amounts on the cards can be read as minutes. Live admin rates.
+ */
+export function CreditRateStrip({ rates }: { rates: CreditRates }) {
+  const items = [
+    { icon: Mic, label: 'Audio', rate: rates.audioCreditsPerMinute },
+    { icon: Video, label: 'Video', rate: rates.videoCreditsPerMinute },
+    { icon: Monitor, label: 'Screen share', rate: rates.screenShareCreditsPerMinute },
+  ];
+  return (
+    <div
+      data-testid="credit-rate-strip"
+      className="mx-auto mt-10 max-w-3xl rounded-2xl border border-[#E7DFF5] bg-[#F8F4FD] px-6 py-5"
+    >
+      <p className="text-center text-sm font-semibold text-[#170B2E]">Credits used per participant-minute</p>
+      <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {items.map((x) => (
+          <li key={x.label} className="flex items-center justify-center gap-2.5 rounded-xl bg-white px-4 py-3 ring-1 ring-[#E7DFF5]">
+            <x.icon size={18} className="shrink-0 text-[#7F40E8]" aria-hidden="true" />
+            <span className="text-sm text-[#3D3650]">{x.label}</span>
+            <span className="text-sm font-bold text-[#170B2E]">
+              {formatRate(x.rate)} {x.rate === 1 ? 'credit' : 'credits'}/min
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-center text-xs text-[#3D3650]">
+        A participant-minute is one connected participant for one minute: 2 people on a 10-minute video call use{' '}
+        {formatRate(20 * rates.videoCreditsPerMinute)} credits.
+      </p>
+    </div>
+  );
 }
 
 function FeatureList({ keys, names, dark }: { keys: string[]; names: Map<string, string>; dark?: boolean }) {
@@ -120,10 +157,10 @@ function PaidPlanCard({
   return (
     <article
       data-testid={`plan-card-${plan.slug}`}
-      className={`group relative flex flex-col rounded-3xl p-8 transition-all duration-300 ${
+      className={`plan-card-border group relative flex flex-col rounded-3xl p-8 transition-all duration-300 ${
         featured
-          ? 'text-white shadow-[0_24px_60px_-12px_rgba(65,6,134,0.55)] lg:-my-4 lg:py-12'
-          : 'border border-[#E7DFF5] bg-white hover:-translate-y-1 hover:border-[#D6C4EE] hover:shadow-[0_20px_45px_-20px_rgba(65,6,134,0.25)]'
+          ? 'plan-card-border--featured text-white shadow-[0_24px_60px_-12px_rgba(65,6,134,0.55)] lg:-my-4 lg:py-12'
+          : 'bg-white hover:-translate-y-1 hover:shadow-[0_20px_45px_-20px_rgba(65,6,134,0.25)]'
       }`}
       style={featured ? { background: 'radial-gradient(120% 80% at 0% 0%, #8B4DF0 0%, #5B1BB5 45%, #2B0F52 100%)' } : undefined}
     >
@@ -525,6 +562,7 @@ export default function PricingSection({ variant = 'summary', bare = false }: { 
         {state.status === 'ready' && (
           <>
             <PlanCards pricing={state.data} />
+            <CreditRateStrip rates={state.data.creditRates} />
             <p className="mt-5 text-center text-xs text-[#3D3650]">{gstNote(state.data.creditRates)}</p>
 
             {full ? (

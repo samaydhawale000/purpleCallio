@@ -24,6 +24,7 @@ ArrowUpRight,
 import { useAuthStore } from '../store/auth.store';
 import { useRequireAuth } from '../hooks/useRequireAuth';
 import { api } from '../lib/api';
+import { formatMinutes } from '../lib/duration';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
@@ -321,7 +322,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
             <MiniType label="Screen Share" mins={screenMins} credits={currentUsage?.credits?.screenShare} />
           </div>
           <p className="text-[11px] text-[#3D3650] -mt-2 mb-4">
-            Shown in participant-minutes (call duration × participants using that media) — not raw call length.
+            Participant time = call duration × participants using that media — not raw call length.
           </p>
 
           <div className="flex flex-wrap items-center justify-between mt-2 gap-3">
@@ -340,8 +341,8 @@ const minutesUsed = usage?.minutesUsed ?? 0;
               <div>
                 <p className="text-xs text-[#3D3650]">Total usage</p>
                 <p className="text-lg font-bold text-[#170B2E]">
-                  {totalParticipantMinutes.toFixed(2)}
-                  <span className="text-xs font-normal text-[#3D3650]"> participant-min</span>
+                  {formatMinutes(totalParticipantMinutes)}
+                  <span className="text-xs font-normal text-[#3D3650]"> participant time</span>
                 </p>
               </div>
             </div>
@@ -361,7 +362,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
         >
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-semibold text-[#170B2E]">Call time this week</p>
-            <span className="text-xs text-[#3D3650]">{minutesUsed.toFixed(2)} min call time (all-time)</span>
+            <span className="text-xs text-[#3D3650]">{formatMinutes(minutesUsed)} call time (all-time)</span>
           </div>
           <div className="flex h-32 items-end justify-between gap-2">
             {weekData.length === 0 ? (
@@ -393,7 +394,7 @@ const minutesUsed = usage?.minutesUsed ?? 0;
         <StatCard label="Projects" value={projects.length} color="#7F40E8" />
         <StatCard label="Active Calls" value={usage?.activeCalls ?? 0} color="#10B981" />
         <StatCard label="Calls" value={usage?.totalCalls ?? 0} color="#F59E0B" />
-        <StatCard label="Call time (min)" value={usage?.minutesUsed ?? 0} color="#410686" />
+        <StatCard label="Call time" value={formatMinutes(usage?.minutesUsed ?? 0)} color="#410686" />
         <StatCard label="API Keys" value={totalKeys} color="#EC4899" />
       </div>
 
@@ -702,15 +703,15 @@ function MiniType({ label, mins, credits }: { label: string; mins: number; credi
     <div className="rounded-xl border border-[#E7DFF5] px-4 py-3 text-center" style={{ background: '#F8F4FD' }}>
       <p className="text-[11px] text-[#3D3650]">{label}</p>
       <p className="text-lg font-bold text-[#170B2E] mt-0.5">
-        {mins.toFixed(2)}
-        <span className="text-xs font-normal text-[#3D3650]"> participant-min</span>
+        {formatMinutes(mins)}
+        <span className="text-xs font-normal text-[#3D3650]"> participant time</span>
       </p>
       {credits != null && <p className="text-[11px] font-semibold text-[#6425C4]">{formatCredits(credits)} credits</p>}
     </div>
   );
 }
 
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+function StatCard({ label, value, color }: { label: string; value: number | string; color: string }) {
   return (
     <div
       className="rounded-2xl border border-[#E7DFF5] p-5"

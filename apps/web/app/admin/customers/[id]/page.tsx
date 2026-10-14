@@ -11,6 +11,7 @@ import { countryByCode, usageRangeLabel, useCaseLabel } from '../../../lib/onboa
 
 import type { CurrentUsage } from '../../../lib/billing';
 import { formatCredits } from '../../../lib/billing';
+import { formatMinutes } from '../../../lib/duration';
 import { CustomerBillingPanel } from '../../billing/_components/CustomerBillingPanel';
 
 interface CustomerDetail {
@@ -172,8 +173,8 @@ export default function AdminCustomerDetailPage() {
           <p className="text-xs text-[#3D3650] mb-2">Usage this period</p>
           <p className="text-lg font-bold text-[#170B2E]">{formatCredits(customer.usage.credits.total)} credits</p>
           <p className="text-sm text-[#3D3650] mt-1">
-            {Math.round(customer.usage.usage.audioMinutes)} audio · {Math.round(customer.usage.usage.videoMinutes)} video ·{' '}
-            {Math.round(customer.usage.usage.screenShareMinutes)} screen-share participant-min
+            {formatMinutes(customer.usage.usage.audioMinutes)} audio · {formatMinutes(customer.usage.usage.videoMinutes)} video ·{' '}
+            {formatMinutes(customer.usage.usage.screenShareMinutes)} screen-share participant time
           </p>
         </div>
         <div className="rounded-2xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>

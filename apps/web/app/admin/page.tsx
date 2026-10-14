@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Building2, CalendarDays, Coins, ChartColumn, CircleCheck, Clock3, CreditCard, FileText, FolderKanban, HandCoins, HeartPulse, PhoneCall, Users } from 'lucide-react';
 import { api } from '../lib/api';
+import { formatMinutes } from '../lib/duration';
 
 type OverviewData = {
   stats: {
@@ -38,9 +39,9 @@ const STAT_CARDS = (s: OverviewData['stats']) => [
   { label: 'Total Projects', value: s.totalProjects, icon: FolderKanban },
   { label: 'Active Calls', value: s.activeCalls, icon: PhoneCall },
   { label: 'Active Participants', value: s.activeParticipants, icon: Users },
-  { label: 'Platform Minutes Today', value: s.minutesToday, icon: Clock3 },
-  { label: 'Platform Minutes This Month', value: s.minutesMonth, icon: CalendarDays },
-  { label: 'Participant-Minutes This Month', value: Math.round(s.participantMinutesMonth), icon: ChartColumn },
+  { label: 'Platform Call Time Today', value: formatMinutes(s.minutesToday), icon: Clock3 },
+  { label: 'Platform Call Time This Month', value: formatMinutes(s.minutesMonth), icon: CalendarDays },
+  { label: 'Participant Time This Month', value: formatMinutes(s.participantMinutesMonth), icon: ChartColumn },
   { label: 'Credits Consumed This Month', value: Math.round(s.creditsConsumedMonth ?? 0).toLocaleString('en-IN'), icon: Coins },
   { label: 'Revenue This Month', value: paiseToINR(s.revenueMonthPaise ?? 0), icon: HandCoins },
 ];

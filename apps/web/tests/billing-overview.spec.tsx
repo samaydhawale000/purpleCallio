@@ -40,7 +40,7 @@ describe('Billing overview', () => {
     expect(screen.getByTestId('credit-balance').textContent).toContain('9,000');
     expect(screen.getByTestId('usage-by-media').textContent).toContain('2,400');
     expect(screen.getByText('1 video participant-minute = 2 credits')).toBeTruthy();
-    expect(screen.getByTestId('recent-usage').textContent).toContain('20.00 participant-min');
+    expect(screen.getByTestId('recent-usage').textContent).toContain('20m 00s participant time');
     expect(screen.getByText('How prepaid billing works')).toBeTruthy();
     expect(api.get).toHaveBeenCalledWith('/billing/credits/history', { params: { page: 1, type: 'USAGE_DEBIT' } });
     expect(screen.queryByTestId('credit-alert')).toBeNull();

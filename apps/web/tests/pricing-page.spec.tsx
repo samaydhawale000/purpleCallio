@@ -126,6 +126,15 @@ describe('public pricing page', () => {
     expect(within(custom).getByText('Custom pricing')).toBeTruthy();
     expect(within(custom).getByText('Talk to us').getAttribute('href')).toBe('/signup?intent=custom');
 
+    // Per-minute consumption shown right under the plan cards, from API rates.
+    const strip = screen.getByTestId('credit-rate-strip');
+    expect(strip.textContent).toContain('Audio1 credit/min');
+    expect(strip.textContent).toContain('Video3 credits/min');
+    expect(strip.textContent).toContain('Screen share2 credits/min');
+    // 43,210 credits at video 3 / audio 1 / screen share 2 per minute.
+    expect(growth.textContent).toContain('≈ 14,403 video or 43,210 audio participant-minutes');
+    expect(growth.textContent).not.toContain('screen-share');
+
     // Credit explainer computed from API rates: 2 × 10 min video × 3 credits = 60.
     expect(screen.getByText(/1 video participant-minute =/).textContent).toContain('3');
     expect(screen.getAllByText(/60 credits/).length).toBeGreaterThan(0);

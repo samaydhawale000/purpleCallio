@@ -8,6 +8,7 @@
  *   Admin:    /admin/billing/*
  */
 import { api } from './api';
+import { formatMinutes } from './duration';
 
 // ── Shared types ───────────────────────────────────────────
 export type PlanType = 'FREE' | 'PAID' | 'CUSTOM';
@@ -562,7 +563,7 @@ export function describeCreditTransaction(row: Pick<CreditTransactionRow, 'type'
       const callId = str(m.callId) ?? row.referenceId;
       const used = usageBreakdown(m).filter((p) => p.minutes > 0);
       const media = used.length
-        ? used.map((p) => `${p.label} ${p.minutes.toFixed(2)} participant-min`).join(' · ')
+        ? used.map((p) => `${p.label} ${formatMinutes(p.minutes)}`).join(' · ')
         : 'No metered media';
       return `${callId ? `Call ${callId.slice(0, 12)}` : 'Call'} · ${media}`;
     }
