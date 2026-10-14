@@ -157,6 +157,24 @@ export interface EngineConfig {
   iceServers?: RTCIceServer[];
   /** Override the backend by setting this to true — only custom servers are used. */
   overrideIceServers?: boolean;
+  /**
+   * Default 'all': ICE tries direct (host/srflx) pairs and falls back to the
+   * TURN relay. 'relay' forces TURN — for testing relay connectivity only.
+   */
+  iceTransportPolicy?: RTCIceTransportPolicy;
+  /**
+   * Connection recovery deadlines (ms). Defaults: setupTimeoutMs 15000,
+   * disconnectGraceMs 3000, restartBackoffMs [0, 2000, 5000],
+   * restartCheckMs 8000, maxRestarts 3, failDeadlineMs 35000.
+   */
+  iceRecovery?: {
+    setupTimeoutMs?: number;
+    disconnectGraceMs?: number;
+    restartBackoffMs?: number[];
+    restartCheckMs?: number;
+    maxRestarts?: number;
+    failDeadlineMs?: number;
+  };
 }
 
 export interface MeetingSnapshot {

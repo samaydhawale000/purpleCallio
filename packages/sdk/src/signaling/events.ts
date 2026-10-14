@@ -1,4 +1,5 @@
 import type { Participant, ParticipantMedia, ParticipantRole } from '../types';
+import type { ConnectivityFailureReason, ConnectivityStatus, MediaPath } from '../webrtc/connectivity';
 
 /**
  * Map of signaling event name → payload type.
@@ -30,6 +31,17 @@ export interface SignalingEventMap {
   'call.ended': { callId: string };
   'call.expired': { callId: string };
   'connection.diagnostic': { code: 'TURN_CREDENTIALS_FAILED' | 'AUDIO_AUTOPLAY_BLOCKED' | 'AUDIO_OUTPUT_SWITCH_FAILED' | 'ICE_FAILED' };
+  /**
+   * Media connection progress: `recovering` while ICE restarts run,
+   * `failed` once neither a direct nor a relay path could be established.
+   * `path` (on `connected`) is the selected candidate pair's route.
+   */
+  'connection.status': {
+    status: ConnectivityStatus;
+    reason?: ConnectivityFailureReason;
+    path?: MediaPath;
+    restarts: number;
+  };
 
   // Local media stream events (emitted by the engine, not the server).
   'remote.stream': MediaStream;
@@ -76,6 +88,7 @@ export class SignalingEvents {
     'call.ended': new Set(),
     'call.expired': new Set(),
     'connection.diagnostic': new Set(),
+    'connection.status': new Set(),
     'remote.stream': new Set(),
     'remote.stream.ended': new Set(),
     'join-call': new Set(),

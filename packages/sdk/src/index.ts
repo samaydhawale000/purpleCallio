@@ -6,6 +6,12 @@ import { PurpleCallioClient } from './client';
 export default PurpleCallioClient;
 
 export type {
+  ConnectivityFailureReason,
+  ConnectivityStatus,
+  MediaPath,
+} from './webrtc/connectivity';
+
+export type {
   PurpleCallioConfig,
   Branding,
   Call,

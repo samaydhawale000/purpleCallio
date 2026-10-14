@@ -93,12 +93,7 @@ export class CallController {
     @Param('id') id: string,
     @Body() body: WebrtcTransportDto,
   ) {
-    return this.callService.recordWebrtcTransport(
-      id,
-      req.callSession,
-      body.transport,
-      body.candidateType,
-    );
+    return this.callService.recordWebrtcTransport(id, req.callSession, body);
   }
 
   // Client-reported ICE outcome — see CallService's doc comment on why a
@@ -111,13 +106,7 @@ export class CallController {
     @Param('id') id: string,
     @Body() body: WebrtcIceDto,
   ) {
-    return this.callService.recordWebrtcIceOutcome(
-      id,
-      req.callSession,
-      body.outcome,
-      body.iceConnectionState,
-      body.connectionState,
-    );
+    return this.callService.recordWebrtcIceOutcome(id, req.callSession, body);
   }
 
   @Get(':id/details')

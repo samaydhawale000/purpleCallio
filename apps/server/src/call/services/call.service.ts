@@ -20,6 +20,8 @@ import { UsageSegmentService } from '../../billing/usage-segment.service';
 import { RatingEngineService } from '../../billing/rating-engine.service';
 import { EntitlementService } from '../../billing/subscriptions/entitlement.service';
 import { FeatureKey } from '../../billing/plans/feature-registry';
+import { WebrtcTransportDto } from '../dto/webrtc-transport.dto';
+import { WebrtcIceDto } from '../dto/webrtc-ice.dto';
 
 @Injectable()
 export class CallService implements OnModuleInit {
@@ -756,9 +758,9 @@ export class CallService implements OnModuleInit {
   async recordWebrtcTransport(
     callId: string,
     session: any,
-    transport: 'P2P' | 'TURN',
-    candidateType?: string,
+    report: WebrtcTransportDto,
   ) {
+    const { transport, candidateType } = report;
     const call = await this.prisma.call.findUnique({ where: { id: callId } });
     if (!call) throw new NotFoundException('Call not found');
 
@@ -770,7 +772,22 @@ export class CallService implements OnModuleInit {
         callId,
         event: 'WEBRTC_TRANSPORT',
         participantId,
-        metadata: { transport, candidateType: candidateType ?? null },
+        // Types, protocols and timings only — never addresses or SDP.
+        metadata: {
+          transport,
+          // Distinguishes the two sides even when callerId === receiverId.
+          role: session?.role === 'CALLER' ? 'CALLER' : 'RECEIVER',
+          candidateType: candidateType ?? null,
+          remoteCandidateType: report.remoteCandidateType ?? null,
+          protocol: report.protocol ?? null,
+          relayProtocol: report.relayProtocol ?? null,
+          rttMs: report.rttMs ?? null,
+          availableOutgoingBitrate: report.availableOutgoingBitrate ?? null,
+          setupMs: report.setupMs ?? null,
+          firstMediaMs: report.firstMediaMs ?? null,
+          mediaVerified: report.mediaVerified ?? null,
+          iceRestarts: report.iceRestarts ?? null,
+        },
       },
     });
 
@@ -780,10 +797,9 @@ export class CallService implements OnModuleInit {
   async recordWebrtcIceOutcome(
     callId: string,
     session: any,
-    outcome: 'SUCCESS' | 'FAILED',
-    iceConnectionState?: string,
-    connectionState?: string,
+    report: WebrtcIceDto,
   ) {
+    const { outcome, iceConnectionState, connectionState } = report;
     const call = await this.prisma.call.findUnique({ where: { id: callId } });
     if (!call) throw new NotFoundException('Call not found');
 
@@ -799,6 +815,9 @@ export class CallService implements OnModuleInit {
         metadata: {
           iceConnectionState: iceConnectionState ?? null,
           connectionState: connectionState ?? null,
+          reason: report.reason ?? null,
+          cause: report.cause ?? null,
+          iceRestarts: report.iceRestarts ?? null,
         },
       },
     });

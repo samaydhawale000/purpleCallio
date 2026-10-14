@@ -1,9 +1,27 @@
-import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export enum IceOutcomeDto {
   SUCCESS = 'SUCCESS',
   FAILED = 'FAILED',
 }
+
+const FAILURE_REASONS = [
+  'SETUP_TIMEOUT',
+  'ICE_FAILED',
+  'ICE_DISCONNECTED',
+  'MEDIA_STALLED',
+  'SIGNALING_LOST',
+  'RECOVERY_EXHAUSTED',
+] as const;
 
 export class WebrtcIceDto {
   @IsEnum(IceOutcomeDto)
@@ -20,4 +38,20 @@ export class WebrtcIceDto {
   @IsString()
   @MaxLength(32)
   connectionState?: string;
+
+  /** FAILED only. RECOVERY_EXHAUSTED = the client gave up after its ICE restarts. */
+  @IsOptional()
+  @IsIn(FAILURE_REASONS)
+  reason?: string;
+
+  /** With RECOVERY_EXHAUSTED: what started the failed recovery. */
+  @IsOptional()
+  @IsIn(FAILURE_REASONS)
+  cause?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  iceRestarts?: number;
 }

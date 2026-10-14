@@ -264,10 +264,16 @@ describe('TURN hostname configuration', () => {
         }),
       ),
     ).toEqual([
-      'stun:stun.l.google.com:19302',
+      'stun:calls.example.com:3478,stun:stun.l.google.com:19302',
       'turn:calls.example.com:3478',
       'turns:calls.example.com:5349',
     ]);
+  });
+
+  it('brackets an IPv6 literal TURN host in every URI', () => {
+    const list = urls(service({ TURN_SECRET: 's', TURN_HOST: '2001:db8::1' }));
+    expect(list).toContain('turn:[2001:db8::1]:3478');
+    expect(list[0]).toContain('stun:[2001:db8::1]:3478');
   });
 
   it('prefers TURN_HOST over the legacy TURN_SERVER', () => {

@@ -29,8 +29,17 @@ class FakePeerConnection {
   connectionState: RTCPeerConnectionState = 'new';
   /** Local candidate type of the selected pair, or null for "no pair yet". */
   selectedCandidateType: string | null = 'host';
+  remoteCandidateType = 'host';
+  /** Inbound RTP bytes grow on every getStats() while media flows. */
+  mediaFlowing = true;
+  private inboundBytes = 0;
 
-  constructor() {
+  /** ICE-restart offers created (createOffer({ iceRestart: true })). */
+  restartOffers = 0;
+  /** Makes the next setRemoteDescription reject (e.g. a new DTLS identity). */
+  failNextRemoteDescription = false;
+
+  constructor(readonly config?: RTCConfiguration) {
     FakePeerConnection.instances.push(this);
   }
 
@@ -39,9 +48,10 @@ class FakePeerConnection {
     return [];
   }
 
-  async createOffer() {
+  async createOffer(options?: RTCOfferOptions) {
     this.createOfferCalls.push(Date.now());
     this.calls.push('createOffer');
+    if (options?.iceRestart) this.restartOffers++;
     return { type: 'offer' as const, sdp: `offer-sdp-${this.id}-${this.createOfferCalls.length}` };
   }
 
@@ -60,6 +70,10 @@ class FakePeerConnection {
 
   async setRemoteDescription(desc: RTCSessionDescriptionInit) {
     this.calls.push(`setRemoteDescription:${desc.type}`);
+    if (this.failNextRemoteDescription) {
+      this.failNextRemoteDescription = false;
+      throw new Error('InvalidAccessError: DTLS fingerprint changed');
+    }
     this.remoteDescription = { type: desc.type, sdp: desc.sdp };
     this.signalingState = desc.type === 'offer' ? 'have-remote-offer' : 'stable';
   }
@@ -72,9 +86,12 @@ class FakePeerConnection {
   async getStats() {
     const reports = new Map<string, Record<string, unknown>>();
     if (this.selectedCandidateType) {
-      reports.set('pair', { id: 'pair', type: 'candidate-pair', state: 'succeeded', nominated: true, localCandidateId: 'local' });
-      reports.set('local', { id: 'local', type: 'local-candidate', candidateType: this.selectedCandidateType });
+      reports.set('pair', { id: 'pair', type: 'candidate-pair', state: 'succeeded', nominated: true, localCandidateId: 'local', remoteCandidateId: 'remote' });
+      reports.set('local', { id: 'local', type: 'local-candidate', candidateType: this.selectedCandidateType, protocol: 'udp' });
+      reports.set('remote', { id: 'remote', type: 'remote-candidate', candidateType: this.remoteCandidateType });
     }
+    if (this.mediaFlowing) this.inboundBytes += 1000;
+    reports.set('in', { id: 'in', type: 'inbound-rtp', bytesReceived: this.inboundBytes });
     return reports;
   }
 
@@ -623,12 +640,19 @@ describe('PurpleCallioMeeting WebRTC telemetry', () => {
         {
           url: 'https://api.example/api/calls/call%2F1/webrtc-transport',
           auth: 'Bearer session-token',
-          body: { transport: 'P2P', candidateType: 'host' },
+          body: expect.objectContaining({
+            transport: 'P2P',
+            candidateType: 'host',
+            remoteCandidateType: 'host',
+            protocol: 'udp',
+            mediaVerified: true,
+            iceRestarts: 0,
+          }),
         },
         {
           url: 'https://api.example/api/calls/call%2F1/webrtc-ice',
           auth: 'Bearer session-token',
-          body: { outcome: 'SUCCESS', iceConnectionState: 'connected', connectionState: 'connected' },
+          body: { outcome: 'SUCCESS', iceConnectionState: 'connected', connectionState: 'connected', iceRestarts: 0 },
         },
       ]),
     );
@@ -645,7 +669,7 @@ describe('PurpleCallioMeeting WebRTC telemetry', () => {
     expect(posts()).toContainEqual({
       url: 'https://signal.example/calls/call%2F1/webrtc-transport',
       auth: 'Bearer session-token',
-      body: { transport: 'TURN', candidateType: 'relay' },
+      body: expect.objectContaining({ transport: 'TURN', candidateType: 'relay' }),
     });
   });
 
@@ -680,7 +704,7 @@ describe('PurpleCallioMeeting WebRTC telemetry', () => {
     pc.setIceState('completed');
     await vi.waitFor(() =>
       expect(posts().filter((p) => p.url.endsWith('/webrtc-transport')).map((p) => p.body)).toEqual([
-        { transport: 'P2P', candidateType: 'srflx' },
+        expect.objectContaining({ transport: 'P2P', candidateType: 'srflx' }),
       ]),
     );
   });
@@ -829,5 +853,201 @@ describe('PurpleCallioMeeting WebRTC telemetry', () => {
     await flush();
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('PurpleCallioMeeting connectivity: P2P first, TURN fallback, recovery', () => {
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  let gateway: FakeGateway;
+  const meetings: PurpleCallioMeeting[] = [];
+  const TURN = { urls: 'turn:turn.example:3478', username: 'u', credential: 'c' };
+
+  const makeMeeting = (token: string, extra: Partial<ConstructorParameters<typeof PurpleCallioMeeting>[0]> = {}) => {
+    const meeting = new PurpleCallioMeeting({
+      token,
+      callId: CALL_ID,
+      signalUrl: gateway.url,
+      iceServers: [{ urls: 'stun:stun.example:3478' }, TURN],
+      overrideIceServers: true,
+      ...extra,
+    });
+    meetings.push(meeting);
+    return meeting;
+  };
+
+  const connectedPair = async (extra: Partial<ConstructorParameters<typeof PurpleCallioMeeting>[0]> = {}) => {
+    const caller = makeMeeting('caller-token', extra);
+    const receiver = makeMeeting('receiver-token', extra);
+    await caller.join();
+    await receiver.join();
+    await vi.waitFor(() => {
+      expect(pcOf(caller).remoteDescription?.type).toBe('answer');
+      expect(pcOf(receiver).remoteDescription?.type).toBe('offer');
+    });
+    pcOf(caller).setIceState('connected');
+    pcOf(receiver).setIceState('connected');
+    return { caller, receiver };
+  };
+
+  const settle = (ms = 150) => new Promise((r) => setTimeout(r, ms));
+
+  beforeEach(async () => {
+    FakePeerConnection.instances = [];
+    vi.stubGlobal('RTCPeerConnection', FakePeerConnection);
+    vi.stubGlobal('RTCSessionDescription', FakeSessionDescription);
+    vi.stubGlobal('RTCIceCandidate', FakeIceCandidate);
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { mediaDevices: { getUserMedia: async () => fakeStream() } },
+    });
+    gateway = new FakeGateway({
+      'caller-token': { role: 'CALLER', participantId: 'alice' },
+      'receiver-token': { role: 'RECEIVER', participantId: 'bob' },
+    });
+    await gateway.start();
+  });
+
+  afterEach(async () => {
+    await Promise.all(meetings.splice(0).map((m) => m.leave()));
+    await gateway.stop();
+    vi.unstubAllGlobals();
+    if (originalNavigator) Object.defineProperty(globalThis, 'navigator', originalNavigator);
+    else Reflect.deleteProperty(globalThis, 'navigator');
+  });
+
+  it('creates the peer connection with STUN and TURN and iceTransportPolicy "all" before the first offer', async () => {
+    const caller = makeMeeting('caller-token');
+    await caller.join();
+    const config = pcOf(caller).config!;
+    expect(config.iceTransportPolicy).toBe('all');
+    expect(config.iceServers).toEqual([{ urls: 'stun:stun.example:3478' }, TURN]);
+  });
+
+  it('passes iceTransportPolicy "relay" through only when explicitly requested (TURN-only testing)', async () => {
+    const caller = makeMeeting('caller-token', { iceTransportPolicy: 'relay' });
+    await caller.join();
+    expect(pcOf(caller).config!.iceTransportPolicy).toBe('relay');
+  });
+
+  it('on ICE failure the CALLER sends an ICE-restart offer, the RECEIVER answers, and the call reconnects', async () => {
+    const { caller, receiver } = await connectedPair();
+    const statuses: string[] = [];
+    caller.on('connection.status', (s) => statuses.push(s.reason ? `${s.status}:${s.reason}` : s.status));
+
+    pcOf(caller).setIceState('failed');
+    pcOf(receiver).setIceState('failed');
+
+    await vi.waitFor(() => expect(pcOf(receiver).createAnswerCalls).toHaveLength(2));
+    expect(pcOf(caller).restartOffers).toBe(1);
+    expect(gateway.count('offer', 'CALLER')).toBe(2);
+    expect(gateway.count('offer', 'RECEIVER')).toBe(0); // no glare: only the offerer restarts
+    expect(FakePeerConnection.instances).toHaveLength(2); // same connections, no rebuild
+
+    pcOf(caller).setIceState('connected');
+    expect(statuses).toEqual(['recovering:ICE_FAILED', 'connected']);
+  });
+
+  it('a transient `disconnected` that heals does not restart ICE', async () => {
+    const { caller } = await connectedPair();
+    pcOf(caller).setIceState('disconnected');
+    await settle(200);
+    pcOf(caller).setIceState('connected');
+    await settle(200);
+    expect(pcOf(caller).restartOffers).toBe(0);
+  });
+
+  it('resends the restart offer once the peer is back in the room (offer dropped while it was offline)', async () => {
+    const { caller, receiver } = await connectedPair({ iceRecovery: { restartCheckMs: 60_000 } });
+
+    gateway.socketFor('RECEIVER')!.conn.close();
+    await vi.waitFor(() => expect(gateway.roomSize()).toBe(1));
+    pcOf(caller).setIceState('failed');
+    await vi.waitFor(() => expect(pcOf(caller).restartOffers).toBe(1)); // relayed to nobody
+
+    await vi.waitFor(() => expect(gateway.count('join-call', 'RECEIVER')).toBe(2), { timeout: 5000 });
+    await vi.waitFor(() => expect(pcOf(caller).restartOffers).toBe(2));
+    await vi.waitFor(() => expect(pcOf(receiver).createAnswerCalls).toHaveLength(2));
+  }, 10_000);
+
+  it('gives up after bounded restarts with a clear `failed` status instead of hanging', async () => {
+    const { caller } = await connectedPair({
+      iceRecovery: { restartBackoffMs: [0], restartCheckMs: 40, maxRestarts: 2, failDeadlineMs: 400 },
+    });
+    const statuses: string[] = [];
+    const diagnostics: string[] = [];
+    caller.on('connection.status', (s) => statuses.push(s.status));
+    caller.on('connection.diagnostic', (d) => diagnostics.push(d.code));
+
+    pcOf(caller).setIceState('failed');
+    await vi.waitFor(() => expect(statuses).toContain('failed'), { timeout: 2000 });
+    await settle(200);
+
+    expect(pcOf(caller).restartOffers).toBe(2);
+    expect(diagnostics).toContain('ICE_FAILED');
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    const iceReports = fetchMock.mock.calls
+      .filter(([url]) => String(url).endsWith('/webrtc-ice'))
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string));
+    expect(iceReports).toContainEqual(
+      expect.objectContaining({ outcome: 'FAILED', reason: 'RECOVERY_EXHAUSTED', cause: 'ICE_FAILED', iceRestarts: 2 }),
+    );
+  });
+
+  it('holds candidates of a newer ICE generation until the restart offer carrying their ufrag is applied', async () => {
+    const receiver = makeMeeting('receiver-token');
+    await receiver.join();
+    const socket = gateway.socketFor('RECEIVER')!;
+
+    socket.emit('offer', { offer: { type: 'offer', sdp: 'v=0\r\na=ice-ufrag:gen1\r\n' } });
+    await vi.waitFor(() => expect(pcOf(receiver).createAnswerCalls).toHaveLength(1));
+
+    socket.emit('ice-candidate', { candidate: { candidate: 'old-gen', sdpMid: '0', usernameFragment: 'gen1' } });
+    socket.emit('ice-candidate', { candidate: { candidate: 'new-gen', sdpMid: '0', usernameFragment: 'gen2' } });
+    await settle();
+    expect(pcOf(receiver).addedCandidates.map((c) => c.candidate)).toEqual(['old-gen']);
+
+    socket.emit('offer', { offer: { type: 'offer', sdp: 'v=0\r\na=ice-ufrag:gen2\r\n' } });
+    await vi.waitFor(() => expect(pcOf(receiver).createAnswerCalls).toHaveLength(2));
+    expect(pcOf(receiver).addedCandidates.map((c) => c.candidate)).toEqual(['old-gen', 'new-gen']);
+  });
+
+  it('ignores a duplicate or stale answer once negotiation is stable', async () => {
+    const { caller } = await connectedPair();
+    const before = pcOf(caller).calls.filter((c) => c.startsWith('setRemoteDescription')).length;
+    gateway.socketFor('CALLER')!.emit('answer', { answer: { type: 'answer', sdp: 'stale-answer' } });
+    await settle();
+    expect(pcOf(caller).calls.filter((c) => c.startsWith('setRemoteDescription'))).toHaveLength(before);
+    expect(pcOf(caller).remoteDescription?.sdp).not.toBe('stale-answer');
+  });
+
+  it('a RECEIVER whose peer reloaded starts over on a fresh peer connection for the new offer', async () => {
+    const { receiver } = await connectedPair();
+    const oldPc = pcOf(receiver);
+    oldPc.failNextRemoteDescription = true;
+
+    gateway.socketFor('RECEIVER')!.emit('offer', { offer: { type: 'offer', sdp: 'offer-from-reloaded-caller' } });
+
+    await vi.waitFor(() => expect(pcOf(receiver)).not.toBe(oldPc));
+    await vi.waitFor(() => expect(pcOf(receiver).createAnswerCalls).toHaveLength(1));
+    expect(oldPc.signalingState).toBe('closed');
+    expect(pcOf(receiver).remoteDescription?.sdp).toBe('offer-from-reloaded-caller');
+    expect(pcOf(receiver).config!.iceServers).toEqual(oldPc.config!.iceServers);
+  });
+
+  it('a CALLER whose answer comes from a reloaded RECEIVER renegotiates on a fresh peer connection', async () => {
+    const { caller } = await connectedPair({ iceRecovery: { restartCheckMs: 60_000 } });
+    const oldPc = pcOf(caller);
+    pcOf(caller).setIceState('failed');
+    await vi.waitFor(() => expect(oldPc.restartOffers).toBe(1));
+    // The answer to the restart offer comes from the RECEIVER's new connection.
+    await vi.waitFor(() => expect(oldPc.signalingState).toBe('stable'));
+    oldPc.signalingState = 'have-local-offer';
+    oldPc.failNextRemoteDescription = true;
+    gateway.socketFor('CALLER')!.emit('answer', { answer: { type: 'answer', sdp: 'answer-from-new-receiver-pc' } });
+
+    await vi.waitFor(() => expect(pcOf(caller)).not.toBe(oldPc));
+    await vi.waitFor(() => expect(pcOf(caller).createOfferCalls).toHaveLength(1));
+    expect(oldPc.signalingState).toBe('closed');
   });
 });

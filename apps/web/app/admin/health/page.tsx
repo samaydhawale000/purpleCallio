@@ -67,6 +67,14 @@ type MonitoringData = {
     turnPercent: number | null;
     iceSuccessRate: number | null;
     iceFailureRate: number | null;
+    // Absent from servers older than the connectivity telemetry.
+    unknownCalls?: number;
+    failureReasons?: Record<string, number>;
+    setupMsP50?: number | null;
+    setupMsP95?: number | null;
+    mediaVerifiedPercent?: number | null;
+    iceRestartCalls?: number;
+    iceRestartRecoveryRate?: number | null;
   }>;
   turn: NotAvailable<{
     configured: boolean;
@@ -249,6 +257,37 @@ export default function AdminHealthPage() {
               na={m.webrtc.iceFailureRate == null}
               value={fmtPct(m.webrtc.iceFailureRate)}
             />
+            <StatRow
+              label="Path unconfirmed"
+              na={m.webrtc.unknownCalls == null}
+              value={String(m.webrtc.unknownCalls ?? '')}
+              note="Only one side reported; not counted as P2P or TURN"
+            />
+            <StatRow
+              label="Setup p50 / p95"
+              na={m.webrtc.setupMsP50 == null}
+              value={`${fmtMs(m.webrtc.setupMsP50)} / ${fmtMs(m.webrtc.setupMsP95)}`}
+            />
+            <StatRow
+              label="Media verified"
+              na={m.webrtc.mediaVerifiedPercent == null}
+              value={fmtPct(m.webrtc.mediaVerifiedPercent ?? null)}
+            />
+            <StatRow
+              label="ICE restarts → recovered"
+              na={!m.webrtc.iceRestartCalls}
+              value={`${m.webrtc.iceRestartCalls ?? 0} calls · ${fmtPct(m.webrtc.iceRestartRecoveryRate ?? null)}`}
+            />
+            {m.webrtc.failureReasons &&
+              Object.keys(m.webrtc.failureReasons).length > 0 && (
+                <StatRow
+                  label="Failure reasons"
+                  value={Object.entries(m.webrtc.failureReasons)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([reason, count]) => `${reason} ${count}`)
+                    .join(' · ')}
+                />
+              )}
             {!m.webrtc.available && (
               <p className="text-[11px] text-[#3D3650] mt-1">
                 No calls have reported a transport or ICE outcome yet this month.
@@ -418,6 +457,11 @@ function formatUptime(totalSeconds: number): string {
 
 function fmtPct(value: number | null): string {
   return value == null ? '' : `${value.toFixed(1)}%`;
+}
+
+function fmtMs(value: number | null | undefined): string {
+  if (value == null) return '—';
+  return value < 1000 ? `${value} ms` : `${(value / 1000).toFixed(1)} s`;
 }
 
 function fmtMbps(value: number | null): string {

@@ -16,6 +16,21 @@ import { MeetingState } from "../state/meeting-state";
 import { CameraController } from "../media/camera";
 import { MicrophoneController } from "../media/microphone";
 import { ScreenShareController } from "../media/screenShare";
+import {
+   IceRecovery,
+   candidateMatchesRemote,
+   readMediaBytes,
+   readSelectedPath,
+   type ConnectivityFailureReason,
+   type MediaPath,
+} from "../webrtc/connectivity";
+
+/** Poll interval for path classification and media-flow checks. */
+const STATS_POLL_MS = 1_000;
+/** Report the path this long after connecting even if no media arrived yet. */
+const MEDIA_WAIT_MS = 5_000;
+/** Inbound media silent this long on a connected call → recover. */
+const MEDIA_STALL_MS = 10_000;
 
 /**
  * Headless PurpleCallio meeting engine.
@@ -42,11 +57,26 @@ export class PurpleCallioMeeting {
    private localStream: MediaStream | null = null;
    private participantRole: ParticipantRole | null = null;
    private offerCreated = false;
+   private iceServers: RTCIceServer[] = [];
+   private recovery: IceRecovery | null = null;
+   /** Offer/answer/candidates are applied strictly in arrival order. */
+   private signalingQueue: Promise<void> = Promise.resolve();
+   private negotiationStartedAt: number | null = null;
+   private statsTimer: ReturnType<typeof setInterval> | null = null;
+   private media = {
+      connectedAt: null as number | null,
+      firstInboundAt: null as number | null,
+      lastInbound: 0,
+      lastInboundChangeAt: 0,
+   };
    private readonly pendingIceCandidates: RTCIceCandidateInit[] = [];
    private readonly seenIceCandidates = new Set<string>();
    private transportReported = false;
+   private reportedPath: MediaPath | null = null;
    private resolvedApiBase: string | null = null;
-   private readonly reportedIceOutcomes = new Set<"SUCCESS" | "FAILED">();
+   private readonly reportedIceOutcomes = new Set<
+      "SUCCESS" | "FAILED" | "GAVE_UP"
+   >();
    private audioOutputDeviceId = "";
    private readonly audioElements = new Set<HTMLMediaElement>();
 
@@ -418,12 +448,33 @@ export class PurpleCallioMeeting {
       ]);
 
       this.localStream = stream;
+      this.iceServers = iceServers;
       this.meetingState.localStream = stream;
       this.cameraCtrl.setStreamProvider(() => this.localStream);
       this.microphoneCtrl.setStreamProvider(() => this.localStream);
 
-      const pc = new RTCPeerConnection({ iceServers });
-      stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+      this.createPeerConnection(
+         stream.getTracks().map((track) => ({ track, stream })),
+      );
+
+      this.cameraCtrl.sync();
+      this.microphoneCtrl.sync();
+   }
+
+   /**
+    * One RTCPeerConnection per negotiation with the current remote peer.
+    * ICE servers (STUN + TURN) are resolved before this runs, so the very
+    * first gathering already includes relay candidates: ICE tries direct
+    * pairs and falls back to TURN within the same negotiation.
+    */
+   private createPeerConnection(
+      senders: Array<{ track: MediaStreamTrack; stream: MediaStream }>,
+   ): RTCPeerConnection {
+      const pc = new RTCPeerConnection({
+         iceServers: this.iceServers,
+         iceTransportPolicy: this.config.iceTransportPolicy ?? "all",
+      });
+      senders.forEach(({ track, stream }) => pc.addTrack(track, stream));
       this.pc = pc;
 
       pc.ontrack = (event) => {
@@ -444,19 +495,87 @@ export class PurpleCallioMeeting {
          }
       };
 
+      const recovery = new IceRecovery({
+         ...this.config.iceRecovery,
+         canRestart: () =>
+            this.pc === pc &&
+            this.participantRole === "CALLER" &&
+            this.joinedRoom &&
+            !!this.transport?.isConnected,
+         restart: () => this.restartIce(pc),
+         onStatus: (status, reason) => {
+            if (this.pc !== pc) return;
+            this.emit("connection.status", {
+               status,
+               reason,
+               restarts: recovery.restartCount,
+            });
+         },
+         onGiveUp: (reason) => {
+            if (this.pc !== pc) return;
+            this.emit("connection.diagnostic", { code: "ICE_FAILED" });
+            void this.reportIceOutcome(pc, "FAILED", reason, true);
+         },
+      });
+      this.recovery = recovery;
+
       pc.oniceconnectionstatechange = () => {
+         if (this.pc !== pc) return;
          const iceState = pc.iceConnectionState;
+         recovery.onIceState(iceState);
          if (iceState === "connected" || iceState === "completed") {
-            void this.reportWebrtcTransport(pc);
+            const now = Date.now();
+            if (this.media.connectedAt === null) this.media.connectedAt = now;
+            // Media silence before this (re)connection is not a stall.
+            this.media.lastInboundChangeAt = now;
+            this.startStatsMonitor(pc);
             void this.reportIceOutcome(pc, "SUCCESS");
          } else if (iceState === "failed") {
             // Only a hard 'failed' counts: 'disconnected' often recovers.
-            void this.reportIceOutcome(pc, "FAILED");
+            void this.reportIceOutcome(pc, "FAILED", "ICE_FAILED");
          }
       };
 
-      this.cameraCtrl.sync();
-      this.microphoneCtrl.sync();
+      return pc;
+   }
+
+   /** Replace a peer connection whose remote end is a different (new) peer. */
+   private resetPeerConnection(): RTCPeerConnection | null {
+      const old = this.pc;
+      if (!old || !this.localStream) return null;
+      const stream = this.localStream;
+      const senders = old
+         .getSenders()
+         .flatMap((sender) => (sender.track ? [{ track: sender.track, stream }] : []));
+      this.teardownPeerConnection();
+      this.meetingState.remoteStream = null;
+      this.emit("remote.stream.ended", {});
+      return this.createPeerConnection(
+         senders.length
+            ? senders
+            : stream.getTracks().map((track) => ({ track, stream })),
+      );
+   }
+
+   private teardownPeerConnection(): void {
+      this.stopStatsMonitor();
+      this.recovery?.dispose();
+      this.recovery = null;
+      this.pc?.close();
+      this.pc = null;
+      this.offerCreated = false;
+      this.negotiationStartedAt = null;
+      this.media = {
+         connectedAt: null,
+         firstInboundAt: null,
+         lastInbound: 0,
+         lastInboundChangeAt: 0,
+      };
+      this.transportReported = false;
+      this.reportedPath = null;
+      this.reportedIceOutcomes.clear();
+      this.pendingIceCandidates.length = 0;
+      this.seenIceCandidates.clear();
    }
 
    /**
@@ -534,50 +653,110 @@ export class PurpleCallioMeeting {
       }
    }
 
-   private async reportWebrtcTransport(pc: RTCPeerConnection): Promise<void> {
-      if (this.transportReported) return;
-      this.transportReported = true;
-      try {
-         const stats = await pc.getStats();
-         let selectedPair: any = null;
-         stats.forEach((report: any) => {
-            if (report.type === "candidate-pair" && report.state === "succeeded") {
-               if (report.nominated || !selectedPair) selectedPair = report;
-            }
-         });
-         let candidateType: string | undefined;
-         if (selectedPair) {
-            stats.forEach((report: any) => {
-               if (report.id === selectedPair.localCandidateId)
-                  candidateType = report.candidateType;
-            });
-         }
-         if (!candidateType) {
-            // Stats not settled yet; let a later state change retry.
-            this.transportReported = false;
-            return;
-         }
-         if (this.pc !== pc) return;
-         await this.postTelemetry("webrtc-transport", {
-            transport: candidateType === "relay" ? "TURN" : "P2P",
-            candidateType,
-         });
-      } catch {
-         /* getStats() shape varies across platforms — never block the call */
-      }
+   /**
+    * Polls getStats() while the call is connected: classifies the selected
+    * candidate pair (P2P vs TURN), confirms media is actually arriving, and
+    * hands a stalled-but-"connected" call to the recovery policy.
+    */
+   private startStatsMonitor(pc: RTCPeerConnection): void {
+      if (!this.statsTimer)
+         this.statsTimer = setInterval(() => {
+            void this.pollStats(pc);
+         }, STATS_POLL_MS);
+      void this.pollStats(pc);
    }
 
-   /** At most once per outcome per peer connection; a FAILED can later recover to SUCCESS. */
+   private stopStatsMonitor(): void {
+      if (this.statsTimer) clearInterval(this.statsTimer);
+      this.statsTimer = null;
+   }
+
+   private async pollStats(pc: RTCPeerConnection): Promise<void> {
+      if (this.pc !== pc || isPeerClosed(pc)) return;
+      let stats: RTCStatsReport;
+      try {
+         stats = await pc.getStats();
+      } catch {
+         return; // getStats() shape varies across platforms — never block the call
+      }
+      if (this.pc !== pc) return;
+      const now = Date.now();
+      const { inbound } = readMediaBytes(stats);
+      if (inbound > this.media.lastInbound) {
+         this.media.lastInbound = inbound;
+         this.media.lastInboundChangeAt = now;
+         if (this.media.firstInboundAt === null) this.media.firstInboundAt = now;
+      }
+
+      const connected = this.recovery?.isConnected ?? false;
+      if (
+         connected &&
+         this.media.firstInboundAt !== null &&
+         now - this.media.lastInboundChangeAt > MEDIA_STALL_MS
+      ) {
+         this.media.lastInboundChangeAt = now;
+         this.recovery?.onMediaStalled();
+      }
+
+      const path = readSelectedPath(stats);
+      if (!connected || path.path === "UNKNOWN") return;
+      const mediaSeen = this.media.firstInboundAt !== null;
+      const waited =
+         this.media.connectedAt !== null &&
+         now - this.media.connectedAt >= MEDIA_WAIT_MS;
+      // Report once per (re)connection, after media arrives (or a short
+      // wait), and again if a later restart moved the call to another path.
+      if (this.transportReported && this.reportedPath === path.path) return;
+      if (!mediaSeen && !waited && !this.transportReported) return;
+      this.transportReported = true;
+      this.reportedPath = path.path;
+      const started = this.negotiationStartedAt;
+      this.emit("connection.status", {
+         status: "connected",
+         path: path.path,
+         restarts: this.recovery?.restartCount ?? 0,
+      });
+      await this.postTelemetry("webrtc-transport", {
+         transport: path.path,
+         candidateType: path.localCandidateType,
+         remoteCandidateType: path.remoteCandidateType,
+         protocol: path.protocol,
+         relayProtocol: path.relayProtocol,
+         rttMs: path.rttMs,
+         availableOutgoingBitrate: path.availableOutgoingBitrate,
+         setupMs:
+            started !== null && this.media.connectedAt !== null
+               ? Math.max(0, this.media.connectedAt - started)
+               : undefined,
+         firstMediaMs:
+            started !== null && this.media.firstInboundAt !== null
+               ? Math.max(0, this.media.firstInboundAt - started)
+               : undefined,
+         mediaVerified: mediaSeen,
+         iceRestarts: this.recovery?.restartCount ?? 0,
+      });
+   }
+
+   /**
+    * At most once per outcome per peer connection; a FAILED can later
+    * recover to SUCCESS. `final` marks recovery giving up (reported once).
+    */
    private async reportIceOutcome(
       pc: RTCPeerConnection,
       outcome: "SUCCESS" | "FAILED",
+      reason?: ConnectivityFailureReason,
+      final = false,
    ): Promise<void> {
-      if (this.pc !== pc || this.reportedIceOutcomes.has(outcome)) return;
-      this.reportedIceOutcomes.add(outcome);
+      const key = final ? "GAVE_UP" : outcome;
+      if (this.pc !== pc || this.reportedIceOutcomes.has(key)) return;
+      this.reportedIceOutcomes.add(key);
       await this.postTelemetry("webrtc-ice", {
          outcome,
          iceConnectionState: pc.iceConnectionState,
          connectionState: pc.connectionState,
+         ...(reason ? { reason: final ? "RECOVERY_EXHAUSTED" : reason } : {}),
+         ...(final ? { cause: reason } : {}),
+         iceRestarts: this.recovery?.restartCount ?? 0,
       });
    }
 
@@ -601,48 +780,100 @@ export class PurpleCallioMeeting {
    }
 
    private createOffer = async () => {
-      if (!this.pc || this.participantRole !== "CALLER" || this.offerCreated)
+      const pc = this.pc;
+      if (!pc || this.participantRole !== "CALLER" || this.offerCreated)
          return;
       this.offerCreated = true;
       try {
-         const offer = await this.pc.createOffer();
-         await this.pc.setLocalDescription(offer);
+         const offer = await pc.createOffer();
+         await pc.setLocalDescription(offer);
+         this.markNegotiationStarted();
          this.transport?.emit("offer", { offer });
       } catch (error) {
-         this.offerCreated = false;
+         if (this.pc === pc) this.offerCreated = false;
          throw error;
       }
    };
 
+   /** ICE restart: fresh ICE credentials, re-gathered host/srflx/relay candidates. */
+   private async restartIce(pc: RTCPeerConnection): Promise<void> {
+      if (this.pc !== pc || isPeerClosed(pc)) return;
+      const offer = await pc.createOffer({ iceRestart: true });
+      if (this.pc !== pc) return;
+      await pc.setLocalDescription(offer);
+      this.transport?.emit("offer", { offer });
+   }
+
+   private markNegotiationStarted(): void {
+      if (this.negotiationStartedAt === null)
+         this.negotiationStartedAt = Date.now();
+      this.recovery?.start();
+   }
+
    private negotiateIfPeerPresent(roomSize: number | undefined): void {
       if (typeof roomSize !== "number" || roomSize < 2) return;
+      // The peer is (back) in the room: a recovery that stalled while
+      // signaling was unavailable can send its restart offer now.
+      this.recovery?.onSignalingRestored();
       void this.createOffer().catch(() =>
          this.emit("connection.diagnostic", { code: "ICE_FAILED" }),
       );
    }
 
+   /** Serializes signaling so an offer, its answer and candidates never interleave. */
+   private enqueueSignaling(task: () => Promise<void>): void {
+      this.signalingQueue = this.signalingQueue
+         .then(task)
+         .catch(() =>
+            this.emit("connection.diagnostic", { code: "ICE_FAILED" }),
+         );
+   }
+
    private handleOffer = async (payload: {
       offer: RTCSessionDescriptionInit;
    }) => {
-      if (!this.pc || this.pc.signalingState === "closed") return;
-      if (this.pc.remoteDescription?.sdp === payload.offer.sdp) return;
-      await this.pc.setRemoteDescription(
-         new RTCSessionDescription(payload.offer),
-      );
+      let pc = this.pc;
+      if (!pc || isPeerClosed(pc)) return;
+      if (pc.remoteDescription?.sdp === payload.offer.sdp) return;
+      try {
+         await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
+      } catch (error) {
+         // An offer from a peer that rejoined with a new RTCPeerConnection
+         // (page refresh) carries a new DTLS identity that cannot be applied
+         // to the old connection: start over on a fresh one.
+         if (!pc.remoteDescription) throw error;
+         pc = this.resetPeerConnection();
+         if (!pc) throw error;
+         await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
+      }
+      this.markNegotiationStarted();
       await this.flushIceCandidates();
-      const answer = await this.pc.createAnswer();
-      await this.pc.setLocalDescription(answer);
+      const answer = await pc.createAnswer();
+      if (this.pc !== pc) return;
+      await pc.setLocalDescription(answer);
       this.transport?.emit("answer", { answer });
    };
 
    private handleAnswer = async (payload: {
       answer: RTCSessionDescriptionInit;
    }) => {
-      if (!this.pc || this.pc.signalingState === "closed") return;
-      if (this.pc.remoteDescription?.sdp === payload.answer.sdp) return;
-      await this.pc.setRemoteDescription(
-         new RTCSessionDescription(payload.answer),
-      );
+      const pc = this.pc;
+      if (!pc || isPeerClosed(pc)) return;
+      // Only an answer to our outstanding offer applies; a duplicate or
+      // stale one would fail or corrupt the negotiation.
+      if ((pc.signalingState as string) !== "have-local-offer") return;
+      try {
+         await pc.setRemoteDescription(
+            new RTCSessionDescription(payload.answer),
+         );
+      } catch (error) {
+         // The receiver answered from a new peer connection (it reloaded
+         // since our offer was negotiated): renegotiate from scratch.
+         if (!pc.remoteDescription) throw error;
+         if (!this.resetPeerConnection()) throw error;
+         await this.createOffer();
+         return;
+      }
       await this.flushIceCandidates();
    };
 
@@ -650,12 +881,13 @@ export class PurpleCallioMeeting {
       candidate: RTCIceCandidateInit;
    }) => {
       const pc = this.pc;
-      if (!pc || isPeerClosed(pc)) return;
+      if (!pc || isPeerClosed(pc) || !payload?.candidate) return;
       const key = JSON.stringify(payload.candidate);
       if (this.seenIceCandidates.has(key)) return;
       this.seenIceCandidates.add(key);
       if (this.seenIceCandidates.size > 512) this.seenIceCandidates.clear();
-      if (!pc.remoteDescription) {
+      if (!candidateMatchesRemote(payload.candidate, pc.remoteDescription)) {
+         // Before the (new) remote description: hold until it is applied.
          if (this.pendingIceCandidates.length >= 256)
             this.pendingIceCandidates.shift();
          this.pendingIceCandidates.push(payload.candidate);
@@ -672,9 +904,14 @@ export class PurpleCallioMeeting {
    private async flushIceCandidates(): Promise<void> {
       const pc = this.pc;
       if (!pc?.remoteDescription || isPeerClosed(pc)) return;
-      const candidates = this.pendingIceCandidates.splice(0);
-      for (const candidate of candidates) {
+      const queued = this.pendingIceCandidates.splice(0);
+      for (const candidate of queued) {
          if (this.pc !== pc || isPeerClosed(pc)) return;
+         if (!candidateMatchesRemote(candidate, pc.remoteDescription)) {
+            // Belongs to a newer ICE generation than the one just applied.
+            this.pendingIceCandidates.push(candidate);
+            continue;
+         }
          try {
             await pc.addIceCandidate(new RTCIceCandidate(candidate));
          } catch {
@@ -795,25 +1032,17 @@ export class PurpleCallioMeeting {
 
       // WebRTC signaling.
       offs.push(
-         raw("offer", (p) => {
-            void this.handleOffer(p).catch(() =>
-               this.emit("connection.diagnostic", { code: "ICE_FAILED" }),
-            );
-         }),
+         raw("offer", (p) => this.enqueueSignaling(() => this.handleOffer(p))),
       );
       offs.push(
-         raw("answer", (p) => {
-            void this.handleAnswer(p).catch(() =>
-               this.emit("connection.diagnostic", { code: "ICE_FAILED" }),
-            );
-         }),
+         raw("answer", (p) =>
+            this.enqueueSignaling(() => this.handleAnswer(p)),
+         ),
       );
       offs.push(
-         raw("ice-candidate", (p) => {
-            void this.handleIceCandidate(p).catch(() =>
-               this.emit("connection.diagnostic", { code: "ICE_FAILED" }),
-            );
-         }),
+         raw("ice-candidate", (p) =>
+            this.enqueueSignaling(() => this.handleIceCandidate(p)),
+         ),
       );
 
       this.cleanupFns = offs;
@@ -847,6 +1076,8 @@ export class PurpleCallioMeeting {
          if (joined.state)
             this.applyParticipantSnapshot(joined.state.participants);
          this.connection.set("joined");
+         // Restart offers sent while the socket was down were dropped.
+         this.recovery?.onSignalingRestored();
       } catch {
          this.joinedRoom = false;
          this.connection.set("error");
@@ -857,8 +1088,8 @@ export class PurpleCallioMeeting {
    }
 
    private cleanupMedia(): void {
-      this.pc?.close();
-      this.pc = null;
+      this.teardownPeerConnection();
+      this.signalingQueue = Promise.resolve();
       this.localStream?.getTracks().forEach((t) => t.stop());
       this.localStream = null;
       this.meetingState.localStream = null;
@@ -866,11 +1097,6 @@ export class PurpleCallioMeeting {
       this.emit("remote.stream.ended", {});
       this.cleanupFns.forEach((f) => f());
       this.cleanupFns = [];
-      this.offerCreated = false;
-      this.transportReported = false;
-      this.reportedIceOutcomes.clear();
-      this.pendingIceCandidates.length = 0;
-      this.seenIceCandidates.clear();
       this.participantRole = null;
    }
 }
