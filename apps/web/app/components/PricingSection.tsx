@@ -9,6 +9,7 @@ import {
   gstNote,
   planCtaHref,
   planCtaLabel,
+  planComparePrice,
   planPrice,
   sortPlans,
   topUpExpiryText,
@@ -150,6 +151,7 @@ function PaidPlanCard({
 }) {
   const v = plan.version;
   const price = planPrice(plan);
+  const comparePrice = planComparePrice(plan);
   const featured = plan.isPopular;
   const badge = plan.badge ?? (featured ? 'Most popular' : null);
   const hint = v ? minutesHint(v.includedCredits, rates) : null;
@@ -197,6 +199,12 @@ function PaidPlanCard({
         <span className={`text-5xl font-bold tracking-tight ${featured ? 'text-white' : 'text-[#170B2E]'}`}>{price.amount}</span>
         {price.suffix && <span className={`text-sm ${featured ? 'text-white/70' : 'text-[#3D3650]'}`}>{price.suffix}</span>}
       </div>
+      {comparePrice && (
+        <p className={`relative mt-1 text-lg font-medium line-through ${featured ? 'text-white/50' : 'text-[#3D3650]/60'}`}>
+          <span className="sr-only">Regular price </span>
+          {comparePrice}
+        </p>
+      )}
 
       {v && (
         <div
