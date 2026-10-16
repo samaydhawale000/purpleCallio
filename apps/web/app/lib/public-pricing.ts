@@ -99,6 +99,16 @@ export function planPrice(plan: Plan): { amount: string; suffix: string | null }
   };
 }
 
+/** Display-only "was" price shown struck through: 30% above the real price, rounded up to a whole rupee. */
+const COMPARE_PRICE_MARKUP = 1.3;
+
+export function planComparePrice(plan: Plan): string | null {
+  const v = plan.version;
+  if (plan.customPricing || !v || v.pricePaise <= 0) return null;
+  const paise = Math.ceil((v.pricePaise * COMPARE_PRICE_MARKUP) / 100) * 100;
+  return formatMoney(paise, v.currency);
+}
+
 export function planCtaLabel(plan: Plan): string {
   if (plan.ctaLabel) return plan.ctaLabel;
   switch (plan.ctaAction) {

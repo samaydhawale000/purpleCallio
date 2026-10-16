@@ -27,6 +27,7 @@ import { formatCredits, formatDate, formatMoney, intervalLabel } from '../../../
 import { Button } from '../../../components/ui/Button';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
 import { FeatureChecklist } from './PlanFields';
+import { useCanWrite } from '../../../lib/admin-access';
 import { Checkbox, ErrorText, Field, inputCls, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler } from './ui';
 
 export const VERSIONING_NOTE =
@@ -175,6 +176,7 @@ export function PlanEditor({ planId }: { planId: string | null }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const canWrite = useCanWrite();
 
   useEffect(() => {
     let cancelled = false;
@@ -260,6 +262,7 @@ export function PlanEditor({ planId }: { planId: string | null }) {
         <p className="text-sm text-amber-700">This plan is archived. Set its status to Active or Inactive to restore and edit it.</p>
       )}
 
+      <fieldset disabled={!canWrite} className="flex flex-col gap-6 min-w-0">
       <Panel title="General">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Name">
@@ -366,7 +369,9 @@ export function PlanEditor({ planId }: { planId: string | null }) {
       <Panel title="Features" subtitle="From the feature registry (manage it in the Features tab).">
         <FeatureChecklist features={features} selected={form.features} onChange={(keys) => set('features', keys)} />
       </Panel>
+      </fieldset>
 
+      {canWrite && (
       <div className="flex flex-wrap items-center gap-3 sticky bottom-0 bg-white/90 backdrop-blur py-3 border-t border-[#E7DFF5]">
         <Button type="submit" loading={saving}>
           {planId ? 'Save plan' : 'Create plan'}
@@ -376,6 +381,7 @@ export function PlanEditor({ planId }: { planId: string | null }) {
         </Link>
         <ErrorText>{error}</ErrorText>
       </div>
+      )}
 
       {plan && plan.versions.length > 0 && (
         <Panel title="Version history" subtitle="Versions are immutable. Subscribers stay on the version they purchased.">

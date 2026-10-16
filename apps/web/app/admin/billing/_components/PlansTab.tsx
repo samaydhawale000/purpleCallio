@@ -17,6 +17,7 @@ import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { Pagination } from '../../../components/ui/Pagination';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
+import { useCanWrite } from '../../../lib/admin-access';
 import { ErrorText, linkBtn, Modal, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
 export function planPriceLabel(p: Pick<AdminPlan, 'customPricing' | 'version'>) {
@@ -31,6 +32,7 @@ export function PlansTab() {
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [subscribersOf, setSubscribersOf] = useState<AdminPlan | null>(null);
+  const canWrite = useCanWrite();
 
   const run = async (id: string, fn: () => Promise<unknown>, success: string) => {
     setBusy(id);
@@ -56,9 +58,11 @@ export function PlansTab() {
         title="Plans"
         subtitle="Plans are never deleted. Archive a plan to retire it — existing subscribers keep the terms they purchased."
         actions={
-          <Button size="sm" onClick={() => router.push('/admin/billing/plans/new')}>
-            <Plus size={14} /> New plan
-          </Button>
+          canWrite && (
+            <Button size="sm" onClick={() => router.push('/admin/billing/plans/new')}>
+              <Plus size={14} /> New plan
+            </Button>
+          )
         }
       >
         <Table
@@ -93,7 +97,9 @@ export function PlansTab() {
               <td className={`${tdCls} whitespace-nowrap`}>{formatDate(p.updatedAt)}</td>
               <td className={tdCls}>
                 <div className="flex flex-wrap gap-x-3 gap-y-1">
-                  <Link href={`/admin/billing/plans/${p.id}`} className={linkBtn}>Edit</Link>
+                  <Link href={`/admin/billing/plans/${p.id}`} className={linkBtn}>{canWrite ? 'Edit' : 'View'}</Link>
+                  {canWrite && (
+                  <>
                   <button className={linkBtn} disabled={busy === p.id} onClick={() => run(p.id, () => duplicatePlan(p.id), `Duplicated ${p.name} (inactive copy)`)}>
                     Duplicate
                   </button>
@@ -132,6 +138,8 @@ export function PlansTab() {
                     >
                       Archive
                     </button>
+                  )}
+                  </>
                   )}
                   <button className={linkBtn} onClick={() => setSubscribersOf(p)}>
                     Subscribers

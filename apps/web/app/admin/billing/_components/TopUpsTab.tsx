@@ -16,6 +16,7 @@ import { formatCredits, formatDate, formatMoney } from '../../../lib/billing';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
+import { useCanWrite } from '../../../lib/admin-access';
 import { Checkbox, ErrorText, Field, inputCls, linkBtn, Modal, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
 type Status = AdminTopUp['status'];
@@ -25,6 +26,7 @@ export function TopUpsTab() {
   const { data, loading, error, reload } = useResource(listAdminTopUps, []);
   const [editing, setEditing] = useState<AdminTopUp | 'new' | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const canWrite = useCanWrite();
 
   const setStatus = async (t: AdminTopUp, status: Status) => {
     try {
@@ -47,9 +49,11 @@ export function TopUpsTab() {
         title="Top-up packages"
         subtitle="One-time credit packages customers can buy any time. Price and credit changes apply to future purchases only."
         actions={
-          <Button size="sm" onClick={() => setEditing('new')}>
-            <Plus size={14} /> New top-up
-          </Button>
+          canWrite && (
+            <Button size="sm" onClick={() => setEditing('new')}>
+              <Plus size={14} /> New top-up
+            </Button>
+          )
         }
       >
         <Table headers={['Package', 'Price', 'Credits', 'Status', 'Order', 'Purchases', 'Updated', 'Actions']} empty={data.length === 0 ? 'No top-up packages yet.' : undefined}>
@@ -67,6 +71,7 @@ export function TopUpsTab() {
               <td className={tdCls}>{t.purchases}</td>
               <td className={tdCls}>{formatDate(t.updatedAt)}</td>
               <td className={tdCls}>
+                {canWrite && (
                 <div className="flex flex-wrap gap-x-3 gap-y-1">
                   <button className={linkBtn} onClick={() => setEditing(t)}>Edit</button>
                   {t.status !== 'ACTIVE' && <button className={linkBtn} onClick={() => setStatus(t, 'ACTIVE')}>Activate</button>}
@@ -80,12 +85,13 @@ export function TopUpsTab() {
                     </button>
                   )}
                 </div>
+                )}
               </td>
             </tr>
           ))}
         </Table>
       </Panel>
-      {editing && (
+      {canWrite && editing && (
         <TopUpForm
           topUp={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}

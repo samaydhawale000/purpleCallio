@@ -19,6 +19,9 @@ import {
   ShieldCheck,
   CreditCard,
   Headset,
+  UserCog,
+  Lock,
+  Eye,
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 import { NotificationBell } from '../components/notifications/NotificationBell';
@@ -27,6 +30,7 @@ import { useRealtimeEvent } from '../lib/realtime';
 import { useRequireAuth } from '../hooks/useRequireAuth';
 import logo from '../assets/images/logo.webp';
 import { BILLING_NAV } from './billing/_components/tabs';
+import { AdminAccessContext, getAdminMe, tabForPathname, type AdminPermissions } from '../lib/admin-access';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -39,6 +43,7 @@ const NAV_ITEMS = [
   { label: 'Support', href: '/admin/support', icon: Headset },
   { label: 'Audit Logs', href: '/admin/audit-logs', icon: ScrollText },
   { label: 'Platform Settings', href: '/admin/settings', icon: Settings },
+  { label: 'Admins', href: '/admin/admins', icon: UserCog },
 ];
 
 export default function AdminLayout({
@@ -65,6 +70,23 @@ export default function AdminLayout({
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
+
+  // Per-tab access for the signed-in admin (null until loaded).
+  const token = useAuthStore((s) => s.token);
+  const [perms, setPerms] = useState<AdminPermissions | null>(null);
+  const [accessError, setAccessError] = useState(false);
+  useEffect(() => {
+    if (!token) return;
+    getAdminMe()
+      .then((me) => setPerms(me.permissions))
+      .catch(() => setAccessError(true));
+  }, [token]);
+  const currentTab = tabForPathname(pathname);
+  const currentLevel = currentTab ? perms?.[currentTab] : 'WRITE';
+  const navItems = NAV_ITEMS.filter((item) => {
+    const tab = tabForPathname(item.href);
+    return !tab || !!perms?.[tab];
+  });
 
   const displayName = user?.name || user?.email || 'Admin';
   const avatarUrl = user?.avatarUrl || '';
@@ -138,7 +160,7 @@ export default function AdminLayout({
             Internal
           </p>
           <div className="flex flex-col gap-0.5">
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const Icon = item.icon;
               const active =
                 pathname === item.href ||
@@ -215,7 +237,21 @@ export default function AdminLayout({
       {/* Main content */}
       <div className="flex-1 min-w-0">
         <main className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-7xl mx-auto">
-          {ready && children}
+          {ready &&
+            (accessError ? (
+              <NoAccess text="You don't have admin access." />
+            ) : !perms ? null : !currentLevel ? (
+              <NoAccess text="You don't have access to this section." />
+            ) : (
+              <AdminAccessContext.Provider value={perms}>
+                {currentLevel === 'READ' && (
+                  <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-[#E7DFF5] bg-[#F8F4FD] px-3 py-1.5 text-xs text-[#3D3650]">
+                    <Eye size={14} aria-hidden="true" /> View only: you can see this section but not make changes.
+                  </div>
+                )}
+                {children}
+              </AdminAccessContext.Provider>
+            ))}
         </main>
       </div>
     </div>
@@ -244,6 +280,15 @@ function BillingSubNav({ pathname }: { pathname: string }) {
           </Link>
         );
       })}
+    </div>
+  );
+}
+
+function NoAccess({ text }: { text: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 py-24 text-center text-[#3D3650]">
+      <Lock size={28} className="text-[#7F40E8]" aria-hidden="true" />
+      <p className="text-sm">{text}</p>
     </div>
   );
 }

@@ -12,7 +12,8 @@ interface Props {
   customerLabel: string;
   placeholder: string;
   submitLabel: string;
-  onReply: (message: string) => Promise<boolean>;
+  /** Omit to render the thread without a reply composer (read-only). */
+  onReply?: (message: string) => Promise<boolean>;
   /** Ticket summary rendered as the chat panel's header. */
   header?: ReactNode;
 }
@@ -47,7 +48,7 @@ export function TicketThread({
   }, [messages.length]);
 
   async function send() {
-    if (sending) return;
+    if (sending || !onReply) return;
     if (!draft.trim()) {
       setError('Message is required.');
       return;
@@ -160,7 +161,7 @@ export function TicketThread({
       </div>
 
       {/* Composer */}
-      <form onSubmit={submit} className="shrink-0 border-t border-[#E7DFF5] px-4 sm:px-5 py-3">
+      {onReply && <form onSubmit={submit} className="shrink-0 border-t border-[#E7DFF5] px-4 sm:px-5 py-3">
         <div className="flex items-end gap-3">
           <textarea
             value={draft}
@@ -188,7 +189,7 @@ export function TicketThread({
           <p className="text-xs text-red-600">{error}</p>
           <p className="text-[11px] text-[#3D3650] shrink-0">Enter to send · Shift+Enter for a new line</p>
         </div>
-      </form>
+      </form>}
     </div>
   );
 }

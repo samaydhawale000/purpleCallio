@@ -17,6 +17,7 @@ import {
 import { Button } from '../../../components/ui/Button';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
 import { RefundDialog } from './PaymentsTab';
+import { useCanWrite } from '../../../lib/admin-access';
 import { Checkbox, ErrorText, Field, inputCls, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
 const BUCKET_LABEL: Record<string, string> = {
@@ -32,6 +33,7 @@ export function CustomerBillingPanel({ customerId, onChanged }: { customerId: st
   const { data, loading, error, reload } = useResource(() => getCustomerBilling(customerId), [customerId]);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [refunding, setRefunding] = useState<AdminPaymentRow | null>(null);
+  const canWrite = useCanWrite();
 
   if (loading) return <Spinner tall={false} />;
   if (error || !data) return <ErrorText>{error || 'Failed to load billing'}</ErrorText>;
@@ -103,13 +105,15 @@ export function CustomerBillingPanel({ customerId, onChanged }: { customerId: st
         </Panel>
       </div>
 
-      <AdjustCreditsForm
-        customerId={customerId}
-        onDone={(msg) => {
-          setToast({ id: Date.now(), type: 'success', message: msg });
-          refresh();
-        }}
-      />
+      {canWrite && (
+        <AdjustCreditsForm
+          customerId={customerId}
+          onDone={(msg) => {
+            setToast({ id: Date.now(), type: 'success', message: msg });
+            refresh();
+          }}
+        />
+      )}
 
       <Panel title="Recent credit history">
         <Table headers={['Date', 'Type', 'Amount', 'Balance after', 'Details']} empty={data.creditHistory.data.length === 0 ? 'No credit activity yet.' : undefined}>
@@ -146,7 +150,7 @@ export function CustomerBillingPanel({ customerId, onChanged }: { customerId: st
                 {p.refundedPaise > 0 && <div className="text-amber-700">Refunded {formatMoney(p.refundedPaise, p.currency)}</div>}
               </td>
               <td className={tdCls}>
-                {p.paymentStatus === 'PAID' && (
+                {canWrite && p.paymentStatus === 'PAID' && (
                   <button className="text-xs font-medium text-red-600 hover:text-red-800" onClick={() => setRefunding({ ...p, user: data.customer })}>
                     Refund
                   </button>
@@ -170,7 +174,7 @@ export function CustomerBillingPanel({ customerId, onChanged }: { customerId: st
         </div>
       )}
 
-      {refunding && (
+      {canWrite && refunding && (
         <RefundDialog
           payment={refunding}
           onClose={() => setRefunding(null)}

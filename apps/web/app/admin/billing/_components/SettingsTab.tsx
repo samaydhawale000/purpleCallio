@@ -5,6 +5,7 @@ import { Plus, X } from 'lucide-react';
 import { getBillingSettings, updateBillingSettings, type TopUpExpiryPolicy } from '../../../lib/admin-billing';
 import { Button } from '../../../components/ui/Button';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
+import { useCanWrite } from '../../../lib/admin-access';
 import { ErrorText, Field, inputCls, Panel, Spinner, useAdminErrorHandler, useResource } from './ui';
 
 interface Form {
@@ -27,6 +28,7 @@ export function SettingsTab() {
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const canWrite = useCanWrite();
 
   useEffect(() => {
     if (!data) return;
@@ -86,6 +88,7 @@ export function SettingsTab() {
   return (
     <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
+      <fieldset disabled={!canWrite} className="flex flex-col gap-6 min-w-0">
       <Panel title="Tax">
         <Field label="GST (%)" hint="Added at checkout on top of plan and top-up prices (after any customer discount)." className="max-w-xs">
           <input type="number" min={0} max={100} className={inputCls} value={form.taxPercent} onChange={(e) => setForm({ ...form, taxPercent: e.target.value })} />
@@ -106,6 +109,7 @@ export function SettingsTab() {
                 onChange={(e) => setThreshold(i, e.target.value)}
               />
               <span className="text-xs text-[#3D3650]">%</span>
+              {canWrite && (
               <button
                 type="button"
                 aria-label={`Remove threshold ${i + 1}`}
@@ -114,8 +118,10 @@ export function SettingsTab() {
               >
                 <X size={14} />
               </button>
+              )}
             </div>
           ))}
+          {canWrite && (
           <button
             type="button"
             onClick={() => setForm({ ...form, thresholds: [...form.thresholds, ''] })}
@@ -123,6 +129,7 @@ export function SettingsTab() {
           >
             <Plus size={12} /> Add threshold
           </button>
+          )}
         </div>
       </Panel>
 
@@ -172,11 +179,14 @@ export function SettingsTab() {
           </label>
         </div>
       </Panel>
+      </fieldset>
 
-      <div className="flex items-center gap-3">
-        <Button type="submit" loading={saving}>Save settings</Button>
-        <ErrorText>{saveError}</ErrorText>
-      </div>
+      {canWrite && (
+        <div className="flex items-center gap-3">
+          <Button type="submit" loading={saving}>Save settings</Button>
+          <ErrorText>{saveError}</ErrorText>
+        </div>
+      )}
     </form>
   );
 }
