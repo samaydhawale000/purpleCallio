@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 
 import { AdminController } from './admin.controller';
+import { AdminsController } from './admins.controller';
 import { AdminService } from './admin.service';
 import { AdminGuard } from './guards/admin.guard';
 import { SocketModule } from '../socket/socket.module';
@@ -19,7 +20,7 @@ import { CallModule } from '../call/call.module';
     OciMonitoringModule,
     CallModule,
   ],
-  controllers: [AdminController],
+  controllers: [AdminController, AdminsController],
   providers: [AdminService, AdminGuard],
 })
 export class AdminModule {}

@@ -5,12 +5,14 @@ import { Plus } from 'lucide-react';
 import { listAdminFeatures, upsertFeature, type AdminFeature } from '../../../lib/admin-billing';
 import { Button } from '../../../components/ui/Button';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
+import { useCanWrite } from '../../../lib/admin-access';
 import { Checkbox, ErrorText, Field, inputCls, linkBtn, Modal, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
 export function FeaturesTab() {
   const { data, loading, error, reload } = useResource(listAdminFeatures, []);
   const [editing, setEditing] = useState<AdminFeature | 'new' | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const canWrite = useCanWrite();
 
   if (loading) return <Spinner />;
   if (error || !data) return <ErrorText>{error || 'Failed to load features'}</ErrorText>;
@@ -22,9 +24,11 @@ export function FeaturesTab() {
         title="Feature registry"
         subtitle="Features plans can include. Plans reference features by key; inactive features stay on existing plans but can't be newly offered."
         actions={
-          <Button size="sm" onClick={() => setEditing('new')}>
-            <Plus size={14} /> Add feature
-          </Button>
+          canWrite && (
+            <Button size="sm" onClick={() => setEditing('new')}>
+              <Plus size={14} /> Add feature
+            </Button>
+          )
         }
       >
         <Table headers={['Key', 'Name', 'Category', 'Order', 'Status', 'Visibility', '']} empty={data.length === 0 ? 'No features yet.' : undefined}>
@@ -40,13 +44,13 @@ export function FeaturesTab() {
               <td className={tdCls}><StatusBadge status={f.isActive ? 'ACTIVE' : 'INACTIVE'} /></td>
               <td className={tdCls}>{f.isPublic ? 'Public' : 'Hidden'}</td>
               <td className={tdCls}>
-                <button className={linkBtn} onClick={() => setEditing(f)}>Edit</button>
+                {canWrite && <button className={linkBtn} onClick={() => setEditing(f)}>Edit</button>}
               </td>
             </tr>
           ))}
         </Table>
       </Panel>
-      {editing && (
+      {canWrite && editing && (
         <FeatureForm
           feature={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}

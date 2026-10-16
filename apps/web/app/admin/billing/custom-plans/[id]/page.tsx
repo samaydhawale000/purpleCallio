@@ -24,6 +24,7 @@ import { formatCredits, formatDate, formatMoney, intervalLabel } from '../../../
 import { countryByCode, usageRangeLabel, useCaseLabel } from '../../../../lib/onboarding';
 import { Button } from '../../../../components/ui/Button';
 import { ToastHost, type ToastState } from '../../../../dashboard/billing/Toast';
+import { useCanWrite } from '../../../../lib/admin-access';
 import { CustomOfferForm } from '../../_components/CustomOfferForm';
 import { CustomPlanSnapshot } from '../../_components/CustomPlanSnapshot';
 import { ErrorText, Field, inputCls, Panel, Spinner, StatusBadge, useAdminErrorHandler } from '../../_components/ui';
@@ -42,6 +43,7 @@ export default function CustomPlanRequestPage() {
   const [saving, setSaving] = useState(false);
   const [offerOpen, setOfferOpen] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const canWrite = useCanWrite();
 
   useEffect(() => {
     let cancelled = false;
@@ -183,9 +185,9 @@ export default function CustomPlanRequestPage() {
           <Panel
             title="Offers"
             subtitle="Private plans proposed to this customer."
-            actions={!offerOpen && <Button size="sm" onClick={() => setOfferOpen(true)}>Create custom offer</Button>}
+            actions={canWrite && !offerOpen && <Button size="sm" onClick={() => setOfferOpen(true)}>Create custom offer</Button>}
           >
-            {offerOpen && (
+            {canWrite && offerOpen && (
               <div className="mb-6 rounded-xl border border-[#E7DFF5] p-4">
                 <CustomOfferForm
                   requestId={detail.id}
@@ -212,7 +214,7 @@ export default function CustomPlanRequestPage() {
                           <span className="font-medium text-[#170B2E]">{o.plan.name}</span>
                           <StatusBadge status={o.status} />
                         </div>
-                        {o.status === 'SENT' && (
+                        {canWrite && o.status === 'SENT' && (
                           <button className="text-xs font-medium text-red-600 hover:text-red-800" onClick={() => withdraw(o.id)}>
                             Withdraw
                           </button>
@@ -245,7 +247,7 @@ export default function CustomPlanRequestPage() {
                 <select
                   className={inputCls}
                   value={detail.status}
-                  disabled={saving}
+                  disabled={saving || !canWrite}
                   onChange={(e) => patch({ status: e.target.value as CustomPlanRequestStatus }, 'Status updated')}
                 >
                   {CUSTOM_PLAN_STATUSES.map((s) => (
@@ -258,7 +260,7 @@ export default function CustomPlanRequestPage() {
                 <select
                   aria-label="Assignee"
                   className={inputCls}
-                  disabled={saving}
+                  disabled={saving || !canWrite}
                   value={detail.assignedAdmin?.id ?? ''}
                   onChange={(e) => patch({ assignedAdminId: e.target.value || null }, e.target.value ? 'Assigned' : 'Unassigned')}
                 >
@@ -267,6 +269,7 @@ export default function CustomPlanRequestPage() {
                     <option key={a.id} value={a.id}>{a.name || a.email}</option>
                   ))}
                 </select>
+                {canWrite && (
                 <div className="flex gap-3 mt-2">
                   {me?.userId && detail.assignedAdmin?.id !== me.userId && (
                     <button className="text-xs font-medium text-[#6425C4]" disabled={saving} onClick={() => patch({ assignedAdminId: me.userId }, 'Assigned to you')}>
@@ -279,14 +282,15 @@ export default function CustomPlanRequestPage() {
                     </button>
                   )}
                 </div>
+                )}
               </div>
               <Field label="Estimated monthly credits">
-                <input type="number" min={0} className={inputCls} value={estimate} onChange={(e) => setEstimate(e.target.value)} />
+                <input type="number" min={0} readOnly={!canWrite} className={inputCls} value={estimate} onChange={(e) => setEstimate(e.target.value)} />
               </Field>
               <Field label="Internal notes">
-                <textarea className={inputCls} rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} />
+                <textarea className={inputCls} rows={4} readOnly={!canWrite} value={notes} onChange={(e) => setNotes(e.target.value)} />
               </Field>
-              <Button size="sm" variant="secondary" onClick={saveNotes} loading={saving}>Save notes</Button>
+              {canWrite && <Button size="sm" variant="secondary" onClick={saveNotes} loading={saving}>Save notes</Button>}
             </div>
           </Panel>
           <Panel title="Account">

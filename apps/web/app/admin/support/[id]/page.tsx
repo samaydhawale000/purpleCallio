@@ -18,6 +18,7 @@ import { TicketStatusBadge, ticketStatusLabel } from '../../../components/suppor
 import { TicketThread } from '../../../components/support/TicketThread';
 import { ToastHost, ToastState } from '../../../dashboard/billing/Toast';
 import { CustomPlanBadge, CustomPlanContextPanel } from '../_components/CustomPlanContext';
+import { useCanWrite } from '../../../lib/admin-access';
 
 type AdminTicketDetail = SupportTicket & {
   type?: 'GENERAL' | 'CUSTOM_PLAN';
@@ -39,6 +40,7 @@ type AdminTicketDetail = SupportTicket & {
 
 export default function AdminTicketPage() {
   const { id } = useParams<{ id: string }>();
+  const canWrite = useCanWrite();
   const [ticket, setTicket] = useState<AdminTicketDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -144,7 +146,7 @@ export default function AdminTicketPage() {
             customerLabel={c.name || c.email}
             placeholder="Write response..."
             submitLabel="Send Response"
-            onReply={reply}
+            onReply={canWrite ? reply : undefined}
             header={
               <>
                 <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -174,7 +176,7 @@ export default function AdminTicketPage() {
           {ticket.type === 'CUSTOM_PLAN' && ticket.customPlanRequest && (
             <CustomPlanContextPanel requestId={ticket.customPlanRequest.id} />
           )}
-          <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
+          {canWrite && <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
             <p className="text-xs font-mono uppercase tracking-widest text-[#3D3650] mb-3">Status</p>
             <select
               value={ticket.status}
@@ -186,7 +188,7 @@ export default function AdminTicketPage() {
                 <option key={s} value={s}>{ticketStatusLabel(s)}</option>
               ))}
             </select>
-          </div>
+          </div>}
 
           <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
             <p className="text-xs font-mono uppercase tracking-widest text-[#3D3650] mb-3">Customer</p>

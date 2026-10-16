@@ -13,6 +13,7 @@ import type { CurrentUsage } from '../../../lib/billing';
 import { formatCredits } from '../../../lib/billing';
 import { formatMinutes } from '../../../lib/duration';
 import { CustomerBillingPanel } from '../../billing/_components/CustomerBillingPanel';
+import { useCanWrite } from '../../../lib/admin-access';
 
 interface CustomerDetail {
   id: string;
@@ -55,6 +56,7 @@ export default function AdminCustomerDetailPage() {
   const { token, logout } = useAuthStore();
   const router = useRouter();
   const { isReady } = useRequireAuth();
+  const canWrite = useCanWrite();
 
   const [customer, setCustomer] = useState<CustomerDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -234,7 +236,7 @@ export default function AdminCustomerDetailPage() {
             <p className="text-sm font-semibold text-[#170B2E]">Customer discount</p>
             <p className="text-xs text-[#3D3650] mt-0.5">Applies to plan, renewal and top-up prices before GST.</p>
           </div>
-          {!editing && (
+          {canWrite && !editing && (
             <div className="flex gap-2">
               <button
                 onClick={startEditing}

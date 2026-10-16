@@ -14,6 +14,7 @@ import {
 import { formatCredits, formatDate, formatMoney, PURPOSE_LABEL } from '../../../lib/billing';
 import { formatMinutes as mins } from '../../../lib/duration';
 import { Button } from '../../../components/ui/Button';
+import { useCanWrite } from '../../../lib/admin-access';
 import { ErrorText, Field, inputCls, Panel, rowCls, Spinner, Stat, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
 
@@ -113,6 +114,7 @@ function InternalRatesEditor() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const canWrite = useCanWrite();
 
   const toggle = async () => {
     const next = !open;
@@ -160,6 +162,7 @@ function InternalRatesEditor() {
                   <input
                     type="number"
                     min={0}
+                    readOnly={!canWrite}
                     className={inputCls}
                     value={rates[k]}
                     onChange={(e) => setRates({ ...rates, [k]: Math.max(0, Number(e.target.value) || 0) })}
@@ -171,7 +174,7 @@ function InternalRatesEditor() {
             !error && <Spinner tall={false} />
           )}
           <ErrorText>{error}</ErrorText>
-          {rates && (
+          {canWrite && rates && (
             <Button size="sm" onClick={save} loading={saving}>
               {saved ? 'Saved' : 'Save internal rates'}
             </Button>

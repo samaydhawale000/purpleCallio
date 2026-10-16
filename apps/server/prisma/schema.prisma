@@ -221,6 +221,9 @@ model User {
   refreshTokenHash String?
 
   role   UserRole   @default(USER)
+  // Admin tab access: { [tab]: "READ" | "WRITE" }. null = full access.
+  // See src/admin/admin-access.ts.
+  adminPermissions Json?
   status UserStatus @default(ACTIVE)
   phone  String?
 

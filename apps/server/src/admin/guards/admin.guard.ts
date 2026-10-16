@@ -9,6 +9,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { resolvePermissions, tabForPath } from '../admin-access';
 
 /**
  * Verifies the JWT and additionally checks that the authenticated
@@ -50,6 +51,16 @@ export class AdminGuard implements CanActivate {
 
     if (user.role !== 'ADMIN') {
       throw new ForbiddenException('Admin access required');
+    }
+
+    // Per-tab access: reads need READ or WRITE, anything else needs WRITE.
+    const tab = tabForPath(request.originalUrl ?? request.url ?? '');
+    if (tab) {
+      const level = resolvePermissions(user.adminPermissions)[tab];
+      const isRead = ['GET', 'HEAD', 'OPTIONS'].includes(request.method);
+      if (!level || (!isRead && level !== 'WRITE')) {
+        throw new ForbiddenException(isRead ? 'No access to this section' : 'Read-only access to this section');
+      }
     }
 
     request.user = { userId: user.id, role: user.role };

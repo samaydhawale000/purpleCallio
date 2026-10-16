@@ -5,6 +5,7 @@ import { getCreditRates, updateCreditRates, type BillingConfigUpdate } from '../
 import { formatCredits } from '../../../lib/billing';
 import { Button } from '../../../components/ui/Button';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
+import { useCanWrite } from '../../../lib/admin-access';
 import { ErrorText, Field, inputCls, Panel, Spinner, useAdminErrorHandler, useResource } from './ui';
 
 const FIELDS = [
@@ -30,6 +31,7 @@ export function CreditRatesTab() {
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const canWrite = useCanWrite();
 
   useEffect(() => {
     if (!data) return;
@@ -75,6 +77,7 @@ export function CreditRatesTab() {
               <input
                 type="number"
                 min={0}
+                disabled={!canWrite}
                 className={inputCls}
                 value={form[f.key]}
                 onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
@@ -85,6 +88,7 @@ export function CreditRatesTab() {
             <input
               type="number"
               min={0}
+              disabled={!canWrite}
               className={inputCls}
               value={form.minimumCreditsToStartCall}
               onChange={(e) => setForm({ ...form, minimumCreditsToStartCall: e.target.value })}
@@ -112,10 +116,12 @@ export function CreditRatesTab() {
         </ul>
       </Panel>
 
-      <div className="flex items-center gap-3">
-        <Button type="submit" loading={saving}>Save credit rates</Button>
-        <ErrorText>{saveError}</ErrorText>
-      </div>
+      {canWrite && (
+        <div className="flex items-center gap-3">
+          <Button type="submit" loading={saving}>Save credit rates</Button>
+          <ErrorText>{saveError}</ErrorText>
+        </div>
+      )}
     </form>
   );
 }

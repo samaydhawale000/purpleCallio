@@ -14,6 +14,7 @@ import { Button } from '../../../components/ui/Button';
 import { Pagination } from '../../../components/ui/Pagination';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
 import { SearchBox } from './SubscriptionsTab';
+import { useCanWrite } from '../../../lib/admin-access';
 import { ErrorText, Field, inputCls, Modal, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
 export function PaymentsTab({ userId }: { userId?: string }) {
@@ -23,6 +24,7 @@ export function PaymentsTab({ userId }: { userId?: string }) {
   const [search, setSearch] = useState('');
   const [refunding, setRefunding] = useState<AdminPaymentRow | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const canWrite = useCanWrite();
   const { data, loading, error, reload } = useResource(
     () => listAdminPayments({ page, status, purpose, search, userId }),
     [page, status, purpose, search, userId],
@@ -86,7 +88,7 @@ export function PaymentsTab({ userId }: { userId?: string }) {
                   {!p.failureReason && !p.refundedPaise && '—'}
                 </td>
                 <td className={tdCls}>
-                  {p.paymentStatus === 'PAID' && (
+                  {canWrite && p.paymentStatus === 'PAID' && (
                     <button className="text-xs font-medium text-red-600 hover:text-red-800" onClick={() => setRefunding(p)}>
                       Refund
                     </button>
@@ -98,7 +100,7 @@ export function PaymentsTab({ userId }: { userId?: string }) {
           <Pagination page={page} pageCount={data.pageCount} totalItems={data.total} pageSize={data.pageSize} onPageChange={setPage} />
         </>
       )}
-      {refunding && (
+      {canWrite && refunding && (
         <RefundDialog
           payment={refunding}
           onClose={() => setRefunding(null)}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
+import { useCanWrite } from '../../lib/admin-access';
 
 type SettingsData = {
   maintenanceMode: boolean;
@@ -9,6 +10,7 @@ type SettingsData = {
 };
 
 export default function AdminSettingsPage() {
+  const canWrite = useCanWrite();
   const [data, setData] = useState<SettingsData | null>(null);
   const [maintenance, setMaintenance] = useState(false);
   const [announcement, setAnnouncement] = useState('');
@@ -56,6 +58,7 @@ export default function AdminSettingsPage() {
       {/* Maintenance + announcement */}
       <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
         <p className="text-sm font-semibold text-[#170B2E] mb-4">Operations</p>
+        <fieldset disabled={!canWrite}>
         <label className="flex items-center gap-3 mb-5 cursor-pointer">
           <input
             type="checkbox"
@@ -74,14 +77,15 @@ export default function AdminSettingsPage() {
           className="w-full rounded-lg border border-[#E7DFF5] bg-[#FFFFFF] px-3 py-2.5 text-sm text-[#170B2E] placeholder:text-[#6B6478] resize-none"
           rows={3}
         />
+        </fieldset>
 
-        <button
+        {canWrite && <button
           onClick={save}
           className="mt-4 px-5 py-2.5 rounded-lg text-sm font-medium text-white transition-all hover:opacity-90"
           style={{ background: 'linear-gradient(135deg, #7F40E8, #410686)' }}
         >
           {saved ? 'Saved ✓' : 'Save Settings'}
-        </button>
+        </button>}
       </div>
 
       {/* Server logs */}
