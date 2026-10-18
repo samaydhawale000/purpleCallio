@@ -18,7 +18,7 @@ export const CORE_FEATURES: FeatureCard[] = [
       tagline: "Face-to-face calls inside your product.",
       body: "Browser video calls for interviews, consultations, tutoring and support, created from your backend and joined through hosted UI, React components or the headless SDK.",
       highlights: [
-         "One-to-one and group calls",
+         "One-to-one video calls",
          "Screen sharing and device selection",
          "Hosted UI, React or headless SDK",
       ],

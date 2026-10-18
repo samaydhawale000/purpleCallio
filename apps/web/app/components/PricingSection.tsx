@@ -1,7 +1,26 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Bot, Building2, Check, Coins, Minus, Mic, Monitor, RefreshCw, Rocket, Sparkles, Video } from 'lucide-react';
+import {
+  ArrowRight,
+  Bot,
+  Building2,
+  CalendarClock,
+  Check,
+  Coins,
+  CreditCard,
+  Minus,
+  Mic,
+  Monitor,
+  PhoneCall,
+  Receipt,
+  RefreshCw,
+  Rocket,
+  ShieldCheck,
+  Sparkles,
+  Video,
+} from 'lucide-react';
 import { formatCredits, formatMoney, intervalLabel, type CreditRates, type Plan, type PublicPricing } from '../lib/billing';
 import {
   featureNames,
@@ -82,42 +101,214 @@ function minutesHint(credits: number, rates: CreditRates) {
   return `≈ ${list} participant-minutes`;
 }
 
-/**
- * What each media type consumes, shown right under the plan cards so the
- * credit amounts on the cards can be read as minutes. Live admin rates.
- */
-export function CreditRateStrip({ rates }: { rates: CreditRates }) {
-  const items = [
-    { icon: Mic, label: 'Audio', rate: rates.audioCreditsPerMinute },
-    { icon: Video, label: 'Video', rate: rates.videoCreditsPerMinute },
-    { icon: Monitor, label: 'Screen share', rate: rates.screenShareCreditsPerMinute },
+type MediaKey = 'audio' | 'video' | 'screen' | 'ai';
+interface MediaRate {
+  key: MediaKey;
+  icon: typeof Mic;
+  label: string;
+  rate: number;
+  /** AI calls are billed per call minute, not per participant. */
+  perParticipant: boolean;
+}
+
+function mediaRates(rates: CreditRates): MediaRate[] {
+  return [
+    { key: 'audio', icon: Mic, label: 'Audio', rate: rates.audioCreditsPerMinute, perParticipant: true },
+    { key: 'video', icon: Video, label: 'Video', rate: rates.videoCreditsPerMinute, perParticipant: true },
+    { key: 'screen', icon: Monitor, label: 'Screen share', rate: rates.screenShareCreditsPerMinute, perParticipant: true },
+    ...(rates.aiCreditsPerMinute != null
+      ? [{ key: 'ai' as const, icon: Bot, label: 'AI voice', rate: rates.aiCreditsPerMinute, perParticipant: false }]
+      : []),
   ];
-  const aiRate = rates.aiCreditsPerMinute;
+}
+
+const creditWord = (n: number) => (n === 1 ? 'credit' : 'credits');
+
+function RangeField({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  suffix,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  suffix: string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="flex items-baseline justify-between text-sm">
+        <span className="text-[#3D3650]">{label}</span>
+        <span className="font-semibold text-[#170B2E]">
+          {value} {suffix}
+        </span>
+      </span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="mt-2 w-full cursor-pointer accent-[#7F40E8]"
+      />
+    </label>
+  );
+}
+
+/**
+ * What a one-to-one call consumes, under the plan cards: pick the call type,
+ * optionally add screen sharing (it only happens inside an audio/video call)
+ * and set the length. Live admin rates.
+ */
+export function CreditRateStrip({ rates, plans = [] }: { rates: CreditRates; plans?: Plan[] }) {
+  const media = mediaRates(rates);
+  const callTypes = media.filter((m) => m.key !== 'screen');
+  const screen = media.find((m) => m.key === 'screen')!;
+  const [selected, setSelected] = useState<MediaKey>('video');
+  const [minutes, setMinutes] = useState(30);
+  const [shareOn, setShareOn] = useState(false);
+  const [shareMinutes, setShareMinutes] = useState(10);
+  const current = callTypes.find((m) => m.key === selected) ?? callTypes[0];
+  const canShare = current.key !== 'ai';
+  const sharing = canShare && shareOn;
+  const shareMins = Math.min(shareMinutes, minutes);
+
+  // One-to-one: both people use audio/video; the sharer adds screen-share minutes.
+  const lines: { label: string; credits: number }[] =
+    current.key === 'ai'
+      ? [{ label: `${minutes} AI call min × ${formatRate(current.rate)}`, credits: minutes * current.rate }]
+      : [
+          {
+            label: `2 people × ${minutes} min ${current.label.toLowerCase()} × ${formatRate(current.rate)}`,
+            credits: 2 * minutes * current.rate,
+          },
+          ...(sharing
+            ? [{ label: `1 sharer × ${shareMins} min screen share × ${formatRate(screen.rate)}`, credits: shareMins * screen.rate }]
+            : []),
+        ];
+  const credits = Math.ceil(lines.reduce((sum, l) => sum + l.credits, 0));
+  // The smallest paid plan, to show what its credits cover.
+  const plan = sortPlans(plans)
+    .filter((p) => p.type !== 'FREE' && !p.customPricing && (p.version?.includedCredits ?? 0) > 0)
+    .sort((a, b) => a.version!.includedCredits - b.version!.includedCredits)[0];
+  const calls = plan && credits > 0 ? Math.floor(plan.version!.includedCredits / credits) : null;
+
+  const tileCls = (on: boolean) =>
+    `relative rounded-2xl p-4 text-left transition-all ${
+      on
+        ? 'bg-[#7F40E8] text-white shadow-[0_12px_30px_-12px_rgba(127,64,232,0.8)]'
+        : 'bg-[#F8F4FD] text-[#170B2E] ring-1 ring-[#E7DFF5] hover:ring-[#D6C4EE]'
+    }`;
+
   return (
     <div
       data-testid="credit-rate-strip"
-      className="mx-auto mt-10 max-w-3xl rounded-2xl border border-[#E7DFF5] bg-[#F8F4FD] px-6 py-5"
+      className="mx-auto mt-12 max-w-5xl overflow-hidden rounded-3xl border border-[#E7DFF5] bg-white shadow-[0_24px_60px_-32px_rgba(65,6,134,0.35)]"
     >
-      <p className="text-center text-sm font-semibold text-[#170B2E]">Credits used per participant-minute</p>
-      <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {items.map((x) => (
-          <li key={x.label} className="flex items-center justify-center gap-2.5 rounded-xl bg-white px-4 py-3 ring-1 ring-[#E7DFF5]">
-            <x.icon size={18} className="shrink-0 text-[#7F40E8]" aria-hidden="true" />
-            <span className="text-sm text-[#3D3650]">{x.label}</span>
-            <span className="text-sm font-bold text-[#170B2E]">
-              {formatRate(x.rate)} {x.rate === 1 ? 'credit' : 'credits'}/min
-            </span>
-          </li>
-        ))}
-      </ul>
-      {aiRate != null && (
-        <p data-testid="ai-rate" className="mt-3 flex items-center justify-center gap-2 text-sm text-[#3D3650]">
-          <Bot size={18} className="shrink-0 text-[#7F40E8]" aria-hidden="true" />
-          AI voice: <span className="font-bold text-[#170B2E]">{formatRate(aiRate)} {aiRate === 1 ? 'credit' : 'credits'}/min</span>
-          <span className="text-xs">(per call minute, paid plans)</span>
-        </p>
-      )}
-      <p className="mt-3 text-center text-xs text-[#3D3650]">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr]">
+        <div className="p-6 sm:p-8">
+          <p className="text-lg font-bold text-[#170B2E]">What do credits buy?</p>
+          <p className="mt-1 text-sm text-[#3D3650]">
+            Pick a one-to-one call type, add screen sharing if you need it, and set the length.
+          </p>
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            {callTypes.map((m) => {
+              const on = m.key === current.key;
+              return (
+                <button
+                  key={m.key}
+                  type="button"
+                  aria-pressed={on}
+                  data-testid={m.key === 'ai' ? 'ai-rate' : undefined}
+                  onClick={() => setSelected(m.key)}
+                  className={tileCls(on)}
+                >
+                  <m.icon size={20} className={on ? 'text-white' : 'text-[#7F40E8]'} aria-hidden="true" />
+                  <span className="mt-3 block text-sm">
+                    <span className={on ? 'text-white/85' : 'text-[#3D3650]'}>{m.label}</span>
+                    <span className="mt-0.5 block text-lg font-bold">
+                      {formatRate(m.rate)} {creditWord(m.rate)}/min
+                    </span>
+                  </span>
+                  <span className={`mt-1 block text-xs ${on ? 'text-white/75' : 'text-[#3D3650]'}`}>
+                    {m.perParticipant ? 'per participant' : 'per call minute · paid plans'}
+                  </span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              aria-pressed={sharing}
+              disabled={!canShare}
+              onClick={() => setShareOn((v) => !v)}
+              className={`${tileCls(sharing)} disabled:cursor-not-allowed disabled:opacity-50`}
+              title={canShare ? undefined : 'Screen sharing is part of an audio or video call'}
+            >
+              <span
+                className={`absolute right-3 top-3 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  sharing ? 'bg-white text-[#5B1BB5]' : 'bg-white text-[#6425C4] ring-1 ring-[#E7DFF5]'
+                }`}
+              >
+                {sharing ? 'Added' : '+ Add to call'}
+              </span>
+              <screen.icon size={20} className={sharing ? 'text-white' : 'text-[#7F40E8]'} aria-hidden="true" />
+              <span className="mt-3 block text-sm">
+                <span className={sharing ? 'text-white/85' : 'text-[#3D3650]'}>{screen.label}</span>
+                <span className="mt-0.5 block text-lg font-bold">
+                  {formatRate(screen.rate)} {creditWord(screen.rate)}/min
+                </span>
+              </span>
+              <span className={`mt-1 block text-xs ${sharing ? 'text-white/75' : 'text-[#3D3650]'}`}>
+                add-on · only during a call
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-6 bg-gradient-to-br from-[#F8F4FD] to-[#EFE5FC] p-6 sm:p-8">
+          <div className="space-y-5">
+            <RangeField label="Call length" value={minutes} min={5} max={120} step={5} suffix="min" onChange={setMinutes} />
+            {sharing && (
+              <RangeField
+                label="Screen sharing time"
+                value={shareMins}
+                min={5}
+                max={minutes}
+                step={5}
+                suffix="min"
+                onChange={setShareMinutes}
+              />
+            )}
+          </div>
+          <div className="mt-auto" aria-live="polite">
+            <ul className="space-y-1.5 border-b border-[#D6C4EE]/60 pb-3 text-sm text-[#3D3650]">
+              {lines.map((l) => (
+                <li key={l.label} className="flex justify-between gap-4">
+                  <span>{l.label}</span>
+                  <span className="font-semibold text-[#170B2E]">{formatRate(l.credits)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-4xl font-bold tracking-tight text-[#170B2E]">
+              {formatCredits(credits)} <span className="text-lg font-semibold text-[#3D3650]">credits per call</span>
+            </p>
+            {plan && calls != null && (
+              <p className="mt-2 text-sm text-[#3D3650]">
+                {plan.name}&apos;s {formatCredits(plan.version!.includedCredits)} credits cover{' '}
+                <strong className="text-[#6425C4]">≈ {formatCredits(calls)}</strong> calls like this.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+      <p className="border-t border-[#E7DFF5] px-6 py-3 text-center text-xs text-[#3D3650]">
         A participant-minute is one connected participant for one minute: 2 people on a 10-minute video call use{' '}
         {formatRate(20 * rates.videoCreditsPerMinute)} credits.
       </p>
@@ -395,25 +586,26 @@ export function PlanCards({ pricing }: { pricing: PublicPricing }) {
 
 // ── Comparison table ─────────────────────────────────────────────────────
 function Yes() {
-  return <Check size={16} className="mx-auto text-[#7F40E8]" aria-label="Included" />;
+  return (
+    <span className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-[#7F40E8]/10" aria-label="Included">
+      <Check size={14} strokeWidth={3} className="text-[#7F40E8]" aria-hidden="true" />
+    </span>
+  );
 }
 function No() {
-  return <Minus size={16} className="mx-auto text-[#B9AECB]" aria-label="Not included" />;
+  return <Minus size={16} className="mx-auto text-[#D6C4EE]" aria-label="Not included" />;
 }
 
 export function PlanComparison({ pricing }: { pricing: PublicPricing }) {
+  const token = useAuthStore((s) => s.token);
   const plans = sortPlans(pricing.plans);
   if (plans.length === 0) return null;
+  const r = pricing.creditRates;
   const custom = (p: Plan) => p.customPricing;
+  const minutes = (p: Plan, rate: number) =>
+    !p.version || custom(p) || rate <= 0 ? 'Custom' : `≈ ${formatCredits(Math.floor(p.version.includedCredits / rate))} min`;
 
-  const rows: { label: string; render: (p: Plan) => React.ReactNode }[] = [
-    {
-      label: 'Price',
-      render: (p) => {
-        const price = planPrice(p);
-        return price.suffix ? `${price.amount} / ${intervalLabel(p.version)}` : price.amount;
-      },
-    },
+  const rows: { label: string; hint?: string; render: (p: Plan) => React.ReactNode }[] = [
     {
       label: 'Included credits',
       render: (p) =>
@@ -421,45 +613,83 @@ export function PlanComparison({ pricing }: { pricing: PublicPricing }) {
           ? `${formatCredits(p.version.includedCredits)} / ${intervalLabel(p.version)}`
           : 'Custom',
     },
-    // Only features that differ between plans — shared ones are listed once above.
-    ...pricing.features.filter((f) => !commonFeatureKeys(plans).includes(f.key)).map((f) => ({
-      label: f.name,
-      render: (p: Plan) => (p.version?.features.includes(f.key) ? <Yes /> : <No />),
-    })),
+    { label: 'Video calling', hint: 'participant-minutes', render: (p) => minutes(p, r.videoCreditsPerMinute) },
+    { label: 'Audio calling', hint: 'participant-minutes', render: (p) => minutes(p, r.audioCreditsPerMinute) },
     // AI voice agents need a paid plan: any plan type except FREE, Custom included.
-    ...(pricing.creditRates.aiCreditsPerMinute != null
+    ...(r.aiCreditsPerMinute != null
       ? [{ label: 'AI voice agents', render: (p: Plan) => (p.type === 'FREE' ? <No /> : <Yes />) }]
       : []),
+    // Only features that differ between plans — shared ones are listed once above.
+    ...pricing.features
+      .filter((f) => !commonFeatureKeys(plans).includes(f.key))
+      .map((f) => ({
+        label: f.name,
+        render: (p: Plan) => (p.version?.features.includes(f.key) ? <Yes /> : <No />),
+      })),
   ];
+  const col = (p: Plan) => (p.isPopular ? 'bg-[#7F40E8]/[0.05]' : '');
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-[#E7DFF5]">
-      <table className="w-full min-w-[640px] text-left text-sm" aria-label="Plan comparison">
-        <thead className="bg-[#F8F4FD] text-xs uppercase tracking-wider text-[#3D3650]">
+    <div className="overflow-x-auto rounded-2xl border border-[#E7DFF5] bg-white">
+      <table className="w-full min-w-[680px] text-left text-sm" aria-label="Plan comparison">
+        <thead>
           <tr>
-            <th scope="col" className="px-4 py-3">
+            <th scope="col" className="w-1/4 px-5 pb-5 pt-6 align-bottom text-xs font-semibold uppercase tracking-wider text-[#3D3650]">
               Compare plans
             </th>
-            {plans.map((p) => (
-              <th key={p.id} scope="col" className="px-4 py-3 text-center text-[#170B2E]">
-                {p.name}
-              </th>
-            ))}
+            {plans.map((p) => {
+              const price = planPrice(p);
+              return (
+                <th key={p.id} scope="col" className={`px-4 pb-5 pt-6 text-center align-bottom ${col(p)}`}>
+                  {p.isPopular && (
+                    <span className="mb-2 inline-flex items-center gap-1 rounded-full bg-[#7F40E8] px-2.5 py-0.5 text-[11px] font-semibold text-white">
+                      <Sparkles size={11} aria-hidden="true" /> {p.badge ?? 'Most popular'}
+                    </span>
+                  )}
+                  <span className="block text-base font-bold text-[#170B2E]">{p.name}</span>
+                  <span className="mt-1 block text-sm font-normal text-[#3D3650]">
+                    {price.suffix ? (
+                      <>
+                        <strong className="text-lg text-[#170B2E]">{price.amount}</strong> / {intervalLabel(p.version)}
+                      </>
+                    ) : (
+                      price.amount
+                    )}
+                  </span>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody className="text-[#3D3650]">
           {rows.map((row) => (
-            <tr key={row.label} className="border-t border-[#E7DFF5]">
-              <th scope="row" className="px-4 py-3 font-medium text-[#170B2E]">
+            <tr key={row.label} className="border-t border-[#F0EAF9] transition-colors hover:bg-[#FBF9FE]">
+              <th scope="row" className="px-5 py-3.5 font-medium text-[#170B2E]">
                 {row.label}
+                {row.hint && <span className="block text-xs font-normal text-[#3D3650]">{row.hint}</span>}
               </th>
               {plans.map((p) => (
-                <td key={p.id} className="px-4 py-3 text-center">
+                <td key={p.id} className={`px-4 py-3.5 text-center ${col(p)}`}>
                   {row.render(p)}
                 </td>
               ))}
             </tr>
           ))}
+          <tr className="border-t border-[#F0EAF9]">
+            <td className="px-5 py-5" />
+            {plans.map((p) => (
+              <td key={p.id} className={`px-4 py-5 text-center ${col(p)}`}>
+                <Link
+                  href={planCtaHref(p, !!token)}
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
+                    p.isPopular ? 'btn-primary text-white' : 'border border-[#E7DFF5] text-[#6425C4] hover:border-[#D6C4EE]'
+                  }`}
+                >
+                  {planCtaLabel(p)} <ArrowRight size={13} aria-hidden="true" />
+                </Link>
+              </td>
+            ))}
+          </tr>
         </tbody>
       </table>
     </div>
@@ -467,55 +697,143 @@ export function PlanComparison({ pricing }: { pricing: PublicPricing }) {
 }
 
 // ── How credits work ─────────────────────────────────────────────────────
+interface Scenario {
+  label: string;
+  media: MediaKey;
+  people: number;
+  minutes: number;
+  /** Minutes one participant shares a screen during the call. */
+  share?: number;
+}
+
 export function HowCreditsWork({ pricing }: { pricing: PublicPricing }) {
   const r = pricing.creditRates;
-  const exampleMinutes = 2 * 10;
-  const exampleCredits = exampleMinutes * r.videoCreditsPerMinute;
-  const rates = [
-    { icon: Mic, label: 'Audio', rate: r.audioCreditsPerMinute },
-    { icon: Video, label: 'Video', rate: r.videoCreditsPerMinute },
-    { icon: Monitor, label: 'Screen share', rate: r.screenShareCreditsPerMinute },
+  const media = mediaRates(r);
+  const scenarios: Scenario[] = [
+    { label: '1:1 video call', media: 'video', people: 2, minutes: 10 },
+    { label: 'Video consultation', media: 'video', people: 2, minutes: 30 },
+    { label: 'Sales call', media: 'audio', people: 2, minutes: 15 },
+    { label: 'Video call + screen share', media: 'video', people: 2, minutes: 10, share: 10 },
+    ...(r.aiCreditsPerMinute != null ? [{ label: 'AI support call', media: 'ai' as const, people: 1, minutes: 8 }] : []),
   ];
+  const [active, setActive] = useState(0);
+  const s = scenarios[active];
+  const m = media.find((x) => x.key === s.media)!;
+  const screenRate = r.screenShareCreditsPerMinute;
+  const units = m.perParticipant ? s.people * s.minutes : s.minutes;
+  const callCredits = units * m.rate;
+  const shareCredits = (s.share ?? 0) * screenRate;
+  const total = Math.ceil(callCredits + shareCredits);
+
+  const steps = [
+    { icon: CreditCard, title: 'Choose a plan', body: 'Pay upfront for a monthly plan. Credits are added the moment payment is confirmed.' },
+    { icon: Coins, title: 'Credits land in your wallet', body: 'One balance for video, audio, screen sharing and AI calls. Top up whenever you need more.' },
+    { icon: PhoneCall, title: 'Calls use credits by the minute', body: 'Each connected participant uses credits at the rate for their call type.' },
+  ];
+  const rules = [
+    { icon: CalendarClock, title: 'Plan credits expire with the period', body: 'Credits from your plan are valid until the end of that plan period.' },
+    { icon: ShieldCheck, title: 'Calls are never cut off', body: 'When credits run out, new calls wait for a top-up or renewal. Calls in progress continue.' },
+    { icon: RefreshCw, title: 'Auto-renew, with notice', body: 'Paid plans renew on your card or UPI Autopay. You are notified first and can turn it off anytime.' },
+    { icon: Receipt, title: 'Never billed after the fact', body: 'You only spend credits you already have. No surprise usage invoices.' },
+  ];
+
   return (
-    <div className="rounded-xl border border-[#E7DFF5] bg-white p-6">
-      <p className="text-sm leading-6 text-[#3D3650]">
-        Every plan includes usage credits. Calls are measured in <strong>participant-minutes</strong> — one connected
-        participant for one minute — and each media type consumes credits at its own rate. When your included credits
-        run low you can top up or upgrade; you are never billed after the fact.
-      </p>
-      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {rates.map((x) => (
-          <div key={x.label} className="rounded-lg border border-[#E7DFF5] bg-[#F8F4FD] p-4 text-center">
-            <x.icon size={20} className="mx-auto text-[#7F40E8]" aria-hidden="true" />
-            <p className="mt-2 text-sm text-[#170B2E]">
-              1 {x.label.toLowerCase()} participant-minute = <strong>{formatRate(x.rate)}</strong>{' '}
-              {x.rate === 1 ? 'credit' : 'credits'}
-            </p>
+    <div className="space-y-6">
+      <ol className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {steps.map((step, i) => (
+          <li key={step.title} className="relative rounded-2xl border border-[#E7DFF5] bg-white p-6">
+            <span className="flex items-center gap-3">
+              <span className="btn-primary flex h-10 w-10 items-center justify-center rounded-xl text-white">
+                <step.icon size={20} aria-hidden="true" />
+              </span>
+              <span className="font-mono text-xs text-[#6425C4]">STEP {i + 1}</span>
+            </span>
+            <p className="mt-4 font-semibold text-[#170B2E]">{step.title}</p>
+            <p className="mt-1 text-sm leading-relaxed text-[#3D3650]">{step.body}</p>
+          </li>
+        ))}
+      </ol>
+
+      <div className="rounded-2xl border border-[#E7DFF5] bg-white p-6 sm:p-8">
+        <div className="flex flex-wrap gap-2">
+          {media.map((x) => (
+            <span key={x.key} className="inline-flex items-center gap-2 rounded-full bg-[#F8F4FD] px-3 py-1.5 text-sm text-[#170B2E] ring-1 ring-[#E7DFF5]">
+              <x.icon size={15} className="text-[#7F40E8]" aria-hidden="true" />
+              {x.perParticipant ? `1 ${x.label.toLowerCase()} participant-minute =` : '1 AI call minute ='}{' '}
+              <strong>{formatRate(x.rate)}</strong> {creditWord(x.rate)}
+            </span>
+          ))}
+        </div>
+
+        <p className="mt-8 text-sm font-semibold text-[#170B2E]">Worked examples</p>
+        <div className="mt-3 flex flex-wrap gap-2" role="tablist" aria-label="Worked examples">
+          {scenarios.map((sc, i) => (
+            <button
+              key={sc.label}
+              type="button"
+              role="tab"
+              aria-selected={i === active}
+              onClick={() => setActive(i)}
+              className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
+                i === active ? 'bg-[#170B2E] text-white' : 'bg-[#F8F4FD] text-[#3D3650] hover:text-[#170B2E]'
+              }`}
+            >
+              {sc.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-5 space-y-3 rounded-xl bg-gradient-to-r from-[#F8F4FD] to-[#EFE5FC] p-5 text-sm text-[#3D3650]" aria-live="polite">
+          <div className="flex flex-wrap items-center gap-3">
+            {m.perParticipant ? (
+              <>
+                <Pill>{s.people} {s.people === 1 ? 'participant' : 'participants'}</Pill>×<Pill>{s.minutes} min</Pill>=
+                <Pill>
+                  {units} {m.label.toLowerCase()} participant-minutes
+                </Pill>
+              </>
+            ) : (
+              <Pill>{s.minutes} AI call minutes</Pill>
+            )}
+            ×<Pill>{formatRate(m.rate)} {creditWord(m.rate)}</Pill>=
+            <span className="font-semibold text-[#170B2E]">{formatRate(callCredits)} credits</span>
+          </div>
+          {s.share != null && (
+            <div className="flex flex-wrap items-center gap-3">
+              +<Pill>1 sharer</Pill>×<Pill>{s.share} min screen share</Pill>×<Pill>{formatRate(screenRate)} {creditWord(screenRate)}</Pill>=
+              <span className="font-semibold text-[#170B2E]">{formatRate(shareCredits)} credits</span>
+            </div>
+          )}
+          <p className="border-t border-[#D6C4EE]/60 pt-3 text-2xl font-bold text-[#170B2E]">{formatRate(total)} credits</p>
+        </div>
+        {s.share != null && (
+          <p className="mt-3 text-xs text-[#3D3650]">
+            Screen sharing happens inside an audio or video call and is counted on top of the call&apos;s own minutes.
+          </p>
+        )}
+        {s.media === 'ai' && (
+          <p className="mt-3 text-xs text-[#3D3650]">AI calls are billed per call minute, not per participant, and need a paid plan.</p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {rules.map((rule) => (
+          <div key={rule.title} className="flex gap-4 rounded-2xl border border-[#E7DFF5] bg-white p-5">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#7F40E8]/10 text-[#7F40E8]">
+              <rule.icon size={20} aria-hidden="true" />
+            </span>
+            <span>
+              <span className="block font-semibold text-[#170B2E]">{rule.title}</span>
+              <span className="mt-1 block text-sm leading-relaxed text-[#3D3650]">{rule.body}</span>
+            </span>
           </div>
         ))}
       </div>
-      {r.aiCreditsPerMinute != null && (
-        <p className="mt-3 text-sm text-[#3D3650]">
-          <strong className="text-[#170B2E]">AI voice:</strong> 1 minute of an AI voice agent call ={' '}
-          <strong>{formatRate(r.aiCreditsPerMinute)}</strong> {r.aiCreditsPerMinute === 1 ? 'credit' : 'credits'}, billed
-          per call (not per participant). AI voice agents are available on paid plans.
-        </p>
-      )}
-      <p className="mt-5 text-sm text-[#3D3650]">
-        <strong className="text-[#170B2E]">Example:</strong> 2 participants × 10 min video call = {exampleMinutes} video
-        participant-minutes = <strong>{formatRate(exampleCredits)} credits</strong>.
-      </p>
-      <p className="mt-2 text-sm text-[#3D3650]">
-        Screen sharing is its own category: 1 participant sharing for 10 minutes uses 10 screen-share participant-minutes
-        ({formatRate(10 * r.screenShareCreditsPerMinute)} credits), separately from audio or video.
-      </p>
-      <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-[#3D3650]">
-        <li>Plan credits are added when your payment is confirmed and expire at the end of the plan period.</li>
-        <li>When credits run out, new calls cannot start until you top up, renew or upgrade. Calls already in progress are never cut off.</li>
-        <li>Paid plans auto-renew at the start of each period on your card or UPI Autopay — you are notified first and can turn it off anytime.</li>
-      </ul>
     </div>
   );
+}
+
+function Pill({ children }: { children: React.ReactNode }) {
+  return <span className="rounded-lg bg-white px-3 py-1.5 font-medium text-[#170B2E] ring-1 ring-[#E7DFF5]">{children}</span>;
 }
 
 // ── Top-ups ──────────────────────────────────────────────────────────────
@@ -589,7 +907,7 @@ export default function PricingSection({ variant = 'summary', bare = false }: { 
         {state.status === 'ready' && (
           <>
             <PlanCards pricing={state.data} />
-            <CreditRateStrip rates={state.data.creditRates} />
+            <CreditRateStrip rates={state.data.creditRates} plans={state.data.plans} />
             <p className="mt-5 text-center text-xs text-[#3D3650]">{gstNote(state.data.creditRates)}</p>
 
             {full ? (

@@ -124,26 +124,46 @@ body {
   color: var(--brand-dark);
 }
 
-/* Stripe WebGL gradient canvas */
-.stripe-gradient-canvas {
+/* Hero background: soft drifting blobs (CSS transforms only, see HeroGlow.tsx) */
+.hero-glow {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
+  overflow: hidden;
   background: #FFFFFF;
-  --gradient-color-1: #FFFFFF;
-  --gradient-color-2: #d9d7ff;;
-  opacity: 0;
-  transition: opacity 1.2s ease;
 }
-
-.stripe-gradient-canvas.isLoaded {
-  opacity: 1;
+.hero-glow-blob {
+  position: absolute;
+  border-radius: 9999px;
+  will-change: transform;
+  animation: hero-glow-drift 22s ease-in-out infinite alternate;
 }
-
+.hero-glow-blob--1 {
+  width: 60vw; height: 60vw; max-width: 900px; max-height: 900px;
+  top: -25%; right: -15%;
+  background: radial-gradient(closest-side, rgba(217, 215, 255, 0.9), rgba(217, 215, 255, 0));
+}
+.hero-glow-blob--2 {
+  width: 45vw; height: 45vw; max-width: 700px; max-height: 700px;
+  bottom: -30%; right: 10%;
+  background: radial-gradient(closest-side, rgba(196, 170, 245, 0.55), rgba(196, 170, 245, 0));
+  animation-duration: 28s;
+  animation-delay: -8s;
+}
+.hero-glow-blob--3 {
+  width: 40vw; height: 40vw; max-width: 600px; max-height: 600px;
+  top: 10%; left: -15%;
+  background: radial-gradient(closest-side, rgba(233, 225, 255, 0.8), rgba(233, 225, 255, 0));
+  animation-duration: 34s;
+  animation-delay: -15s;
+}
+@keyframes hero-glow-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(-6%, 5%, 0) scale(1.08); }
+  100% { transform: translate3d(4%, -4%, 0) scale(0.95); }
+}
+.hero-glow[data-paused] .hero-glow-blob { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) {
-  .stripe-gradient-canvas { display: none; }
+  .hero-glow-blob { animation: none; }
 }
 
 .hero-badge-dot {

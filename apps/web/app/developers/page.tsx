@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ArrowRight, Bot, Sparkles, Wrench, Server, Mic } from "lucide-react";
 import {
    ArchitectureExplorer,
    IntegrationSelector,
@@ -8,6 +9,33 @@ import { ContentSection, PublicPage } from "../components/marketing/PublicPage";
 import { JsonLd } from "../components/seo/JsonLd";
 import { pageMetadata, siteUrl } from "../lib/seo";
 import { sdks } from "../lib/sdks";
+
+const AI_STEPS = [
+   {
+      icon: Bot,
+      title: "Configure an agent",
+      body: "Instructions, greeting, voice, language and tools, set in the dashboard.",
+      href: "/docs/ai-agents#tools",
+   },
+   {
+      icon: Server,
+      title: "Create a session on your server",
+      body: "client.ai.createSession() returns a short-lived token for the browser.",
+      href: "/docs/ai-agents#server-session",
+   },
+   {
+      icon: Mic,
+      title: "Talk to it in the browser",
+      body: "Use the headless PurpleCallioAgentCall or the drop-in React component.",
+      href: "/docs/ai-agents#browser-sdk",
+   },
+   {
+      icon: Wrench,
+      title: "Let it call your APIs",
+      body: "Signed tool requests to your endpoints, with optional user confirmation.",
+      href: "/docs/ai-agents#tool-signatures",
+   },
+] as const;
 
 export const metadata: Metadata = pageMetadata({
    title: "Developer Platform: Video, Audio & AI Voice",
@@ -47,6 +75,11 @@ const tools = [
       "Add browser-native sharing to a communication experience.",
       "/docs/screen-sharing",
    ],
+   [
+      "AI voice agents",
+      "Real-time voice agents that talk to users and call your APIs.",
+      "/docs/ai-agents",
+   ],
 ] as const;
 
 export default function DevelopersPage() {
@@ -54,7 +87,7 @@ export default function DevelopersPage() {
       <PublicPage
          eyebrow="For developers"
          title="Build real-time communication into your application."
-         intro="Add audio, video and screen sharing using PurpleCallio's hosted UI, React components, headless SDK or REST APIs."
+         intro="Add audio, video, screen sharing and AI voice agents using PurpleCallio's hosted UI, React components, headless SDK or REST APIs."
          crumbs={[
             { label: "Home", href: "/" },
             { label: "Developers", href: "/developers" },
@@ -69,11 +102,11 @@ export default function DevelopersPage() {
                operatingSystem: "Web",
                url: new URL("/developers", siteUrl).toString(),
                description:
-                  "Developer tools for integrating real-time audio, video, and screen sharing.",
+                  "Developer tools for integrating real-time audio, video, screen sharing and AI voice agents.",
             }}
          />
          <section
-            className="grid gap-4 md:grid-cols-3"
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
             aria-label="Integration paths"
          >
             {[
@@ -111,6 +144,72 @@ export default function DevelopersPage() {
                   </p>
                </article>
             ))}
+         </section>
+         <section
+            id="ai-voice-agents"
+            aria-labelledby="ai-voice-agents-title"
+            className="relative overflow-hidden rounded-3xl p-6 text-white sm:p-10"
+            style={{ background: "radial-gradient(120% 90% at 0% 0%, #8B4DF0 0%, #5B1BB5 45%, #2B0F52 100%)" }}
+         >
+            <div className="flex flex-wrap items-start justify-between gap-6">
+               <div className="max-w-2xl">
+                  <p className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">
+                     <Sparkles size={14} aria-hidden="true" /> New · AI Voice Agents
+                  </p>
+                  <h2 id="ai-voice-agents-title" className="mt-4 text-2xl font-bold sm:text-3xl">
+                     Build AI voice agents with the same API keys and SDK.
+                  </h2>
+                  <p className="mt-3 leading-7 text-white/80">
+                     Real-time, interruptible voice conversations that look things up and take actions
+                     through your own APIs. PurpleCallio runs the audio relay, the model connection, tool
+                     calls, transcripts and per-minute credit billing. Available on paid plans.
+                  </p>
+               </div>
+               <Link
+                  href="/docs/ai-agents"
+                  className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-[#5B1BB5] transition-all hover:-translate-y-0.5"
+               >
+                  Read the AI agents docs <ArrowRight size={16} aria-hidden="true" />
+               </Link>
+            </div>
+
+            <ol className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+               {AI_STEPS.map((step, i) => (
+                  <li key={step.title}>
+                     <Link
+                        href={step.href}
+                        className="group flex h-full flex-col rounded-2xl bg-white/10 p-5 ring-1 ring-white/20 transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                     >
+                        <span className="flex items-center justify-between">
+                           <step.icon size={20} aria-hidden="true" />
+                           <span className="font-mono text-xs text-white/60">0{i + 1}</span>
+                        </span>
+                        <span className="mt-4 font-semibold">{step.title}</span>
+                        <span className="mt-1 flex-1 text-sm leading-6 text-white/75">{step.body}</span>
+                        <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-white/90">
+                           Read this step
+                           <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                        </span>
+                     </Link>
+                  </li>
+               ))}
+            </ol>
+
+            <pre className="mt-6 overflow-x-auto rounded-2xl bg-[#1A0B33]/70 p-5 font-mono text-[13px] leading-6 text-white/90 ring-1 ring-white/10">
+               <code>{`// Server: create a session with your API key
+const { token } = await client.ai.createSession({ agentId, participant: { id: user.id } });
+
+// Browser: start the conversation from a click
+const call = new PurpleCallioAgentCall({ token, apiUrl });
+await call.start();`}</code>
+            </pre>
+
+            <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+               <Link href="/docs/ai-agents#react" className="text-white/85 hover:text-white">React hook &amp; component →</Link>
+               <Link href="/docs/ai-agents#errors" className="text-white/85 hover:text-white">Error codes →</Link>
+               <Link href="/docs/ai-agents#limits" className="text-white/85 hover:text-white">Limits →</Link>
+               <Link href="/features/ai-voice-agents" className="text-white/85 hover:text-white">Use cases &amp; overview →</Link>
+            </div>
          </section>
          <ContentSection title="Official SDKs for every platform">
             <p>

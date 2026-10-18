@@ -93,7 +93,31 @@ describe('AI voice rate', () => {
 
   it('is listed with the media rates on the pricing page', () => {
     render(<CreditRateStrip rates={config as unknown as CreditRates} />);
-    expect(screen.getByTestId('ai-rate').textContent).toContain('AI voice: 15 credits/min');
+    expect(screen.getByTestId('ai-rate').textContent).toContain('AI voice15 credits/min');
+    expect(screen.getByTestId('ai-rate').textContent).toContain('paid plans');
+  });
+
+  it('estimates a one-to-one call, with screen sharing only as an add-on', () => {
+    render(<CreditRateStrip rates={config as unknown as CreditRates} />);
+    // No participants slider. Default: 2 people × 30 min video at 4 credits/min.
+    expect(screen.queryByLabelText(/Participants/)).toBeNull();
+    expect(screen.getByText('2 people × 30 min video × 4')).toBeTruthy();
+    expect(screen.getByText(/credits per call/).parentElement!.textContent).toContain('240');
+
+    fireEvent.change(screen.getByLabelText(/Call length/), { target: { value: '10' } });
+    expect(screen.getByText(/credits per call/).parentElement!.textContent).toContain('80');
+
+    // Screen sharing adds the sharer's minutes on top of the call: 80 + 10 × 1.
+    fireEvent.click(screen.getByText('Screen share').closest('button')!);
+    expect(screen.getByText('1 sharer × 10 min screen share × 1')).toBeTruthy();
+    expect(screen.getByText(/credits per call/).parentElement!.textContent).toContain('90');
+
+    // AI is per call minute (10 × 15) and can't have screen sharing.
+    fireEvent.click(screen.getByTestId('ai-rate'));
+    expect(screen.getByText('10 AI call min × 15')).toBeTruthy();
+    expect(screen.queryByText(/screen share ×/)).toBeNull();
+    expect(screen.getByText('Screen share').closest('button')!.hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText(/credits per call/).parentElement!.textContent).toContain('150');
   });
 });
 

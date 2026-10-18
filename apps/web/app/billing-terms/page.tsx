@@ -77,7 +77,7 @@ export default function BillingTermsPage() {
         </p>
         <LegalBullets items={[
           "Audio: 2 participants × 10 minutes = 20 audio participant-minutes",
-          "Video: 3 participants × 20 minutes = 60 video participant-minutes",
+          "Video: 2 participants × 30 minutes = 60 video participant-minutes",
         ]} />
         <p>
           Credits are consumed per participant, not per room. Audio, video and screen sharing are
