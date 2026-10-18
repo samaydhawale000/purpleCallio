@@ -79,7 +79,7 @@ const features = {
    },
    "screen-sharing": {
       title: "Add Screen Sharing to Your Application",
-      meta: "Screen Sharing API | WebRTC Screen Sharing SDK",
+      meta: "Screen Sharing API & WebRTC SDK",
       description:
          "Add browser screen sharing to a calling experience with PurpleCallio's hosted UI, React components, and headless SDK.",
       summary:

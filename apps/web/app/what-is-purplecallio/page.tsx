@@ -6,9 +6,9 @@ import { PURPLECALLIO_DESCRIPTION, PURPLECALLIO_HOST, PURPLECALLIO_NAME } from "
 import { pageMetadata, siteUrl } from "../lib/seo";
 
 export const metadata: Metadata = pageMetadata({
-   title: "What is PurpleCallio? | Real-Time Communication Infrastructure",
+   title: "What is PurpleCallio? Calling APIs Explained",
    description:
-      "Learn what PurpleCallio is, how its audio and video communication infrastructure works, and how developers can integrate it using hosted UI, React components, SDKs and APIs.",
+      "Learn what PurpleCallio is, how its video, audio and AI voice infrastructure works, and how to integrate it with hosted UI, React components, SDKs and APIs.",
    path: "/what-is-purplecallio",
 });
 

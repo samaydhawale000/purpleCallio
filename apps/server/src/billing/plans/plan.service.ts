@@ -205,6 +205,40 @@ export class PlanService {
       this.logger.log('Seeded default plans.');
     }
 
+    const activeFree = await this.prisma.plan.findFirst({
+      where: {
+        type: PlanType.FREE,
+        status: PlanStatus.ACTIVE,
+        currentVersionId: { not: null },
+      },
+    });
+    if (!activeFree) {
+      let slug = 'free';
+      for (
+        let n = 2;
+        await this.prisma.plan.findUnique({ where: { slug } });
+        n++
+      )
+        slug = `free-${n}`;
+      await this.createPlan(
+        {
+          slug,
+          name: 'Free',
+          type: 'FREE',
+          displayOrder: 0,
+          ctaAction: 'SIGNUP',
+          ctaLabel: 'Start free',
+          description: 'Build and test with a monthly credit allowance.',
+          pricePaise: 0,
+          includedCredits: 1500,
+          features: CORE_FEATURES,
+        },
+        null,
+        { skipAudit: true },
+      );
+      this.logger.warn(`No active Free plan found; seeded "${slug}".`);
+    }
+
     if ((await this.prisma.topUpPackage.count()) === 0) {
       await this.prisma.topUpPackage.createMany({
         data: [
@@ -466,6 +500,9 @@ export class PlanService {
     );
     if (display.status && display.status !== existing.status) {
       await this.assertNotLastFreePlan(existing, display.status);
+    }
+    if (display.type && display.type !== existing.type) {
+      await this.assertNotLastFreePlan(existing, PlanStatus.ARCHIVED);
     }
 
     const termsChanged = this.termsDiffer(terms, existing.currentVersion);

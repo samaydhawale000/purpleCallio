@@ -32,10 +32,10 @@ import { AI_REACT_COMPONENT_EXAMPLE, AI_SECURITY_NOTES, AI_SERVER_SESSION_EXAMPL
 const PATH = "/features/ai-voice-agents";
 const TITLE = "AI Voice Agents for Your Product";
 const DESCRIPTION =
-   "Add real-time AI voice agents to your app with PurpleCallio: natural, interruptible conversations that call your APIs, with transcripts, analytics and per-minute credits.";
+   "Add real-time AI voice agents to your app: natural, interruptible conversations that call your APIs, with transcripts, analytics and per-minute credits.";
 
 export const metadata = pageMetadata({
-   title: "AI Voice Agents API | Real-Time Voice AI SDK | PurpleCallio",
+   title: "AI Voice Agents API & Voice AI SDK",
    description: DESCRIPTION,
    path: PATH,
 });

@@ -10,9 +10,9 @@ import { pageMetadata, siteUrl } from "../lib/seo";
 import { sdks } from "../lib/sdks";
 
 export const metadata: Metadata = pageMetadata({
-   title: "PurpleCallio Developer Platform | Audio, Video & WebRTC",
+   title: "Developer Platform: Video, Audio & AI Voice",
    description:
-      "Choose PurpleCallio hosted UI, React components, or a headless SDK to add audio, video, screen sharing, and WebRTC communication to your application.",
+      "Choose PurpleCallio hosted UI, React components or a headless SDK to add video, audio, screen sharing and AI voice agents to your application.",
    path: "/developers",
 });
 

@@ -5,9 +5,9 @@ import { PlanEstimator } from "../components/marketing/InteractiveTools";
 import { pageMetadata } from "../lib/seo";
 
 export const metadata: Metadata = pageMetadata({
-   title: "PurpleCallio Pricing | Prepaid Plans for Audio & Video APIs",
+   title: "Pricing: Prepaid Plans for Calling & AI APIs",
    description:
-      "Simple prepaid plans for PurpleCallio's audio, video and screen sharing APIs. Pay upfront, get included usage credits, top up when you need more and upgrade as you grow — no surprise usage bills.",
+      "Simple prepaid plans for PurpleCallio's video, audio and AI voice APIs. Pay upfront, get usage credits, top up when you need more. No surprise usage bills.",
    path: "/pricing",
 });
 

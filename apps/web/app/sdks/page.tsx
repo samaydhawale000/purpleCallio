@@ -7,9 +7,9 @@ import { PURPLECALLIO_NPM } from "../lib/brand";
 import { sdks } from "../lib/sdks";
 
 export const metadata: Metadata = pageMetadata({
-   title: "PurpleCallio Developer SDKs | Voice & Video for Every Platform",
+   title: "SDKs for Voice, Video & AI on Every Platform",
    description:
-      "Add real-time voice and video communication to JavaScript, React, Angular, React Native, Vue, and Svelte apps with PurpleCallio's official SDKs, built on a developer-first WebRTC platform.",
+      "Official PurpleCallio SDKs for JavaScript, React, Angular, React Native, Vue and Svelte. Add real-time voice, video and AI voice agents to your app.",
    path: "/sdks",
 });
 

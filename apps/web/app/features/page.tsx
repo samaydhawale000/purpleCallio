@@ -6,7 +6,7 @@ import { pageMetadata, siteUrl } from "../lib/seo";
 import { CORE_FEATURES, PLATFORM_FEATURES } from "../lib/feature-catalog";
 
 export const metadata = pageMetadata({
-   title: "Features | Video, Audio and AI Voice Agents | PurpleCallio",
+   title: "Features: Video, Audio & AI Voice Agents",
    description:
       "PurpleCallio features: browser video calling, audio calling and real-time AI voice agents, plus screen sharing, signaling and TURN relay.",
    path: "/features",

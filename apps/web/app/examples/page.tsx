@@ -4,7 +4,7 @@ import { ContentSection, PublicPage } from "../components/marketing/PublicPage";
 import { pageMetadata } from "../lib/seo";
 
 export const metadata: Metadata = pageMetadata({
-   title: "PurpleCallio Integration Examples",
+   title: "Integration Examples for Video & Audio Calls",
    description:
       "Official PurpleCallio examples for JavaScript, React, audio, video, screen sharing, and hosted UI integrations.",
    path: "/examples",
