@@ -125,6 +125,8 @@ export class CallService implements OnModuleInit {
         projectId: data.projectId,
         status: { in: [CallStatus.RINGING, CallStatus.ACCEPTED] },
         OR: [{ callerId: data.receiverId }, { receiverId: data.receiverId }],
+        // Talking to an AI agent doesn't make someone busy for people.
+        source: { not: CallSource.AI_AGENT },
       },
     });
     if (receiverBusy) {
@@ -461,6 +463,9 @@ export class CallService implements OnModuleInit {
       include: { project: true },
     });
     if (!call) throw new NotFoundException('Call not found');
+    // AI calls are ended by AiSessionService and never billed here.
+    if (call.source === CallSource.AI_AGENT)
+      return this.prisma.call.findUniqueOrThrow({ where: { id: callId } });
 
     if (call.source === CallSource.PLAYGROUND) {
       const endedAt = new Date();

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Building2, Check, Coins, Minus, Mic, Monitor, RefreshCw, Rocket, Sparkles, Video } from 'lucide-react';
+import { ArrowRight, Bot, Building2, Check, Coins, Minus, Mic, Monitor, RefreshCw, Rocket, Sparkles, Video } from 'lucide-react';
 import { formatCredits, formatMoney, intervalLabel, type CreditRates, type Plan, type PublicPricing } from '../lib/billing';
 import {
   featureNames,
@@ -92,6 +92,7 @@ export function CreditRateStrip({ rates }: { rates: CreditRates }) {
     { icon: Video, label: 'Video', rate: rates.videoCreditsPerMinute },
     { icon: Monitor, label: 'Screen share', rate: rates.screenShareCreditsPerMinute },
   ];
+  const aiRate = rates.aiCreditsPerMinute;
   return (
     <div
       data-testid="credit-rate-strip"
@@ -109,6 +110,13 @@ export function CreditRateStrip({ rates }: { rates: CreditRates }) {
           </li>
         ))}
       </ul>
+      {aiRate != null && (
+        <p data-testid="ai-rate" className="mt-3 flex items-center justify-center gap-2 text-sm text-[#3D3650]">
+          <Bot size={18} className="shrink-0 text-[#7F40E8]" aria-hidden="true" />
+          AI voice: <span className="font-bold text-[#170B2E]">{formatRate(aiRate)} {aiRate === 1 ? 'credit' : 'credits'}/min</span>
+          <span className="text-xs">(per call minute, paid plans)</span>
+        </p>
+      )}
       <p className="mt-3 text-center text-xs text-[#3D3650]">
         A participant-minute is one connected participant for one minute: 2 people on a 10-minute video call use{' '}
         {formatRate(20 * rates.videoCreditsPerMinute)} credits.
@@ -418,6 +426,10 @@ export function PlanComparison({ pricing }: { pricing: PublicPricing }) {
       label: f.name,
       render: (p: Plan) => (p.version?.features.includes(f.key) ? <Yes /> : <No />),
     })),
+    // AI voice agents need a paid plan: any plan type except FREE, Custom included.
+    ...(pricing.creditRates.aiCreditsPerMinute != null
+      ? [{ label: 'AI voice agents', render: (p: Plan) => (p.type === 'FREE' ? <No /> : <Yes />) }]
+      : []),
   ];
 
   return (
@@ -482,6 +494,13 @@ export function HowCreditsWork({ pricing }: { pricing: PublicPricing }) {
           </div>
         ))}
       </div>
+      {r.aiCreditsPerMinute != null && (
+        <p className="mt-3 text-sm text-[#3D3650]">
+          <strong className="text-[#170B2E]">AI voice:</strong> 1 minute of an AI voice agent call ={' '}
+          <strong>{formatRate(r.aiCreditsPerMinute)}</strong> {r.aiCreditsPerMinute === 1 ? 'credit' : 'credits'}, billed
+          per call (not per participant). AI voice agents are available on paid plans.
+        </p>
+      )}
       <p className="mt-5 text-sm text-[#3D3650]">
         <strong className="text-[#170B2E]">Example:</strong> 2 participants × 10 min video call = {exampleMinutes} video
         participant-minutes = <strong>{formatRate(exampleCredits)} credits</strong>.

@@ -31,6 +31,7 @@ enum CallStatus {
 enum CallSource {
   CUSTOMER
   PLAYGROUND
+  AI_AGENT
 }
 
 enum PlaygroundAttemptType {
@@ -696,6 +697,8 @@ model Project {
 
   calls Call[]
 
+  aiAgents AiAgent[]
+
   webhookUrl    String?
   webhookSecret String?
 
@@ -774,6 +777,7 @@ model Call {
   events        CallEvent[]
   usageSegments UsageSegment[]
   session       CallSession?
+  aiSession     AiCallSession?
 
   @@index([source, status, expiresAt])
   @@index([source, status, createdAt])
@@ -1067,6 +1071,8 @@ model BillingConfig {
   audioCreditsPerMinute       Int               @default(1)
   videoCreditsPerMinute       Int               @default(4)
   screenShareCreditsPerMinute Int               @default(1)
+  // Credits per minute of an AI voice agent call (whole call, not per participant).
+  aiCreditsPerMinute          Int               @default(15)
   // GST applied on top of plan / top-up prices at checkout.
   taxPercent                  Int               @default(18)
   // % of period credits used that trigger a notification.
@@ -1225,4 +1231,208 @@ model ProviderPlan {
   createdAt       DateTime        @default(now())
 
   @@unique([provider, amountPaise, currency, billingInterval, intervalCount])
+}
+
+// ── AI Voice Agents ────────────────────────────────────
+
+enum AiAgentStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum AiToolMethod {
+  POST
+  GET
+}
+
+model AiAgent {
+  id String @id @default(uuid())
+
+  // Owner is project.ownerId — the same ownership model API keys use.
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  status      AiAgentStatus @default(ACTIVE)
+
+  // Plain id (no FK, to avoid a cyclic relation) of one of this agent's
+  // versions. Config edits create a new version and move this pointer.
+  currentVersionId String?
+
+  storeTranscript         Boolean @default(false)
+  // null | 7 | 30 | 90
+  transcriptRetentionDays Int?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  versions AiAgentVersion[]
+  tools    AiAgentTool[]
+  sessions AiCallSession[]
+
+  @@index([projectId, deletedAt])
+}
+
+/// Immutable snapshot of an agent's call configuration.
+model AiAgentVersion {
+  id String @id @default(uuid())
+
+  agentId String
+  agent   AiAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  version            Int
+  instructions       String
+  welcomeMessage     String?
+  language           String  @default("en")
+  voice              String?
+  provider           String  @default("gemini")
+  model              String?
+  maxDurationSeconds Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([agentId, version])
+}
+
+model AiAgentTool {
+  id String @id @default(uuid())
+
+  agentId String
+  agent   AiAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  name                 String
+  description          String
+  parametersSchema     Json
+  endpointUrl          String
+  method               AiToolMethod @default(POST)
+  enabled              Boolean      @default(true)
+  requiresConfirmation Boolean      @default(false)
+  timeoutMs            Int          @default(8000)
+
+  // Generated server-side; returned to the customer only once, on create.
+  signingSecret String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, name])
+}
+
+enum AiSessionStatus {
+  CREATED
+  CONNECTING
+  ACTIVE
+  ENDED
+  FAILED
+  EXPIRED
+}
+
+/// One AI voice call. Owns the browser token and, later, provider usage.
+/// Never has CallSession / CallUsage rows: AI calls stay out of the
+/// human-call billing path.
+model AiCallSession {
+  id String @id @default(uuid())
+
+  callId String @unique
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  agentId        String
+  agent          AiAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agentVersionId String
+  projectId      String
+  ownerId        String
+
+  // SHA-256 of the bj_ai_ token; the raw token is returned once.
+  tokenHash String @unique
+
+  provider          String
+  model             String?
+  providerSessionId String?
+
+  status             AiSessionStatus @default(CREATED)
+  terminationReason  String?
+  expiresAt          DateTime
+  connectedAt        DateTime?
+  endedAt            DateTime?
+  lastHeartbeatAt    DateTime?
+  durationSeconds    Int?
+  maxDurationSeconds Int
+
+  participantId   String
+  participantName String?
+  metadata        Json?
+  // Enabled tools at creation time (no signing secrets).
+  toolsSnapshot   Json
+
+  inputTokens       Int       @default(0)
+  outputTokens      Int       @default(0)
+  toolCallCount     Int       @default(0)
+  providerCostPaise Int?
+  creditsCharged    Int?
+  // Credits the balance couldn't cover when the call was billed.
+  creditsShortfall  Int?
+  usageRecordedAt   DateTime?
+
+  toolInvocations AiToolInvocation[]
+  messages        AiConversationMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId, status])
+  @@index([agentId, createdAt])
+  @@index([usageRecordedAt])
+}
+
+enum AiToolInvocationStatus {
+  SUCCESS
+  FAILED
+  TIMEOUT
+  REJECTED
+  UNCONFIRMED
+}
+
+/// One tool call in an AI session. Never stores arguments or responses.
+model AiToolInvocation {
+  id String @id @default(uuid())
+
+  sessionId String
+  session   AiCallSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // Plain id: the tool may be deleted later; the name keeps the row readable.
+  toolId    String?
+  toolName  String
+  status    AiToolInvocationStatus
+  latencyMs Int
+  errorCode String?
+
+  createdAt DateTime @default(now())
+
+  @@index([sessionId, createdAt])
+  @@index([toolId, createdAt])
+}
+
+enum AiMessageRole {
+  USER
+  ASSISTANT
+  TOOL
+}
+
+/// One final transcript segment, redacted before insert. Only written when
+/// the agent's storeTranscript is on; purged after transcriptRetentionDays.
+model AiConversationMessage {
+  id String @id @default(uuid())
+
+  sessionId String
+  session   AiCallSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  role    AiMessageRole
+  content String
+
+  createdAt DateTime @default(now())
+
+  @@index([sessionId, createdAt])
+  @@index([createdAt])
 }

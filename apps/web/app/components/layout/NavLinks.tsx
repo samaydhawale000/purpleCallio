@@ -5,7 +5,7 @@ import Link from "next/link";
 const links = [
   {
     label: "Features",
-    href: "/features/video-calling",
+    href: "/features",
   },
   {
     label: "Developers",

@@ -14,7 +14,7 @@ const FIELDS = [
   { key: 'screenShareCreditsPerMinute', label: 'Screen share' },
 ] as const;
 
-type Key = (typeof FIELDS)[number]['key'] | 'minimumCreditsToStartCall';
+type Key = (typeof FIELDS)[number]['key'] | 'minimumCreditsToStartCall' | 'aiCreditsPerMinute';
 
 /** Mirrors the server: participant-minutes × rate, rounded up to whole credits. */
 export function exampleCredits(participants: number, minutes: number, perMinute: number) {
@@ -38,6 +38,8 @@ export function CreditRatesTab() {
     const f = {} as Record<Key, string>;
     for (const { key } of FIELDS) f[key] = String(data[key] ?? 0);
     f.minimumCreditsToStartCall = String(data.minimumCreditsToStartCall ?? 0);
+    // Only servers with AI billing send the AI rate.
+    if (data.aiCreditsPerMinute !== undefined) f.aiCreditsPerMinute = String(data.aiCreditsPerMinute);
     setForm(f);
   }, [data]);
 
@@ -55,6 +57,9 @@ export function CreditRatesTab() {
     for (const k of Object.keys(form) as Key[]) {
       if (!/^\d+$/.test(form[k].trim())) return setSaveError('All rates must be non-negative whole numbers.');
       body[k] = Number(form[k]);
+    }
+    if (body.aiCreditsPerMinute !== undefined && body.aiCreditsPerMinute < 1) {
+      return setSaveError('AI voice must be at least 1 credit per minute.');
     }
     setSaving(true);
     try {
@@ -96,6 +101,29 @@ export function CreditRatesTab() {
           </Field>
         </div>
       </Panel>
+
+      {form.aiCreditsPerMinute !== undefined && (
+        <Panel
+          title="AI voice agents"
+          subtitle="Credits per minute of an AI voice agent call (whole call, not per participant), rounded up to whole credits per call."
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Field
+              label="AI voice (credits / call-min)"
+              hint={`New AI calls need at least max(minimum to start, this rate) credits. A ${m}-min AI call uses ${formatCredits(exampleCredits(1, m, num('aiCreditsPerMinute')))} credits.`}
+            >
+              <input
+                type="number"
+                min={1}
+                disabled={!canWrite}
+                className={inputCls}
+                value={form.aiCreditsPerMinute}
+                onChange={(e) => setForm({ ...form, aiCreditsPerMinute: e.target.value })}
+              />
+            </Field>
+          </div>
+        </Panel>
+      )}
 
       <Panel title="Live example" subtitle="Calculated from the values above.">
         <div className="flex flex-wrap items-end gap-3 mb-4">

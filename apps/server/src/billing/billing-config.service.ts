@@ -22,6 +22,7 @@ export type BillingConfigUpdate = Partial<
     | 'audioCreditsPerMinute'
     | 'videoCreditsPerMinute'
     | 'screenShareCreditsPerMinute'
+    | 'aiCreditsPerMinute'
     | 'taxPercent'
     | 'lowCreditThresholds'
     | 'minimumCreditsToStartCall'
@@ -38,6 +39,7 @@ const INT_FIELDS = [
   'audioCreditsPerMinute',
   'videoCreditsPerMinute',
   'screenShareCreditsPerMinute',
+  'aiCreditsPerMinute',
   'taxPercent',
   'minimumCreditsToStartCall',
   'renewalReminderDays',
@@ -120,6 +122,14 @@ export class BillingConfigService {
     }
     if (input.taxPercent !== undefined && input.taxPercent > 100) {
       throw new BadRequestException('taxPercent must be between 0 and 100.');
+    }
+    // AI calls have a real provider cost, and the per-session balance cap
+    // divides by this rate.
+    if (
+      input.aiCreditsPerMinute !== undefined &&
+      input.aiCreditsPerMinute < 1
+    ) {
+      throw new BadRequestException('aiCreditsPerMinute must be at least 1.');
     }
     if (
       input.pendingCheckoutTtlHours !== undefined &&

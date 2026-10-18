@@ -34,6 +34,9 @@ ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
 ENV NEXT_PUBLIC_RAZORPAY_KEY_ID=$NEXT_PUBLIC_RAZORPAY_KEY_ID
 
+# The web app imports @purplecallio/sdk's built dist/ (workspace symlink)
+RUN npm run build -w packages/sdk
+
 WORKDIR /app/apps/web
 RUN npm run build
 

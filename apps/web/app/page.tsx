@@ -11,8 +11,12 @@ import {
    IntegrationSelector,
 } from "./components/marketing/InteractiveTools";
 import {
+   ArrowRight,
    Atom,
    Blocks,
+   Bot,
+   CalendarCheck,
+   PackageSearch,
    BookOpen,
    BriefcaseBusiness,
    Globe2,
@@ -68,6 +72,10 @@ const FEATURES = [
    {
       title: "Audio & Video Calls",
       body: "Browser audio and video communication built on WebRTC, with simple prepaid plans and included usage credits — no surprise usage bills.",
+   },
+   {
+      title: "AI Voice Agents",
+      body: "Real-time AI agents that talk to your users and call your APIs through secure tools. Included on paid plans, billed per minute in credits.",
    },
    {
       title: "Screen Sharing",
@@ -181,6 +189,29 @@ const PRODUCTS = [
    },
 ];
 
+const AI_USE_CASES = [
+   {
+      icon: Headphones,
+      title: "24/7 support",
+      body: "Answers questions and checks accounts, then hands off to a person with a summary.",
+   },
+   {
+      icon: CalendarCheck,
+      title: "Bookings",
+      body: "Finds a free slot and books it once the user confirms.",
+   },
+   {
+      icon: PackageSearch,
+      title: "Order status",
+      body: "Looks up the order and explains exactly where it is.",
+   },
+   {
+      icon: Target,
+      title: "Lead qualification",
+      body: "Asks your qualifying questions and books the demo.",
+   },
+];
+
 const STEPS = [
    {
       step: "Create a call",
@@ -288,7 +319,11 @@ export default function LandingPage() {
                   signaling, authentication, participant sessions, and calling
                   interfaces from scratch, developers can integrate PurpleCallio
                   through hosted UI, React components, a headless SDK, or REST
-                  APIs.
+                  APIs, and add{" "}
+                  <Link href="/features/ai-voice-agents" className="font-medium text-[#6425C4] underline-offset-2 hover:underline">
+                     AI voice agents
+                  </Link>{" "}
+                  that talk to users for you.
                </p>
 
                <p className="text-balance text-[#170B2E] text-base font-medium leading-relaxed mb-6">
@@ -358,6 +393,56 @@ export default function LandingPage() {
                         sizes="(min-width: 1024px) 42vw, (min-width: 640px) 80vw, 100vw"
                      />
                   </div>
+               </div>
+            </div>
+         </section>
+
+         {/* ── AI voice agents ── */}
+         <section id="ai-voice-agents" className="px-6 py-24 text-white" style={{ background: "radial-gradient(120% 90% at 0% 0%, #8B4DF0 0%, #5B1BB5 45%, #2B0F52 100%)" }}>
+            <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+               <div>
+                  <p className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold mb-5">
+                     <Sparkles size={14} aria-hidden="true" /> New · AI Voice Agents
+                  </p>
+                  <h2 className="lp-h2 font-bold mb-4">
+                     Let an AI agent answer the call.
+                  </h2>
+                  <p className="text-white/80 leading-relaxed mb-8 max-w-xl">
+                     Add a natural-sounding voice agent to your product. It
+                     talks to your users in real time, looks things up in your
+                     systems and takes actions through your APIs. Configure it
+                     in the dashboard; no machine-learning work needed.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                     <Link
+                        href="/features/ai-voice-agents"
+                        className="inline-flex items-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-semibold text-[#5B1BB5] hover:bg-white/90"
+                     >
+                        Explore AI voice agents <ArrowRight size={16} aria-hidden="true" />
+                     </Link>
+                     <Link
+                        href="/docs/ai-agents"
+                        className="rounded-lg border border-white/30 px-5 py-3 text-sm font-medium text-white hover:bg-white/10"
+                     >
+                        Read the docs
+                     </Link>
+                  </div>
+                  <p className="mt-4 text-sm text-white/70">Included on every paid plan.</p>
+               </div>
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {AI_USE_CASES.map((uc) => (
+                     <div key={uc.title} className="rounded-xl bg-white/10 p-5 ring-1 ring-white/20">
+                        <uc.icon size={22} aria-hidden="true" />
+                        <p className="mt-3 font-semibold">{uc.title}</p>
+                        <p className="mt-1 text-sm text-white/75 leading-relaxed">{uc.body}</p>
+                     </div>
+                  ))}
+                  <Link
+                     href="/features/ai-voice-agents#use-cases"
+                     className="sm:col-span-2 inline-flex items-center justify-center gap-2 rounded-xl border border-white/25 p-4 text-sm font-medium hover:bg-white/10"
+                  >
+                     <Bot size={18} aria-hidden="true" /> See all use cases <ArrowRight size={16} aria-hidden="true" />
+                  </Link>
                </div>
             </div>
          </section>

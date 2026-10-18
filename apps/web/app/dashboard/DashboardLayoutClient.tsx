@@ -10,6 +10,7 @@ import {
   KeyRound,
   PhoneCall,
   Play,
+  Bot,
   Gauge,
   CreditCard,
   BookOpen,
@@ -25,6 +26,7 @@ import { NotificationBell } from '../components/notifications/NotificationBell';
 import { notifyNotificationsChanged } from '../lib/notifications';
 import { useRealtimeEvent } from '../lib/realtime';
 import { useRequireAuth } from '../hooks/useRequireAuth';
+import { useAiStatus } from '../lib/ai';
 import logo from '../assets/images/logo.webp';
 
 const NAV_ITEMS = [
@@ -41,6 +43,9 @@ const NAV_ITEMS = [
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 
+// Shown after Playground, only while GET /ai/status says AI is enabled.
+const AI_NAV_ITEM = { label: 'AI Agents', href: '/dashboard/ai', icon: Bot };
+
 export default function DashboardLayout({
   children,
 }: {
@@ -51,6 +56,10 @@ const logout = useAuthStore((s) => s.logout);
   const router = useRouter();
   const pathname = usePathname();
   const { isReady } = useRequireAuth();
+  const { status: aiStatus } = useAiStatus();
+  const navItems = aiStatus?.enabled
+    ? NAV_ITEMS.flatMap((item) => (item.href === '/dashboard/playground' ? [item, AI_NAV_ITEM] : [item]))
+    : NAV_ITEMS;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // One subscription per layout; the bell(s) and notification page listen
@@ -140,7 +149,7 @@ const logout = useAuthStore((s) => s.logout);
             Workspace
           </p>
           <div className="flex flex-col gap-0.5">
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const Icon = item.icon;
               const active =
                 pathname === item.href ||

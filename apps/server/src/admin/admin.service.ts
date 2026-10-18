@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CallStatus } from '@prisma/client';
+import { CallSource, CallStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CallGateway } from '../socket/gateways/call.gateway';
 import { TurnService } from '../turn/turn.service';
@@ -13,6 +13,7 @@ import {
 } from '../billing/customer-discount.service';
 import { OciMonitoringService } from '../oci/oci-monitoring.service';
 import { CallService } from '../call/services/call.service';
+import { AiSessionService } from '../ai/ai-session.service';
 import { summarizeWebrtcEvents } from './webrtc-stats';
 
 @Injectable()
@@ -28,6 +29,7 @@ export class AdminService {
     private subscriptions: SubscriptionService,
     private credits: CreditService,
     private autoRenew: AutoRenewService,
+    private aiSessions: AiSessionService,
   ) {}
 
   // ── Overview ──────────────────────────────────────────
@@ -362,6 +364,14 @@ export class AdminService {
   }
 
   async endCall(callId: string) {
+    const call = await this.prisma.call.findUnique({
+      where: { id: callId },
+      select: { source: true, aiSession: { select: { id: true } } },
+    });
+    if (call?.source === CallSource.AI_AGENT && call.aiSession) {
+      await this.aiSessions.end(call.aiSession.id, 'admin');
+      return this.prisma.call.findUniqueOrThrow({ where: { id: callId } });
+    }
     return this.callService.endCall(callId);
   }
 

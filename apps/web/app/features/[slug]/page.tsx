@@ -187,7 +187,7 @@ export default async function FeaturePage({
          intro={item.summary}
          crumbs={[
             { label: "Home", href: "/" },
-            { label: "Features", href: "/#features" },
+            { label: "Features", href: "/features" },
             { label: item.title, href: path },
          ]}
       >
@@ -282,6 +282,18 @@ export default async function FeaturePage({
          </ContentSection>
          <ContentSection title="Related resources">
             <div className="flex flex-wrap gap-4">
+               <Link
+                  href="/features"
+                  className="text-[#6425C4] hover:text-[#170B2E]"
+               >
+                  All features →
+               </Link>
+               <Link
+                  href="/features/ai-voice-agents"
+                  className="text-[#6425C4] hover:text-[#170B2E]"
+               >
+                  AI voice agents →
+               </Link>
                <Link
                   href="/docs/quickstart"
                   className="text-[#6425C4] hover:text-[#170B2E]"

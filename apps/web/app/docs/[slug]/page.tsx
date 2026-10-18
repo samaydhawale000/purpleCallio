@@ -13,6 +13,7 @@ import {
    ReactMeetingPreview,
 } from "../../components/marketing/InteractiveTools";
 import { PricingAuthority } from "../../components/PricingAuthority";
+import { AiAgentsDoc } from "../../components/marketing/AiAgentsDoc";
 import { PURPLECALLIO_API_URL } from "../../lib/brand";
 
 const docs = {
@@ -410,6 +411,27 @@ const docs = {
          ],
       ],
    },
+   "ai-agents": {
+      title: "AI Voice Agents",
+      meta: "AI Voice Agents API",
+      description:
+         "Add a real-time AI voice agent to your app: configure agents and tools, create sessions from your backend, and talk to the agent from the browser or React.",
+      lead: "AI voice agents answer your users by voice in real time. You configure the agent in the dashboard, your backend creates a short-lived session, and the browser streams audio through PurpleCallio to the voice model. Available on every paid plan.",
+      sections: [
+         [
+            "Create an agent",
+            "In Dashboard → AI Agents, create an agent in a project and set its instructions, optional welcome message, voice, language, model provider and maximum call duration (30 seconds to 30 minutes). Each change creates a new version; sessions use the version current when they were created. Try it in the Playground tab before going live.",
+         ],
+         [
+            "Add tools",
+            "Tools let the agent call your HTTPS endpoints mid-conversation, for example to look up an order. Each tool has a name, a description the model reads, a parameters schema, an endpoint, a method (POST or GET), a timeout and an optional confirmation step. Every request is signed with the tool's bj_tool_ secret.",
+         ],
+         [
+            "How a call flows",
+            "Your backend calls POST /ai/sessions with its API key and gets a single-use bj_ai_ token. The browser connects with that token, the agent greets the user, and audio, transcripts and tool activity stream live. The call ends when either side hangs up, the maximum duration is reached, or your backend ends the session.",
+         ],
+      ],
+   },
 } as const;
 type DocSlug = keyof typeof docs;
 const examples: Partial<Record<DocSlug, { title: string; code: string }>> = {
@@ -771,6 +793,7 @@ export default async function DocPage({
                <PricingAuthority />
             </ContentSection>
          )}
+         {slug === "ai-agents" && <AiAgentsDoc />}
          {slug === "quickstart" && (
             <ContentSection title="First successful call in minutes">
                <QuickstartStepper />
@@ -867,6 +890,12 @@ export default async function DocPage({
                   className="text-[#6425C4] hover:text-[#170B2E]"
                >
                   Svelte SDK →
+               </Link>
+               <Link
+                  href="/docs/ai-agents"
+                  className="text-[#6425C4] hover:text-[#170B2E]"
+               >
+                  AI Voice Agents →
                </Link>
                <Link
                   href="/sdks"

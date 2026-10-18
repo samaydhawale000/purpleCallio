@@ -86,6 +86,7 @@ import { SupportModule } from '../support/support.module';
     EntitlementService,
     AutoRenewService,
     CreditService,
+    BillingConfigService,
     BillingGuard,
   ],
 })
