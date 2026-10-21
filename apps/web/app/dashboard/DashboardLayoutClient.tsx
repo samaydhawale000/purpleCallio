@@ -7,7 +7,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   FolderKanban,
-  KeyRound,
   PhoneCall,
   Play,
   Bot,
@@ -32,8 +31,7 @@ import logo from '../assets/images/logo.webp';
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Notifications', href: '/dashboard/notifications', icon: Bell },
-  { label: 'Projects', href: '/dashboard/projects', icon: FolderKanban },
-  { label: 'API Keys', href: '/dashboard/api-keys', icon: KeyRound },
+  { label: 'Projects & Keys', href: '/dashboard/projects', icon: FolderKanban },
   { label: 'Calls', href: '/dashboard/calls', icon: PhoneCall },
   { label: 'Playground', href: '/dashboard/playground', icon: Play },
   { label: 'Usage', href: '/dashboard/usage', icon: Gauge },

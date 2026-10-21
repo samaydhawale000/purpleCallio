@@ -124,7 +124,12 @@ export function PurpleCallioAI({
               onClick={ai.isMuted ? ai.unmute : ai.mute}
               disabled={ai.status !== 'connected'}
               aria-pressed={ai.isMuted}
-              style={{ ...buttonStyle, background: '#1E293B', color: '#E2E8F0' }}
+              style={{
+                ...buttonStyle,
+                background: '#1E293B',
+                color: '#E2E8F0',
+                cursor: ai.status === 'connected' ? 'pointer' : 'not-allowed',
+              }}
             >
               {ai.isMuted ? <MicOffIcon /> : <MicIcon />}
               {ai.isMuted ? 'Unmute' : 'Mute'}
