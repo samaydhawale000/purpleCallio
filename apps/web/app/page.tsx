@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import heroPreview from "./assets/images/hero-preview.webp";
-import HeroGlow from "./components/gradient/HeroGlow";
+import StripeGradient from "./components/gradient/StripeGradient";
 import PricingSection from "./components/PricingSection";
 import { JsonLd } from "./components/seo/JsonLd";
 import { pageMetadata, siteUrl } from "./lib/seo";
@@ -231,7 +231,7 @@ export default function LandingPage() {
          {/* ── Hero ── */}
          <section className="section-base relative px-6 pt-28 pb-20 overflow-hidden">
             <div className="absolute inset-0 pointer-events-none">
-               <HeroGlow />
+               <StripeGradient />
             </div>
 
             <div className="relative max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-12 lg:gap-10 items-center">

@@ -194,11 +194,15 @@ export function CreditRateStrip({ rates, plans = [] }: { rates: CreditRates; pla
             : []),
         ];
   const credits = Math.ceil(lines.reduce((sum, l) => sum + l.credits, 0));
-  // The smallest paid plan, to show what its credits cover.
-  const plan = sortPlans(plans)
-    .filter((p) => p.type !== 'FREE' && !p.customPricing && (p.version?.includedCredits ?? 0) > 0)
-    .sort((a, b) => a.version!.includedCredits - b.version!.includedCredits)[0];
-  const calls = plan && credits > 0 ? Math.floor(plan.version!.includedCredits / credits) : null;
+  // Plans with a fixed credit allowance, smallest first; the smallest paid one is the default.
+  const choices = sortPlans(plans)
+    .filter((p) => !p.customPricing && (p.version?.includedCredits ?? 0) > 0)
+    .sort((a, b) => a.version!.includedCredits - b.version!.includedCredits);
+  const [planId, setPlanId] = useState<string | null>(null);
+  const plan =
+    choices.find((p) => p.id === planId) ?? choices.find((p) => p.type !== 'FREE') ?? choices[0];
+  const aiNeedsPaid = current.key === 'ai' && plan?.type === 'FREE';
+  const calls = plan && credits > 0 && !aiNeedsPaid ? Math.floor(plan.version!.includedCredits / credits) : null;
 
   const tileCls = (on: boolean) =>
     `relative rounded-2xl p-4 text-left transition-all ${
@@ -275,6 +279,30 @@ export function CreditRateStrip({ rates, plans = [] }: { rates: CreditRates; pla
         <div className="flex flex-col gap-6 bg-gradient-to-br from-[#F8F4FD] to-[#EFE5FC] p-6 sm:p-8">
           <div className="space-y-5">
             <RangeField label="Call length" value={minutes} min={5} max={120} step={5} suffix="min" onChange={setMinutes} />
+            {choices.length > 0 && (
+              <div>
+                <p className="text-sm text-[#3D3650]">Plan</p>
+                <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="Plan">
+                  {choices.map((p) => {
+                    const on = p.id === plan?.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => setPlanId(p.id)}
+                        className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                          on ? 'bg-[#170B2E] text-white' : 'bg-white text-[#3D3650] ring-1 ring-[#E7DFF5] hover:text-[#170B2E]'
+                        }`}
+                      >
+                        {p.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {sharing && (
               <RangeField
                 label="Screen sharing time"
@@ -299,11 +327,16 @@ export function CreditRateStrip({ rates, plans = [] }: { rates: CreditRates; pla
             <p className="mt-3 text-4xl font-bold tracking-tight text-[#170B2E]">
               {formatCredits(credits)} <span className="text-lg font-semibold text-[#3D3650]">credits per call</span>
             </p>
-            {plan && calls != null && (
-              <p className="mt-2 text-sm text-[#3D3650]">
-                {plan.name}&apos;s {formatCredits(plan.version!.includedCredits)} credits cover{' '}
-                <strong className="text-[#6425C4]">≈ {formatCredits(calls)}</strong> calls like this.
-              </p>
+            {aiNeedsPaid ? (
+              <p className="mt-2 text-sm text-[#3D3650]">AI voice agents need a paid plan. Pick a paid plan to see how many calls it covers.</p>
+            ) : (
+              plan &&
+              calls != null && (
+                <p className="mt-2 text-sm text-[#3D3650]" data-testid="plan-coverage">
+                  {plan.name}&apos;s {formatCredits(plan.version!.includedCredits)} credits per {intervalLabel(plan.version)} cover{' '}
+                  <strong className="text-[#6425C4]">≈ {formatCredits(calls)}</strong> calls like this.
+                </p>
+              )
             )}
           </div>
         </div>

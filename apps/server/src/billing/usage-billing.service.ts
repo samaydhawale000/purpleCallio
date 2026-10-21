@@ -59,9 +59,12 @@ export class UsageBillingService {
 
   /** LEGACY: pay-as-you-go rates (for historical invoices / internal cost). */
   async getRates(): Promise<BillingRates> {
-    const rate = await this.prisma.billingRate.findUnique({
-      where: { key: 'default' },
-    });
+    const [rate, config] = await Promise.all([
+      this.prisma.billingRate.findUnique({ where: { key: 'default' } }),
+      this.config.get(),
+    ]);
+    // GST has one source of truth: BillingConfig (Admin → Billing → Settings).
+    const taxPercent = config.taxPercent;
     if (!rate) {
       return {
         audioPaise: 20,
@@ -69,7 +72,7 @@ export class UsageBillingService {
         screenSharePaise: 10,
         freeAudioMins: 500,
         freeVideoMins: 200,
-        taxPercent: 18,
+        taxPercent,
       };
     }
     return {
@@ -78,7 +81,7 @@ export class UsageBillingService {
       screenSharePaise: rate.screenSharePaise,
       freeAudioMins: rate.freeAudioMins,
       freeVideoMins: rate.freeVideoMins,
-      taxPercent: rate.taxPercent,
+      taxPercent,
     };
   }
 

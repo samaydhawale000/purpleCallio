@@ -1,5 +1,6 @@
 import LegalLayout, { LegalSection, LegalBullets } from "../components/LegalLayout";
 import { PricingAuthority } from "../components/PricingAuthority";
+import { GstRate } from "../components/GstRate";
 
 export default function BillingTermsPage() {
   return (
@@ -142,7 +143,7 @@ export default function BillingTermsPage() {
           payment.
         </p>
         <p>
-          Prices are shown excluding GST. GST at the rate shown at checkout is added to the price of
+          Prices are shown excluding GST. GST at <GstRate fallback="the rate shown at checkout" /> is added to the price of
           plans, renewals, custom plans and top-ups. Any customer-specific discount agreed with
           PurpleCallio is applied before GST.
         </p>

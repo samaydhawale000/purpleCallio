@@ -119,6 +119,24 @@ describe('AI voice rate', () => {
     expect(screen.getByText('Screen share').closest('button')!.hasAttribute('disabled')).toBe(true);
     expect(screen.getByText(/credits per call/).parentElement!.textContent).toContain('150');
   });
+
+  it('lets visitors pick a plan and see how many calls its credits cover', () => {
+    const plan = (id: string, name: string, type: string, credits: number) =>
+      ({ id, slug: id, name, type, displayOrder: 0, customPricing: false, version: { includedCredits: credits, billingInterval: 'MONTH', intervalCount: 1, features: [] } }) as never;
+    const plans = [plan('free', 'Free', 'FREE', 1000), plan('starter', 'Starter', 'PAID', 6000), plan('growth', 'Growth', 'PAID', 20000)];
+    render(<CreditRateStrip rates={config as unknown as CreditRates} plans={plans} />);
+    // 2 people × 30 min video × 4 = 240 credits; the smallest paid plan is the default.
+    expect(screen.getByRole('radio', { name: 'Starter' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByTestId('plan-coverage').textContent).toContain('≈ 25');
+    fireEvent.click(screen.getByRole('radio', { name: 'Growth' }));
+    expect(screen.getByTestId('plan-coverage').textContent).toContain("Growth's 20,000 credits");
+    expect(screen.getByTestId('plan-coverage').textContent).toContain('≈ 83');
+    // AI on the Free plan isn't possible.
+    fireEvent.click(screen.getByRole('radio', { name: 'Free' }));
+    fireEvent.click(screen.getByTestId('ai-rate'));
+    expect(screen.getByText(/AI voice agents need a paid plan/)).toBeTruthy();
+    expect(screen.queryByTestId('plan-coverage')).toBeNull();
+  });
 });
 
 describe('Admin AI usage', () => {

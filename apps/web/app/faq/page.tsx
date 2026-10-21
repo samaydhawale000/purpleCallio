@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { PURPLECALLIO_HOST } from '../lib/brand';
 import { PricingAuthority } from '../components/PricingAuthority';
+import { formatRate, usePublicPricing } from '../lib/public-pricing';
 
 const FAQ_GROUPS = [
   {
@@ -106,7 +107,7 @@ const PRICING_FAQ = [
   { q: 'Do credits expire?', a: 'Plan credits expire at the end of the plan period they belong to. Top-up credits expire according to the top-up policy shown at the time of purchase. Your Billing page shows when each set of credits expires.' },
   { q: 'What are top-ups?', a: 'Top-ups are one-time credit packages you can buy from your dashboard whenever you need more credits, without changing your plan.' },
   { q: 'How do upgrades, downgrades, and cancellations work?', a: 'Upgrading starts the new plan immediately: you pay the new plan price and receive its credits, and any remaining credits from your previous plan stay usable until they expire. Downgrades take effect at the end of your current paid period. Cancelling takes effect at the end of the period: your plan remains active until the end of the period you already paid for.' },
-  { q: 'Is GST included in plan prices?', a: 'Prices are shown excluding GST. GST at the applicable rate is added at checkout and shown on your receipt.' },
+  { q: 'Is GST included in plan prices?', a: 'Prices are shown excluding GST. GST at {GST} is added at checkout and shown on your receipt.' },
   { q: 'Do you offer custom plans?', a: 'Yes. For higher volumes or specific requirements, choose "Talk to us" on the pricing page. We open a conversation with our team, and once terms are agreed we send you a private custom-plan offer that you can review, accept, and pay from your dashboard.' },
   { q: 'Can I get a refund?', a: 'Plan and top-up payments are not refunded automatically. Refunds are issued where required by law, for duplicate or erroneous charges, or at PurpleCallio\'s discretion. See the Refund & Cancellation Policy for details.' },
   { q: 'What about my old pay-as-you-go invoices?', a: 'Usage invoices issued before PurpleCallio moved to prepaid plans remain valid historical records. You can still view and download them as legacy usage invoices from the Billing page.' },
@@ -118,7 +119,7 @@ const FAQ_SCHEMA = {
   mainEntity: [...FAQ_GROUPS.flatMap((group) => group.items), ...PRICING_FAQ].map((item) => ({
     '@type': 'Question',
     name: item.q,
-    acceptedAnswer: { '@type': 'Answer', text: item.a },
+    acceptedAnswer: { '@type': 'Answer', text: item.a.replace('{GST}', 'the applicable rate') },
   })),
 };
 
@@ -151,6 +152,8 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 }
 
 export default function FaqPage() {
+  const pricing = usePublicPricing();
+  const gst = pricing.status === 'ready' ? `${formatRate(pricing.data.creditRates.taxPercent)}%` : 'the applicable rate';
   return (
     <div style={{ background: '#FFFFFF', color: '#170B2E', minHeight: '100vh' }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_SCHEMA).replace(/</g, '\\u003c') }} />
@@ -195,7 +198,7 @@ export default function FaqPage() {
             <div className="flex flex-col gap-3">
               <PricingAuthority />
               {PRICING_FAQ.map((item) => (
-                <FaqItem key={item.q} q={item.q} a={item.a} />
+                <FaqItem key={item.q} q={item.q} a={item.a.replace('{GST}', gst)} />
               ))}
             </div>
           </div>
