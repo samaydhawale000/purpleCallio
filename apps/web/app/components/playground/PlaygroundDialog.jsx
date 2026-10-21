@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "react-qr-code";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import {
   X,
   Copy,
@@ -143,7 +143,7 @@ const connected = callStatus === "ACCEPTED";
       {open && session && (
         <>
           {/* Backdrop */}
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -157,7 +157,7 @@ const connected = callStatus === "ACCEPTED";
 
           {/* Modal wrapper */}
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4">
-            <motion.div
+            <m.div
               initial={{ opacity: 0, scale: 0.96, y: 30 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 30 }}
@@ -259,7 +259,7 @@ const connected = callStatus === "ACCEPTED";
                     </div>
                   ) : connected ? (
                     /* STEP 4 — CONNECTED */
-                    <motion.div
+                    <m.div
                       key="connected"
                       initial={{ opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -348,10 +348,10 @@ const connected = callStatus === "ACCEPTED";
                         Open Full Call Experience
                         <ExternalLink size={17} />
                       </button>
-                    </motion.div>
+                    </m.div>
                   ) : firstDeviceJoined ? (
                     /* STEP 3 — JOIN FROM ANOTHER DEVICE (second device only) */
-                    <motion.div
+                    <m.div
                       key="second-device"
                       initial={{ opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -459,10 +459,10 @@ const connected = callStatus === "ACCEPTED";
                           </p>
                         </div>
                       </div>
-                    </motion.div>
+                    </m.div>
                   ) : (
                     /* STEP 2 — OPEN THE FIRST DEVICE (first device only) */
-                    <motion.div
+                    <m.div
                       key="first-device"
                       initial={{ opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -588,11 +588,11 @@ const connected = callStatus === "ACCEPTED";
                           </p>
                         </div>
                       </div>
-                    </motion.div>
+                    </m.div>
                   )}
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           </div>
         </>
       )}

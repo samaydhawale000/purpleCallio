@@ -11,6 +11,7 @@ import {
    FeatureFlow,
    IntegrationSelector,
 } from "../../components/marketing/InteractiveTools";
+import { Reveal, RevealGroup, RevealItem } from "../../components/motion/Reveal";
 
 const features = {
    "video-calling": {
@@ -216,110 +217,126 @@ export default async function FeaturePage({
                },
             ]}
          />
-         <ContentSection
-            title={`What is PurpleCallio ${item.title.replace(" for Your Application", "").replace("Add ", "")}?`}
-         >
-            <p>{item.summary}</p>
-         </ContentSection>
-         <ContentSection title="How it works">
-            <p>Select a stage to understand the workflow.</p>
-            <FeatureFlow kind={flowKind} />
-            <ol className="list-decimal space-y-2 pl-5">
-               <li>Create and manage the call from trusted backend code.</li>
-               <li>
-                  Issue participant-specific access as part of your application
-                  flow.
-               </li>
-               <li>
-                  Connect participants through hosted UI, React components, or
-                  the headless SDK.
-               </li>
-               <li>
-                  Use your product UI to manage media controls and call state.
-               </li>
-            </ol>
-         </ContentSection>
-         <ContentSection title="Technical capabilities">
-            {item.details.map((detail) => (
-               <p key={detail}>{detail}</p>
-            ))}
-            <p>
-               PurpleCallio supports REST API call management, WebSocket
-               signaling, authentication, TURN relay, camera and microphone
-               controls, device selection, and screen sharing where applicable.
-            </p>
-         </ContentSection>
-         <ContentSection title="Choose your integration">
-            <p>
-               Compare the three integration surfaces, their responsibilities,
-               and a copyable starting point.
-            </p>
-            <IntegrationSelector />
-         </ContentSection>
-         <ContentSection title="Common use cases">
-            <ul className="list-disc space-y-2 pl-5">
-               {item.useCases.map((useCase) => (
-                  <li key={useCase}>{useCase}</li>
+         <Reveal>
+            <ContentSection
+               title={`What is PurpleCallio ${item.title.replace(" for Your Application", "").replace("Add ", "")}?`}
+            >
+               <p>{item.summary}</p>
+            </ContentSection>
+         </Reveal>
+         <Reveal>
+            <ContentSection title="How it works">
+               <p>Select a stage to understand the workflow.</p>
+               <FeatureFlow kind={flowKind} />
+               <ol className="list-decimal space-y-2 pl-5">
+                  <li>Create and manage the call from trusted backend code.</li>
+                  <li>
+                     Issue participant-specific access as part of your application
+                     flow.
+                  </li>
+                  <li>
+                     Connect participants through hosted UI, React components, or
+                     the headless SDK.
+                  </li>
+                  <li>
+                     Use your product UI to manage media controls and call state.
+                  </li>
+               </ol>
+            </ContentSection>
+         </Reveal>
+         <Reveal variant="left">
+            <ContentSection title="Technical capabilities">
+               {item.details.map((detail) => (
+                  <p key={detail}>{detail}</p>
                ))}
-            </ul>
-         </ContentSection>
-         <ContentSection title="Security and pricing">
-            <p>
-               Keep API keys on your server and issue only participant-specific
-               access to clients. Webhook requests should be verified before
-               your application processes them. Usage is measured in
-               participant-minutes; see pricing for allowances and current
-               rates.
-            </p>
-         </ContentSection>
-         <ContentSection title="Frequently asked questions">
-            {item.faq.map(([question, answer]) => (
-               <article key={question}>
-                  <h3 className="font-semibold text-[#3D3650]">{question}</h3>
-                  <p>{answer}</p>
-               </article>
-            ))}
-         </ContentSection>
-         <ContentSection title="Related resources">
-            <div className="flex flex-wrap gap-4">
-               <Link
-                  href="/features"
-                  className="text-[#6425C4] hover:text-[#170B2E]"
-               >
-                  All features →
-               </Link>
-               <Link
-                  href="/features/ai-voice-agents"
-                  className="text-[#6425C4] hover:text-[#170B2E]"
-               >
-                  AI voice agents →
-               </Link>
-               <Link
-                  href="/docs/quickstart"
-                  className="text-[#6425C4] hover:text-[#170B2E]"
-               >
-                  Quickstart →
-               </Link>
-               <Link
-                  href="/docs/react"
-                  className="text-[#6425C4] hover:text-[#170B2E]"
-               >
-                  React SDK →
-               </Link>
-               <Link
-                  href="/docs/javascript"
-                  className="text-[#6425C4] hover:text-[#170B2E]"
-               >
-                  JavaScript SDK →
-               </Link>
-               <Link
-                  href="/pricing"
-                  className="text-[#6425C4] hover:text-[#170B2E]"
-               >
-                  Pricing →
-               </Link>
-            </div>
-         </ContentSection>
+               <p>
+                  PurpleCallio supports REST API call management, WebSocket
+                  signaling, authentication, TURN relay, camera and microphone
+                  controls, device selection, and screen sharing where applicable.
+               </p>
+            </ContentSection>
+         </Reveal>
+         <Reveal>
+            <ContentSection title="Choose your integration">
+               <p>
+                  Compare the three integration surfaces, their responsibilities,
+                  and a copyable starting point.
+               </p>
+               <IntegrationSelector />
+            </ContentSection>
+         </Reveal>
+         <Reveal>
+            <ContentSection title="Common use cases">
+               <RevealGroup as="ul" stagger={0.08} className="list-disc space-y-2 pl-5">
+                  {item.useCases.map((useCase) => (
+                     <RevealItem as="li" key={useCase} variant="left">{useCase}</RevealItem>
+                  ))}
+               </RevealGroup>
+            </ContentSection>
+         </Reveal>
+         <Reveal>
+            <ContentSection title="Security and pricing">
+               <p>
+                  Keep API keys on your server and issue only participant-specific
+                  access to clients. Webhook requests should be verified before
+                  your application processes them. Usage is measured in
+                  participant-minutes; see pricing for allowances and current
+                  rates.
+               </p>
+            </ContentSection>
+         </Reveal>
+         <Reveal>
+            <ContentSection title="Frequently asked questions">
+               {item.faq.map(([question, answer]) => (
+                  <article key={question}>
+                     <h3 className="font-semibold text-[#3D3650]">{question}</h3>
+                     <p>{answer}</p>
+                  </article>
+               ))}
+            </ContentSection>
+         </Reveal>
+         <Reveal variant="fade">
+            <ContentSection title="Related resources">
+               <div className="flex flex-wrap gap-4">
+                  <Link
+                     href="/features"
+                     className="text-[#6425C4] hover:text-[#170B2E]"
+                  >
+                     All features →
+                  </Link>
+                  <Link
+                     href="/features/ai-voice-agents"
+                     className="text-[#6425C4] hover:text-[#170B2E]"
+                  >
+                     AI voice agents →
+                  </Link>
+                  <Link
+                     href="/docs/quickstart"
+                     className="text-[#6425C4] hover:text-[#170B2E]"
+                  >
+                     Quickstart →
+                  </Link>
+                  <Link
+                     href="/docs/react"
+                     className="text-[#6425C4] hover:text-[#170B2E]"
+                  >
+                     React SDK →
+                  </Link>
+                  <Link
+                     href="/docs/javascript"
+                     className="text-[#6425C4] hover:text-[#170B2E]"
+                  >
+                     JavaScript SDK →
+                  </Link>
+                  <Link
+                     href="/pricing"
+                     className="text-[#6425C4] hover:text-[#170B2E]"
+                  >
+                     Pricing →
+                  </Link>
+               </div>
+            </ContentSection>
+         </Reveal>
       </PublicPage>
    );
 }

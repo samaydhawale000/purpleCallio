@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { GoogleSignInButton } from '../ui/GoogleSignInButton';
 import { ProfileCompletionForm } from './ProfileCompletionForm';
@@ -117,7 +117,7 @@ export function AuthCard({
       >
         <AnimatePresence mode="wait" initial={false}>
           {phase === 'profile' && user ? (
-            <motion.div key="profile" {...fade}>
+            <m.div key="profile" {...fade}>
               <ProfileCompletionForm user={user} onCompleted={handleCompleted} />
               <p className="text-center text-xs text-[#3D3650] mt-4">
                 Signed in as {user.email}.{' '}
@@ -129,9 +129,9 @@ export function AuthCard({
                   Use a different account
                 </button>
               </p>
-            </motion.div>
+            </m.div>
           ) : phase === 'signin' ? (
-            <motion.div key="signin" {...fade}>
+            <m.div key="signin" {...fade}>
               <div className="flex flex-col items-center gap-2 text-center mb-6">
                 <Image src={logo} alt="PurpleCallio" width={176} height={42} className="mb-2 h-auto w-40 object-contain" />
                 <h2 className="text-lg font-bold text-[#170B2E]">{title}</h2>
@@ -149,9 +149,9 @@ export function AuthCard({
 
                 {footer}
               </div>
-            </motion.div>
+            </m.div>
           ) : phase === 'error' ? (
-            <motion.div key="error" {...fade} className="flex flex-col items-center gap-3 py-6 text-center">
+            <m.div key="error" {...fade} className="flex flex-col items-center gap-3 py-6 text-center">
               <p className="text-sm text-[#3D3650]">We couldn&apos;t load your account. Please try again.</p>
               <div className="flex gap-3 text-sm">
                 <button
@@ -165,12 +165,12 @@ export function AuthCard({
                   Sign out
                 </button>
               </div>
-            </motion.div>
+            </m.div>
           ) : (
-            <motion.div key="loading" {...fade} className="flex items-center justify-center py-12" role="status">
+            <m.div key="loading" {...fade} className="flex items-center justify-center py-12" role="status">
               <Loader2 className="animate-spin h-6 w-6 text-[#7F40E8]" />
               <span className="sr-only">Loading</span>
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
       </div>

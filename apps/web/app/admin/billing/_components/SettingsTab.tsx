@@ -165,7 +165,7 @@ export function SettingsTab() {
           <Field label="Auto-renew grace (hours)" hint="An auto-renewing plan stays active this long past period end while the renewal payment is retried.">
             <input type="number" min={0} className={inputCls} value={form.autoRenewGraceHours} onChange={(e) => setForm({ ...form, autoRenewGraceHours: e.target.value })} />
           </Field>
-          <label className="sm:col-span-2 flex items-start gap-2 text-sm text-[#170B2E]">
+          <label className="sm:col-span-2 flex items-start gap-2 text-sm text-[#170B2E] cursor-pointer">
             <input
               type="checkbox"
               className="mt-0.5 h-4 w-4 accent-[#7F40E8]"

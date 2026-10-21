@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ContentSection, PublicPage } from "../components/marketing/PublicPage";
 import PricingSection from "../components/PricingSection";
 import { PlanEstimator } from "../components/marketing/InteractiveTools";
+import { Reveal } from "../components/motion/Reveal";
 import { pageMetadata } from "../lib/seo";
 
 export const metadata: Metadata = pageMetadata({
@@ -24,9 +25,11 @@ export default function PricingPage() {
             ]}
          >
             <PricingSection variant="full" bare />
-            <ContentSection title="Estimate your monthly credits">
-               <PlanEstimator />
-            </ContentSection>
+            <Reveal amount={0.1}>
+               <ContentSection title="Estimate your monthly credits">
+                  <PlanEstimator />
+               </ContentSection>
+            </Reveal>
          </PublicPage>
       </main>
    );

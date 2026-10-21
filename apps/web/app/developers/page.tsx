@@ -7,6 +7,7 @@ import {
 } from "../components/marketing/InteractiveTools";
 import { ContentSection, PublicPage } from "../components/marketing/PublicPage";
 import { JsonLd } from "../components/seo/JsonLd";
+import { Reveal, RevealGroup, RevealItem } from "../components/motion/Reveal";
 import { pageMetadata, siteUrl } from "../lib/seo";
 import { sdks } from "../lib/sdks";
 
@@ -105,10 +106,8 @@ export default function DevelopersPage() {
                   "Developer tools for integrating real-time audio, video, screen sharing and AI voice agents.",
             }}
          />
-         <section
-            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-            aria-label="Integration paths"
-         >
+         <section aria-label="Integration paths">
+         <RevealGroup stagger={0.08} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
                [
                   "Hosted UI",
@@ -131,9 +130,11 @@ export default function DevelopersPage() {
                   "Create and manage calls from any trusted server environment.",
                ],
             ].map(([name, label, description]) => (
-               <article
+               <RevealItem
+                  as="article"
                   key={name}
-                  className="rounded-2xl border border-[#E7DFF5] bg-white p-6"
+                  variant="zoom-up"
+                  className="h-full rounded-2xl border border-[#E7DFF5] bg-white p-6"
                >
                   <p className="font-mono text-xs uppercase tracking-widest text-[#6425C4]">
                      {label}
@@ -142,9 +143,11 @@ export default function DevelopersPage() {
                   <p className="mt-2 text-sm leading-6 text-[#3D3650]">
                      {description}
                   </p>
-               </article>
+               </RevealItem>
             ))}
+         </RevealGroup>
          </section>
+         <Reveal variant="scale" duration={0.8} amount={0.15}>
          <section
             id="ai-voice-agents"
             aria-labelledby="ai-voice-agents-title"
@@ -173,9 +176,9 @@ export default function DevelopersPage() {
                </Link>
             </div>
 
-            <ol className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <RevealGroup as="ol" delay={0.2} stagger={0.1} className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                {AI_STEPS.map((step, i) => (
-                  <li key={step.title}>
+                  <RevealItem as="li" key={step.title} variant="left">
                      <Link
                         href={step.href}
                         className="group flex h-full flex-col rounded-2xl bg-white/10 p-5 ring-1 ring-white/20 transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
@@ -191,9 +194,9 @@ export default function DevelopersPage() {
                            <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                         </span>
                      </Link>
-                  </li>
+                  </RevealItem>
                ))}
-            </ol>
+            </RevealGroup>
 
             <pre className="mt-6 overflow-x-auto rounded-2xl bg-[#1A0B33]/70 p-5 font-mono text-[13px] leading-6 text-white/90 ring-1 ring-white/10">
                <code>{`// Server: create a session with your API key
@@ -211,135 +214,152 @@ await call.start();`}</code>
                <Link href="/features/ai-voice-agents" className="text-white/85 hover:text-white">Use cases &amp; overview →</Link>
             </div>
          </section>
-         <ContentSection title="Official SDKs for every platform">
-            <p>
-               The React path above is one of several client SDKs. Available
-               packages share the same participant-token security and call
-               protocol, with connection state, participants, and platform
-               media controls exposed through idiomatic APIs.
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-               {sdks
-                  .filter((sdk) => sdk.status === "available")
-                  .map((sdk) => (
-                     <Link
-                        key={sdk.platform}
-                        href={sdk.href!}
-                        className="rounded-xl border border-[#E7DFF5] p-5 transition hover:border-[#A05DF9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#A05DF9]"
+         </Reveal>
+         <Reveal amount={0.1}>
+            <ContentSection title="Official SDKs for every platform">
+               <p>
+                  The React path above is one of several client SDKs. Available
+                  packages share the same participant-token security and call
+                  protocol, with connection state, participants, and platform
+                  media controls exposed through idiomatic APIs.
+               </p>
+               <RevealGroup stagger={0.08} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {sdks
+                     .filter((sdk) => sdk.status === "available")
+                     .map((sdk) => (
+                        <RevealItem key={sdk.platform} variant="zoom-up" className="h-full">
+                        <Link
+                           href={sdk.href!}
+                           className="block h-full rounded-xl border border-[#E7DFF5] p-5 transition hover:border-[#A05DF9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#A05DF9]"
+                        >
+                           <p className="font-mono text-xs uppercase tracking-widest text-[#6425C4]">
+                              {sdk.package}
+                           </p>
+                           <h3 className="mt-2 font-semibold text-[#170B2E]">
+                              {sdk.platform} <span className="text-[#6425C4]">→</span>
+                           </h3>
+                           <p className="mt-2 text-sm leading-6 text-[#3D3650]">
+                              {sdk.description}
+                           </p>
+                        </Link>
+                        </RevealItem>
+                     ))}
+               </RevealGroup>
+               <p className="text-sm text-[#3D3650]">
+                  Flutter, iOS, and Android SDK implementations are available for
+                  preview but have not completed release validation. See{" "}
+                  <Link href="/sdks" className="text-[#6425C4] hover:text-[#170B2E]">
+                     the full SDK list
+                  </Link>{" "}
+                  for current status.
+               </p>
+            </ContentSection>
+         </Reveal>
+         <Reveal amount={0.1}>
+            <ContentSection title="Choose the integration that fits your product">
+               <p>
+                  Start with the amount of frontend control you need. Every path
+                  keeps call creation and authorization in your backend.
+               </p>
+               <IntegrationSelector />
+            </ContentSection>
+         </Reveal>
+         <Reveal amount={0.1}>
+            <ContentSection title="How the pieces connect">
+               <p>
+                  Select a node to see its role in a production communication flow.
+                  PurpleCallio works around browser WebRTC; it does not replace the
+                  browser media layer.
+               </p>
+               <ArchitectureExplorer />
+            </ContentSection>
+         </Reveal>
+         <Reveal>
+            <ContentSection title="What do I actually have to build?">
+               <RevealGroup stagger={0.1} className="grid gap-4 md:grid-cols-3">
+                  {[
+                     [
+                        "Hosted UI",
+                        "You build authentication, business logic, and call creation.",
+                        "PurpleCallio handles the meeting UI, media controls, signaling, WebRTC setup, and TURN relay.",
+                     ],
+                     [
+                        "React",
+                        "You build your product layout, business logic, and branded UI.",
+                        "PurpleCallio handles participant state, media streams, controls, and the connection lifecycle.",
+                     ],
+                     [
+                        "Headless SDK",
+                        "You control the full UI, interactions, and application state.",
+                        "PurpleCallio provides the communication engine, signaling, WebRTC media lifecycle, and relay path.",
+                     ],
+                  ].map(([name, build, handles]) => (
+                     <RevealItem
+                        as="article"
+                        key={name}
+                        variant="scale"
+                        className="h-full rounded-xl border border-[#E7DFF5] p-5"
                      >
-                        <p className="font-mono text-xs uppercase tracking-widest text-[#6425C4]">
-                           {sdk.package}
+                        <h3 className="font-semibold text-[#170B2E]">{name}</h3>
+                        <p className="mt-3 text-sm text-[#3D3650]">
+                           <strong className="text-[#3D3650]">You build:</strong>{" "}
+                           {build}
                         </p>
-                        <h3 className="mt-2 font-semibold text-[#170B2E]">
-                           {sdk.platform} <span className="text-[#6425C4]">→</span>
+                        <p className="mt-3 text-sm text-[#3D3650]">
+                           <strong className="text-[#3D3650]">
+                              PurpleCallio handles:
+                           </strong>{" "}
+                           {handles}
+                        </p>
+                     </RevealItem>
+                  ))}
+               </RevealGroup>
+            </ContentSection>
+         </Reveal>
+         <Reveal>
+            <ContentSection title="Developer toolbox">
+               <RevealGroup stagger={0.06} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {tools.map(([name, description, href]) => (
+                     <RevealItem key={name} variant="zoom-up" className="h-full">
+                     <Link
+                        href={href}
+                        className="block h-full rounded-xl border border-[#E7DFF5] p-5 transition hover:border-[#A05DF9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#A05DF9]"
+                     >
+                        <h3 className="font-semibold text-[#170B2E]">
+                           {name} <span className="text-[#6425C4]">→</span>
                         </h3>
                         <p className="mt-2 text-sm leading-6 text-[#3D3650]">
-                           {sdk.description}
+                           {description}
                         </p>
                      </Link>
+                     </RevealItem>
                   ))}
-            </div>
-            <p className="text-sm text-[#3D3650]">
-               Flutter, iOS, and Android SDK implementations are available for
-               preview but have not completed release validation. See{" "}
-               <Link href="/sdks" className="text-[#6425C4] hover:text-[#170B2E]">
-                  the full SDK list
-               </Link>{" "}
-               for current status.
-            </p>
-         </ContentSection>
-         <ContentSection title="Choose the integration that fits your product">
-            <p>
-               Start with the amount of frontend control you need. Every path
-               keeps call creation and authorization in your backend.
-            </p>
-            <IntegrationSelector />
-         </ContentSection>
-         <ContentSection title="How the pieces connect">
-            <p>
-               Select a node to see its role in a production communication flow.
-               PurpleCallio works around browser WebRTC; it does not replace the
-               browser media layer.
-            </p>
-            <ArchitectureExplorer />
-         </ContentSection>
-         <ContentSection title="What do I actually have to build?">
-            <div className="grid gap-4 md:grid-cols-3">
-               {[
-                  [
-                     "Hosted UI",
-                     "You build authentication, business logic, and call creation.",
-                     "PurpleCallio handles the meeting UI, media controls, signaling, WebRTC setup, and TURN relay.",
-                  ],
-                  [
-                     "React",
-                     "You build your product layout, business logic, and branded UI.",
-                     "PurpleCallio handles participant state, media streams, controls, and the connection lifecycle.",
-                  ],
-                  [
-                     "Headless SDK",
-                     "You control the full UI, interactions, and application state.",
-                     "PurpleCallio provides the communication engine, signaling, WebRTC media lifecycle, and relay path.",
-                  ],
-               ].map(([name, build, handles]) => (
-                  <article
-                     key={name}
-                     className="rounded-xl border border-[#E7DFF5] p-5"
-                  >
-                     <h3 className="font-semibold text-[#170B2E]">{name}</h3>
-                     <p className="mt-3 text-sm text-[#3D3650]">
-                        <strong className="text-[#3D3650]">You build:</strong>{" "}
-                        {build}
-                     </p>
-                     <p className="mt-3 text-sm text-[#3D3650]">
-                        <strong className="text-[#3D3650]">
-                           PurpleCallio handles:
-                        </strong>{" "}
-                        {handles}
-                     </p>
-                  </article>
-               ))}
-            </div>
-         </ContentSection>
-         <ContentSection title="Developer toolbox">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-               {tools.map(([name, description, href]) => (
+               </RevealGroup>
+            </ContentSection>
+         </Reveal>
+         <Reveal>
+            <ContentSection title="Start with a server-controlled call">
+               <p>
+                  Keep API keys on the server, issue participant-specific access
+                  only after your application authorizes a user, and then choose
+                  the meeting surface that fits the product.
+               </p>
+               <div className="flex flex-wrap gap-4">
                   <Link
-                     key={name}
-                     href={href}
-                     className="rounded-xl border border-[#E7DFF5] p-5 transition hover:border-[#A05DF9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#A05DF9]"
+                     href="/docs/quickstart"
+                     className="text-[#6425C4] hover:text-[#170B2E]"
                   >
-                     <h3 className="font-semibold text-[#170B2E]">
-                        {name} <span className="text-[#6425C4]">→</span>
-                     </h3>
-                     <p className="mt-2 text-sm leading-6 text-[#3D3650]">
-                        {description}
-                     </p>
+                     Read the quickstart →
                   </Link>
-               ))}
-            </div>
-         </ContentSection>
-         <ContentSection title="Start with a server-controlled call">
-            <p>
-               Keep API keys on the server, issue participant-specific access
-               only after your application authorizes a user, and then choose
-               the meeting surface that fits the product.
-            </p>
-            <div className="flex flex-wrap gap-4">
-               <Link
-                  href="/docs/quickstart"
-                  className="text-[#6425C4] hover:text-[#170B2E]"
-               >
-                  Read the quickstart →
-               </Link>
-               <Link
-                  href="/pricing"
-                  className="text-[#6425C4] hover:text-[#170B2E]"
-               >
-                  Understand usage pricing →
-               </Link>
-            </div>
-         </ContentSection>
+                  <Link
+                     href="/pricing"
+                     className="text-[#6425C4] hover:text-[#170B2E]"
+                  >
+                     Understand usage pricing →
+                  </Link>
+               </div>
+            </ContentSection>
+         </Reveal>
       </PublicPage>
    );
 }

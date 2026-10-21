@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { Button } from '../ui/Button';
 import type { AuthUser } from '../../store/auth.store';
@@ -124,7 +124,7 @@ export function ProfileCompletionForm({
           </div>
 
           <AnimatePresence mode="wait" initial={false}>
-            <motion.div
+            <m.div
               key={STEPS[step].key}
               initial={{ opacity: 0, x: 12 }}
               animate={{ opacity: 1, x: 0 }}
@@ -136,7 +136,7 @@ export function ProfileCompletionForm({
               )}
               {step === 1 && <CompanyFields form={form} />}
               {step === 2 && <UsageFields form={form} />}
-            </motion.div>
+            </m.div>
           </AnimatePresence>
 
           <FormError message={submitError} />

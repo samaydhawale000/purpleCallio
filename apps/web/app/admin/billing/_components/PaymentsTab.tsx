@@ -154,7 +154,7 @@ export function RefundDialog({ payment, onClose, onDone }: { payment: AdminPayme
         <Field label="Reason (required)">
           <textarea className={inputCls} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
         </Field>
-        <label className="flex items-start gap-2 text-sm text-[#170B2E]">
+        <label className="flex items-start gap-2 text-sm text-[#170B2E] cursor-pointer">
           <input type="checkbox" className="mt-0.5 accent-[#7F40E8]" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
           I understand this reverses the remaining credits and ends a refunded plan.
         </label>

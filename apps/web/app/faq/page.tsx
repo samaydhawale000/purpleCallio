@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { PURPLECALLIO_HOST } from '../lib/brand';
 import { PricingAuthority } from '../components/PricingAuthority';
 import { formatRate, usePublicPricing } from '../lib/public-pricing';
+import { Reveal } from '../components/motion/Reveal';
 
 const FAQ_GROUPS = [
   {
@@ -178,7 +179,7 @@ export default function FaqPage() {
       <div className="max-w-4xl mx-auto px-6 pb-24">
 <div className="flex flex-col gap-12">
 {FAQ_GROUPS.map((g) => (
-            <div key={g.group}>
+            <Reveal key={g.group} amount={0.1}>
               <h2 className="font-semibold text-[#170B2E] mb-4" style={{ fontSize: '1.1rem' }}>
                 <span className="gradient-text font-mono text-xs tracking-widest uppercase mr-3">{g.group}</span>
               </h2>
@@ -187,11 +188,11 @@ export default function FaqPage() {
                   <FaqItem key={item.q} q={item.q} a={item.a} />
                 ))}
               </div>
-            </div>
+            </Reveal>
           ))}
 
           {/* Plans & Billing (current plans and credit rates from the API) */}
-          <div id="pricing" className="scroll-mt-24">
+          <Reveal id="pricing" amount={0.1} className="scroll-mt-24">
             <h2 className="font-semibold text-[#170B2E] mb-4" style={{ fontSize: '1.1rem' }}>
               <span className="gradient-text font-mono text-xs tracking-widest uppercase mr-3">Plans, Credits &amp; Billing</span>
             </h2>
@@ -201,10 +202,11 @@ export default function FaqPage() {
                 <FaqItem key={item.q} q={item.q} a={item.a.replace('{GST}', gst)} />
               ))}
             </div>
-          </div>
+          </Reveal>
         </div>
 
         {/* CTA */}
+        <Reveal variant="zoom-up" duration={0.8}>
         <div className="mt-16 rounded-xl p-8 text-center border border-[#D6C4EE]" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.05))' }}>
           <p className="font-bold text-[#170B2E] mb-2 text-lg">Still have questions?</p>
           <p className="text-[#3D3650] text-sm mb-6">Try the playground or read the docs — or talk to the engineers who built it.</p>
@@ -217,6 +219,7 @@ export default function FaqPage() {
             </Link>
           </div>
         </div>
+        </Reveal>
       </div>
     </div>
   );

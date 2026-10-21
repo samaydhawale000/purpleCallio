@@ -26,6 +26,7 @@ import { Breadcrumbs } from "../../components/seo/Breadcrumbs";
 import { JsonLd } from "../../components/seo/JsonLd";
 import { CodeBlock } from "../../components/marketing/InteractiveTools";
 import { AiRateNote } from "../../components/marketing/AiRateNote";
+import { Reveal, RevealGroup, RevealItem } from "../../components/motion/Reveal";
 import { pageMetadata, siteUrl } from "../../lib/seo";
 import { AI_REACT_COMPONENT_EXAMPLE, AI_SECURITY_NOTES, AI_SERVER_SESSION_EXAMPLE } from "../../lib/ai-docs";
 
@@ -331,44 +332,48 @@ export default function AiVoiceAgentsPage() {
 
          <div className="mx-auto max-w-6xl px-6">
             {/* ── At a glance ── */}
-            <section className="-mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <RevealGroup as="section" stagger={0.08} className="-mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                {STATS.map((s) => (
-                  <div key={s.label} className="rounded-xl border border-[#E7DFF5] bg-white p-5 shadow-sm">
+                  <RevealItem key={s.label} variant="scale" className="rounded-xl border border-[#E7DFF5] bg-white p-5 shadow-sm">
                      <s.icon size={22} className="text-[#7F40E8]" aria-hidden="true" />
                      <p className="mt-3 font-semibold text-[#170B2E]">{s.label}</p>
                      <p className="mt-1 text-sm">{s.body}</p>
-                  </div>
+                  </RevealItem>
                ))}
-            </section>
+            </RevealGroup>
 
             {/* ── How it works ── */}
             <section className="mt-24">
-               <p className="font-mono text-xs uppercase tracking-widest text-[#6425C4]">How it works</p>
-               <h2 className="mt-3 text-3xl font-bold text-[#170B2E]">From idea to live agent in five steps</h2>
-               <ol className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-5">
+               <Reveal>
+                  <p className="font-mono text-xs uppercase tracking-widest text-[#6425C4]">How it works</p>
+                  <h2 className="mt-3 text-3xl font-bold text-[#170B2E]">From idea to live agent in five steps</h2>
+               </Reveal>
+               <RevealGroup as="ol" stagger={0.1} className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-5">
                   {STEPS.map((s, i) => (
-                     <li key={s.title} className="rounded-xl border border-[#E7DFF5] p-5">
+                     <RevealItem as="li" key={s.title} variant="left" className="rounded-xl border border-[#E7DFF5] p-5">
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#7F40E8] text-sm font-bold text-white">
                            {i + 1}
                         </span>
                         <p className="mt-4 font-semibold text-[#170B2E]">{s.title}</p>
                         <p className="mt-2 text-sm leading-relaxed">{s.body}</p>
-                     </li>
+                     </RevealItem>
                   ))}
-               </ol>
+               </RevealGroup>
             </section>
 
             {/* ── Use cases ── */}
             <section className="mt-24" id="use-cases">
-               <p className="font-mono text-xs uppercase tracking-widest text-[#6425C4]">Use cases</p>
-               <h2 className="mt-3 text-3xl font-bold text-[#170B2E]">What teams build with AI voice agents</h2>
-               <p className="mt-4 max-w-3xl">
-                  Anywhere your users would otherwise wait for a person, fill in a form, or search a help
-                  centre, an agent can talk them through it. Each example shows the tools it would connect to.
-               </p>
-               <div className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+               <Reveal>
+                  <p className="font-mono text-xs uppercase tracking-widest text-[#6425C4]">Use cases</p>
+                  <h2 className="mt-3 text-3xl font-bold text-[#170B2E]">What teams build with AI voice agents</h2>
+                  <p className="mt-4 max-w-3xl">
+                     Anywhere your users would otherwise wait for a person, fill in a form, or search a help
+                     centre, an agent can talk them through it. Each example shows the tools it would connect to.
+                  </p>
+               </Reveal>
+               <RevealGroup stagger={0.08} className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
                   {USE_CASES.map((u) => (
-                     <article key={u.title} className="flex flex-col rounded-2xl border border-[#E7DFF5] p-6 transition-colors hover:border-[#D6C4EE]">
+                     <RevealItem as="article" key={u.title} variant="zoom-up" className="flex h-full flex-col rounded-2xl border border-[#E7DFF5] p-6 transition-colors hover:border-[#D6C4EE]">
                         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#7F40E8]/10 text-[#7F40E8]">
                            <u.icon size={22} aria-hidden="true" />
                         </span>
@@ -389,55 +394,59 @@ export default function AiVoiceAgentsPage() {
                               </code>
                            ))}
                         </div>
-                     </article>
+                     </RevealItem>
                   ))}
-               </div>
+               </RevealGroup>
             </section>
 
             {/* ── Capabilities ── */}
             <section className="mt-24">
-               <p className="font-mono text-xs uppercase tracking-widest text-[#6425C4]">Capabilities</p>
-               <h2 className="mt-3 text-3xl font-bold text-[#170B2E]">Everything you need to run voice AI in production</h2>
-               <div className="mt-10 grid grid-cols-1 gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+               <Reveal>
+                  <p className="font-mono text-xs uppercase tracking-widest text-[#6425C4]">Capabilities</p>
+                  <h2 className="mt-3 text-3xl font-bold text-[#170B2E]">Everything you need to run voice AI in production</h2>
+               </Reveal>
+               <RevealGroup stagger={0.06} className="mt-10 grid grid-cols-1 gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
                   {CAPABILITIES.map((c) => (
-                     <div key={c.title} className="flex gap-4">
+                     <RevealItem key={c.title} variant="up" className="flex gap-4">
                         <c.icon size={22} className="mt-0.5 shrink-0 text-[#7F40E8]" aria-hidden="true" />
                         <div>
                            <p className="font-semibold text-[#170B2E]">{c.title}</p>
                            <p className="mt-1 text-sm leading-relaxed">{c.body}</p>
                         </div>
-                     </div>
+                     </RevealItem>
                   ))}
-               </div>
+               </RevealGroup>
             </section>
 
             {/* ── Integrate ── */}
             <section className="mt-24">
-               <p className="font-mono text-xs uppercase tracking-widest text-[#6425C4]">Integrate</p>
-               <h2 className="mt-3 text-3xl font-bold text-[#170B2E]">Two small pieces of code</h2>
-               <p className="mt-4 max-w-3xl">
-                  Your server creates a session for a signed-in user, then your page renders the agent. The
-                  API key stays on your server; the browser only ever sees a short-lived token.
-               </p>
+               <Reveal>
+                  <p className="font-mono text-xs uppercase tracking-widest text-[#6425C4]">Integrate</p>
+                  <h2 className="mt-3 text-3xl font-bold text-[#170B2E]">Two small pieces of code</h2>
+                  <p className="mt-4 max-w-3xl">
+                     Your server creates a session for a signed-in user, then your page renders the agent. The
+                     API key stays on your server; the browser only ever sees a short-lived token.
+                  </p>
+               </Reveal>
                <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-                  <div className="min-w-0">
+                  <Reveal variant="left" className="min-w-0">
                      <p className="mb-3 text-sm font-semibold text-[#170B2E]">1. Your backend: create a session</p>
                      <CodeBlock code={AI_SERVER_SESSION_EXAMPLE} filename="server.ts" />
-                  </div>
-                  <div className="min-w-0">
+                  </Reveal>
+                  <Reveal variant="right" delay={0.1} className="min-w-0">
                      <p className="mb-3 text-sm font-semibold text-[#170B2E]">2. Your page: drop in the agent</p>
                      <CodeBlock code={AI_REACT_COMPONENT_EXAMPLE} filename="SupportWidget.tsx" />
                      <p className="mt-3 text-sm">
                         Prefer your own UI? Use the <code>usePurpleCallioAI</code> hook or the headless{" "}
                         <code>PurpleCallioAgentCall</code> class from <code>@purplecallio/sdk</code>.
                      </p>
-                  </div>
+                  </Reveal>
                </div>
             </section>
 
             {/* ── Pricing + security ── */}
             <section className="mt-24 grid grid-cols-1 gap-6 lg:grid-cols-2">
-               <div className="rounded-2xl border border-[#E7DFF5] p-7">
+               <Reveal variant="left" className="rounded-2xl border border-[#E7DFF5] p-7">
                   <h2 className="text-2xl font-bold text-[#170B2E]">Simple per-minute pricing</h2>
                   <ul className="mt-5 space-y-3 text-sm">
                      <li className="flex items-start gap-2">
@@ -461,8 +470,8 @@ export default function AiVoiceAgentsPage() {
                   <Link href="/pricing" className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-[#6425C4]">
                      See plans and credit rates <ArrowRight size={16} aria-hidden="true" />
                   </Link>
-               </div>
-               <div className="rounded-2xl border border-[#E7DFF5] p-7">
+               </Reveal>
+               <Reveal variant="right" delay={0.1} className="rounded-2xl border border-[#E7DFF5] p-7">
                   <h2 className="text-2xl font-bold text-[#170B2E]">Security and privacy</h2>
                   <ul className="mt-5 space-y-3 text-sm">
                      {AI_SECURITY_NOTES.slice(0, 5).map((t) => (
@@ -472,11 +481,11 @@ export default function AiVoiceAgentsPage() {
                         </li>
                      ))}
                   </ul>
-               </div>
+               </Reveal>
             </section>
 
             {/* ── FAQ ── */}
-            <section className="mt-24">
+            <Reveal as="section" amount={0.1} className="mt-24">
                <h2 className="text-3xl font-bold text-[#170B2E]">Frequently asked questions</h2>
                <div className="mt-8 divide-y divide-[#E7DFF5] rounded-2xl border border-[#E7DFF5]">
                   {FAQ.map(([q, a]) => (
@@ -489,10 +498,10 @@ export default function AiVoiceAgentsPage() {
                      </details>
                   ))}
                </div>
-            </section>
+            </Reveal>
 
             {/* ── CTA ── */}
-            <section className="mt-20 rounded-2xl border border-[#D6C4EE] bg-[#7F40E8]/5 p-8">
+            <Reveal as="section" variant="zoom-up" duration={0.8} className="mt-20 rounded-2xl border border-[#D6C4EE] bg-[#7F40E8]/5 p-8">
                <h2 className="text-2xl font-bold text-[#170B2E]">Give your product a voice</h2>
                <p className="mt-3 max-w-2xl">
                   Create an agent, talk to it in the playground, and embed it with a few lines of code.
@@ -508,7 +517,7 @@ export default function AiVoiceAgentsPage() {
                      All features
                   </Link>
                </div>
-            </section>
+            </Reveal>
          </div>
       </main>
    );

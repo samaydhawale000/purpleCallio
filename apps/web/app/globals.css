@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-/* Tailwind v4 dropped the pointer cursor on buttons; restore it for every
-   clickable control. In the base layer, so utilities like cursor-wait win. */
 @layer base {
   button,
   [role="button"],
@@ -19,12 +17,13 @@
   input[type="color"],
   input[type="submit"],
   input[type="button"],
-  input[type="reset"],
-  label:has(input[type="checkbox"], input[type="radio"], input[type="file"]) {
+  input[type="reset"] {
     cursor: pointer;
   }
 
-  :is(button, select, input, [role="button"]):disabled,
+  button:disabled,
+  select:disabled,
+  input:disabled,
   [aria-disabled="true"] {
     cursor: not-allowed;
   }

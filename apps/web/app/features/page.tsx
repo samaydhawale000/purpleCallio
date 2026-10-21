@@ -4,6 +4,7 @@ import { Breadcrumbs } from "../components/seo/Breadcrumbs";
 import { JsonLd } from "../components/seo/JsonLd";
 import { pageMetadata, siteUrl } from "../lib/seo";
 import { CORE_FEATURES, PLATFORM_FEATURES } from "../lib/feature-catalog";
+import { Reveal, RevealGroup, RevealItem } from "../components/motion/Reveal";
 
 export const metadata = pageMetadata({
    title: "Features: Video, Audio & AI Voice Agents",
@@ -47,15 +48,15 @@ export default function FeaturesPage() {
                and add the others when you need them.
             </p>
 
-            <div className="mt-14 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <RevealGroup stagger={0.12} className="mt-14 grid grid-cols-1 gap-6 lg:grid-cols-3">
                {CORE_FEATURES.map((f) => {
                   const ai = f.slug === "ai-voice-agents";
                   return (
+                     <RevealItem key={f.slug} variant="zoom-up" duration={0.7} className="h-full">
                      <Link
-                        key={f.slug}
                         href={`/features/${f.slug}`}
                         data-testid={`feature-card-${f.slug}`}
-                        className={`group relative flex flex-col rounded-2xl border p-7 transition-all hover:-translate-y-1 ${
+                        className={`group relative flex h-full flex-col rounded-2xl border p-7 transition-all hover:-translate-y-1 ${
                            ai
                               ? "border-transparent text-white shadow-[0_24px_60px_-12px_rgba(65,6,134,0.45)]"
                               : "border-[#E7DFF5] bg-white hover:border-[#D6C4EE] hover:shadow-[0_20px_45px_-20px_rgba(65,6,134,0.25)]"
@@ -108,21 +109,24 @@ export default function FeaturesPage() {
                            <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
                         </span>
                      </Link>
+                     </RevealItem>
                   );
                })}
-            </div>
+            </RevealGroup>
 
             <section className="mt-20">
-               <h2 className="text-2xl font-bold text-[#170B2E]">Included with every call</h2>
-               <p className="mt-3 max-w-3xl">
-                  The infrastructure underneath video and audio calls, available on every plan.
-               </p>
-               <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+               <Reveal>
+                  <h2 className="text-2xl font-bold text-[#170B2E]">Included with every call</h2>
+                  <p className="mt-3 max-w-3xl">
+                     The infrastructure underneath video and audio calls, available on every plan.
+                  </p>
+               </Reveal>
+               <RevealGroup stagger={0.08} className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {PLATFORM_FEATURES.map((f) => (
+                     <RevealItem key={f.slug} variant="scale" className="h-full">
                      <Link
-                        key={f.slug}
                         href={`/features/${f.slug}`}
-                        className="group flex items-start gap-4 rounded-xl border border-[#E7DFF5] p-5 transition-colors hover:border-[#D6C4EE]"
+                        className="group flex h-full items-start gap-4 rounded-xl border border-[#E7DFF5] p-5 transition-colors hover:border-[#D6C4EE]"
                      >
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#7F40E8]/10 text-[#7F40E8]">
                            <f.icon size={20} aria-hidden="true" />
@@ -135,11 +139,12 @@ export default function FeaturesPage() {
                            <span className="mt-1 block text-sm leading-relaxed">{f.body}</span>
                         </span>
                      </Link>
+                     </RevealItem>
                   ))}
-               </div>
+               </RevealGroup>
             </section>
 
-            <section className="mt-16 rounded-2xl border border-[#D6C4EE] bg-[#7F40E8]/5 p-8">
+            <Reveal as="section" variant="zoom-up" duration={0.8} className="mt-16 rounded-2xl border border-[#D6C4EE] bg-[#7F40E8]/5 p-8">
                <h2 className="text-2xl font-bold text-[#170B2E]">Not sure where to start?</h2>
                <p className="mt-3 max-w-2xl">
                   Every account starts on the Free plan with monthly credits for video and audio calls. AI
@@ -153,7 +158,7 @@ export default function FeaturesPage() {
                      Compare plans
                   </Link>
                </div>
-            </section>
+            </Reveal>
          </div>
       </main>
    );

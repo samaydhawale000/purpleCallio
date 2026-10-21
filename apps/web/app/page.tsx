@@ -8,6 +8,7 @@ import { pageMetadata, siteUrl } from "./lib/seo";
 import { PURPLECALLIO_DESCRIPTION, PURPLECALLIO_NAME } from "./lib/brand";
 import { CORE_FEATURES } from "./lib/feature-catalog";
 import { IntegrationSelector } from "./components/marketing/InteractiveTools";
+import { Reveal, RevealGroup, RevealItem } from "./components/motion/Reveal";
 import {
    ArrowRight,
    Atom,
@@ -187,11 +188,11 @@ function SectionHeading({
    className?: string;
 }) {
    return (
-      <div className={`${center ? "mx-auto text-center" : ""} max-w-3xl ${className}`}>
+      <Reveal className={`${center ? "mx-auto text-center" : ""} max-w-3xl ${className}`}>
          <p className="section-label font-mono text-xs tracking-widest uppercase mb-4">{label}</p>
          <h2 className="lp-h2 font-bold leading-tight text-[#170B2E]">{title}</h2>
          {intro && <p className={`mt-4 text-[#3D3650] leading-relaxed ${center ? "mx-auto" : ""} max-w-2xl`}>{intro}</p>}
-      </div>
+      </Reveal>
    );
 }
 
@@ -229,7 +230,7 @@ export default function LandingPage() {
          />
 
          {/* ── Hero ── */}
-         <section className="section-base relative px-6 pt-28 pb-20 overflow-hidden">
+         <section className="section-base relative px-6 pt-42 pb-20 overflow-hidden">
             <div className="absolute inset-0 pointer-events-none">
                <StripeGradient />
             </div>
@@ -299,20 +300,6 @@ export default function LandingPage() {
                   />
                </div>
             </div>
-
-            {/* Works with your stack */}
-            <div className="relative max-w-6xl mx-auto mt-16">
-               <p className="text-center text-xs font-mono uppercase tracking-widest text-[#3D3650]/80 mb-5">
-                  Works with your stack
-               </p>
-               <ul className="flex flex-wrap justify-center gap-x-8 gap-y-3">
-                  {STACK.map((name) => (
-                     <li key={name} className="text-base font-semibold text-[#3D3650]/70">
-                        {name}
-                     </li>
-                  ))}
-               </ul>
-            </div>
          </section>
 
          {/* ── Products: video, audio, AI ── */}
@@ -324,14 +311,14 @@ export default function LandingPage() {
                   title="Three ways to talk to your users."
                   intro="Video calls, audio calls and AI voice agents share the same API keys, dashboard, webhooks and prepaid credit balance. Start with one, add the others when you need them."
                />
-               <div className="mt-14 grid grid-cols-1 gap-5 lg:grid-cols-3">
+               <RevealGroup stagger={0.12} className="mt-14 grid grid-cols-1 gap-5 lg:grid-cols-3">
                   {CORE_FEATURES.map((f) => {
                      const ai = f.slug === "ai-voice-agents";
                      return (
+                        <RevealItem key={f.slug} variant="zoom-up" duration={0.7} className="h-full">
                         <Link
-                           key={f.slug}
                            href={`/features/${f.slug}`}
-                           className={`group relative flex flex-col overflow-hidden rounded-3xl p-8 transition-all duration-300 hover:-translate-y-1 ${
+                           className={`group relative flex h-full flex-col overflow-hidden rounded-3xl p-8 transition-all duration-300 hover:-translate-y-1 ${
                               ai
                                  ? "text-white shadow-[0_30px_60px_-20px_rgba(65,6,134,0.55)]"
                                  : "bg-white border border-[#E7DFF5] hover:shadow-[0_24px_50px_-24px_rgba(65,6,134,0.3)]"
@@ -369,16 +356,18 @@ export default function LandingPage() {
                               <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
                            </span>
                         </Link>
+                        </RevealItem>
                      );
                   })}
-               </div>
+               </RevealGroup>
             </div>
          </section>
 
          {/* ── AI voice agents spotlight ── */}
          <section id="ai-voice-agents" className="px-6 py-8 sm:px-8">
+            <Reveal variant="scale" duration={0.8} amount={0.15} className="max-w-7xl mx-auto">
             <div
-               className="relative max-w-7xl mx-auto overflow-hidden rounded-[2rem] px-6 py-16 text-white sm:px-12 lg:py-20"
+               className="relative overflow-hidden rounded-[2rem] px-6 py-16 text-white sm:px-12 lg:py-20"
                style={{ background: "radial-gradient(120% 90% at 0% 0%, #8B4DF0 0%, #5B1BB5 45%, #2B0F52 100%)" }}
             >
                <div
@@ -390,7 +379,7 @@ export default function LandingPage() {
                   }}
                />
                <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                  <div className="min-w-0">
+                  <Reveal variant="left" delay={0.15} className="min-w-0">
                      <p className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold mb-5">
                         <Sparkles size={14} aria-hidden="true" /> New · AI Voice Agents
                      </p>
@@ -416,24 +405,27 @@ export default function LandingPage() {
                         </Link>
                      </div>
                      <p className="mt-4 text-sm text-white/70">Included on every paid plan.</p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                  </Reveal>
+                  <RevealGroup delay={0.25} stagger={0.1} className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
                      {AI_USE_CASES.map((uc) => (
-                        <div key={uc.title} className="rounded-2xl bg-white/10 p-5 ring-1 ring-white/20 backdrop-blur-sm">
+                        <RevealItem key={uc.title} variant="up" className="rounded-2xl bg-white/10 p-5 ring-1 ring-white/20">
                            <uc.icon size={22} aria-hidden="true" />
                            <p className="mt-3 font-semibold">{uc.title}</p>
                            <p className="mt-1 text-sm text-white/75 leading-relaxed">{uc.body}</p>
-                        </div>
+                        </RevealItem>
                      ))}
+                     <RevealItem variant="fade" className="sm:col-span-2">
                      <Link
                         href="/features/ai-voice-agents#use-cases"
-                        className="sm:col-span-2 inline-flex items-center justify-center gap-2 rounded-2xl border border-white/25 p-4 text-sm font-medium hover:bg-white/10"
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/25 p-4 text-sm font-medium hover:bg-white/10"
                      >
                         <Bot size={18} aria-hidden="true" /> See all use cases <ArrowRight size={16} aria-hidden="true" />
                      </Link>
-                  </div>
+                     </RevealItem>
+                  </RevealGroup>
                </div>
             </div>
+            </Reveal>
          </section>
 
          {/* ── Three steps + code ── */}
@@ -445,9 +437,9 @@ export default function LandingPage() {
                      title="Your first call in three steps."
                      intro="Keep your authentication, business logic and database. PurpleCallio adds the call lifecycle, participant sessions, signaling and media."
                   />
-                  <ol className="mt-10 space-y-6">
+                  <RevealGroup as="ol" stagger={0.15} className="mt-10 space-y-6">
                      {STEPS.map((s, i) => (
-                        <li key={s.step} className="flex gap-4">
+                        <RevealItem as="li" key={s.step} variant="left" className="flex gap-4">
                            <span className="btn-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white">
                               {i + 1}
                            </span>
@@ -455,12 +447,12 @@ export default function LandingPage() {
                               <p className="font-semibold text-[#170B2E]">{s.step}</p>
                               <p className="mt-1 text-sm text-[#3D3650] leading-relaxed">{s.body}</p>
                            </div>
-                        </li>
+                        </RevealItem>
                      ))}
-                  </ol>
+                  </RevealGroup>
                </div>
 
-               <div className="min-w-0">
+               <Reveal variant="right" delay={0.1} className="min-w-0">
                   <div className="lp-code-block rounded-2xl overflow-hidden border border-[#E7DFF5] shadow-[0_30px_60px_-30px_rgba(65,6,134,0.35)]">
                      <div className="flex items-center gap-2 px-4 py-3 border-b border-[#E7DFF5]">
                         <span className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
@@ -486,7 +478,7 @@ export default function LandingPage() {
                   <Link href="/docs/quickstart" className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-[#6425C4]">
                      Follow the quickstart <ArrowRight size={16} aria-hidden="true" />
                   </Link>
-               </div>
+               </Reveal>
             </div>
          </section>
 
@@ -499,7 +491,9 @@ export default function LandingPage() {
                   intro="All four run on the same backend, so you can start with hosted UI and move to your own interface later without changing server code."
                   className="mb-10"
                />
-               <IntegrationSelector />
+               <Reveal variant="up" delay={0.1} amount={0.1}>
+                  <IntegrationSelector />
+               </Reveal>
             </div>
          </section>
 
@@ -512,11 +506,11 @@ export default function LandingPage() {
                   title="Built for products where people need to talk."
                   intro="PurpleCallio is B2B infrastructure. Your customers never see it; calls just work inside your product."
                />
-               <div className="mt-14 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+               <RevealGroup stagger={0.08} className="mt-14 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                   {USE_CASES.map((uc) => (
+                     <RevealItem key={uc.label} variant="zoom-up" className="h-full">
                      <div
-                        key={uc.label}
-                        className="group rounded-2xl border border-[#E7DFF5] bg-white p-6 transition-all hover:-translate-y-0.5 hover:border-[#D6C4EE] hover:shadow-[0_20px_40px_-24px_rgba(65,6,134,0.3)]"
+                        className="group h-full rounded-2xl border border-[#E7DFF5] bg-white p-6 transition-all hover:-translate-y-0.5 hover:border-[#D6C4EE] hover:shadow-[0_20px_40px_-24px_rgba(65,6,134,0.3)]"
                      >
                         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#7F40E8]/10 text-[#7F40E8] transition-colors group-hover:bg-[#7F40E8] group-hover:text-white">
                            <uc.icon size={22} aria-hidden="true" />
@@ -524,8 +518,9 @@ export default function LandingPage() {
                         <p className="mt-5 font-semibold text-[#170B2E]">{uc.label}</p>
                         <p className="mt-2 text-sm text-[#3D3650] leading-relaxed">{uc.description}</p>
                      </div>
+                     </RevealItem>
                   ))}
-               </div>
+               </RevealGroup>
             </div>
          </section>
 
@@ -538,15 +533,15 @@ export default function LandingPage() {
                   title="Everything in the box."
                   intro="The building blocks every calling product needs, included on every plan."
                />
-               <div className="mt-14 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+               <RevealGroup stagger={0.06} className="mt-14 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {FEATURES.map((f) => (
-                     <div key={f.title} className="rounded-2xl bg-white p-6 ring-1 ring-[#E7DFF5] transition-shadow hover:shadow-[0_16px_36px_-20px_rgba(65,6,134,0.3)]">
+                     <RevealItem key={f.title} variant="scale" className="rounded-2xl bg-white p-6 ring-1 ring-[#E7DFF5] transition-shadow hover:shadow-[0_16px_36px_-20px_rgba(65,6,134,0.3)]">
                         <f.icon size={22} className="text-[#7F40E8]" aria-hidden="true" />
                         <p className="mt-4 font-semibold text-[#170B2E] text-sm">{f.title}</p>
                         <p className="mt-1.5 text-sm text-[#3D3650] leading-relaxed">{f.body}</p>
-                     </div>
+                     </RevealItem>
                   ))}
-               </div>
+               </RevealGroup>
                <div className="mt-10 text-center">
                   <Link href="/features" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#6425C4]">
                      See all features <ArrowRight size={16} aria-hidden="true" />
@@ -573,7 +568,7 @@ export default function LandingPage() {
                      </Link>
                   </div>
 
-                  <div className="rounded-2xl border border-[#E7DFF5] bg-white overflow-hidden shadow-[0_30px_60px_-30px_rgba(65,6,134,0.3)]">
+                  <Reveal variant="right" delay={0.1} className="rounded-2xl border border-[#E7DFF5] bg-white overflow-hidden shadow-[0_30px_60px_-30px_rgba(65,6,134,0.3)]">
                      <div className="px-5 py-4 border-b border-[#E7DFF5] flex items-center gap-2">
                         <span className="hero-badge-dot w-2 h-2 rounded-full" />
                         <span className="text-xs text-[#3D3650] font-mono">PurpleCallio Playground</span>
@@ -595,13 +590,15 @@ export default function LandingPage() {
                            Sign in to create and manage a demo session.
                         </div>
                      </div>
-                  </div>
+                  </Reveal>
                </div>
             </div>
          </section>
 
          {/* ── Pricing ── */}
-         <PricingSection />
+         <Reveal variant="fade" duration={0.9} amount={0.05}>
+            <PricingSection />
+         </Reveal>
 
          {/* ── Support ── */}
          <section className="section-alt px-6 py-24">
@@ -612,15 +609,15 @@ export default function LandingPage() {
                      title="Real answers from technical people."
                      intro="When something breaks, you need a fast answer from someone who knows the stack, not a chatbot pointing to a FAQ. PurpleCallio support is run by the engineers who built it."
                   />
-                  <div className="grid grid-cols-2 gap-4">
+                  <RevealGroup stagger={0.1} className="grid grid-cols-2 gap-4">
                      {SUPPORT_ITEMS.map((item) => (
-                        <div key={item.title} className="rounded-2xl bg-white p-5 ring-1 ring-[#E7DFF5]">
+                        <RevealItem key={item.title} variant="scale" className="rounded-2xl bg-white p-5 ring-1 ring-[#E7DFF5]">
                            <item.icon size={20} className="text-[#7F40E8]" aria-hidden="true" />
                            <p className="mt-3 font-semibold text-[#170B2E] text-sm">{item.title}</p>
                            <p className="mt-1 text-xs text-[#3D3650] leading-relaxed">{item.body}</p>
-                        </div>
+                        </RevealItem>
                      ))}
-                  </div>
+                  </RevealGroup>
                </div>
             </div>
          </section>
@@ -629,7 +626,7 @@ export default function LandingPage() {
          <section className="py-28 px-6 relative overflow-hidden">
             <div className="cta-bg absolute inset-0" />
             <div className="cta-grid absolute inset-0 pointer-events-none" />
-            <div className="relative max-w-2xl mx-auto text-center">
+            <Reveal variant="zoom-up" duration={0.8} className="relative max-w-2xl mx-auto text-center">
                <h2 className="lp-h2-cta font-bold leading-tight text-white mb-4">
                   Ready to add calls and AI agents to your product?
                </h2>
@@ -651,7 +648,7 @@ export default function LandingPage() {
                      Read the docs
                   </Link>
                </div>
-            </div>
+            </Reveal>
          </section>
       </div>
    );
