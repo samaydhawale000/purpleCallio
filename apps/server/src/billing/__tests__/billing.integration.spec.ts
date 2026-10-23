@@ -1,3 +1,4 @@
+import { CORE_FEATURES } from '../plans/feature-registry';
 import { InsufficientCreditsError } from '../credits/credit.service';
 import { CUSTOM_PLAN_INITIAL_MESSAGE } from '../custom-plans/custom-plan.service';
 import {
@@ -262,6 +263,26 @@ d('prepaid billing (integration)', () => {
       expect(plans.find((p) => p.slug === 'enterprise')?.customPricing).toBe(
         true,
       );
+    });
+
+    it('gives an active plan saved without features the core features, as a new version', async () => {
+      const admin = await createUser(h, 'admin@test.dev', { role: 'ADMIN' });
+      const created = await h.plans.createPlan(
+        { slug: 'bare', name: 'Bare', type: 'PAID', pricePaise: 10000, includedCredits: 100, features: [] },
+        admin.id,
+      );
+      await h.plans.ensureDefaults();
+
+      const plan = await h.prisma.plan.findUniqueOrThrow({
+        where: { id: created.id },
+        include: { currentVersion: true },
+      });
+      expect(plan.currentVersion?.version).toBe(2);
+      expect(plan.currentVersion?.features).toEqual(CORE_FEATURES);
+      expect(plan.currentVersion?.pricePaise).toBe(10000);
+      // A plan that already lists features is left alone.
+      const growth = await h.prisma.plan.findUniqueOrThrow({ where: { slug: 'growth' }, include: { currentVersion: true } });
+      expect(growth.currentVersion?.version).toBe(1);
     });
 
     it('creates, edits (new version) and archives a plan', async () => {

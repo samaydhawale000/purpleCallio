@@ -11,7 +11,13 @@ export type WebhookEvent =
   | 'call.cancelled'
   | 'call.busy'
   | 'call.ended'
-  | 'call.missed';
+  | 'call.missed'
+  // Live Translate (translation/PROTOCOL.md §6)
+  | 'call.translation.started'
+  | 'call.translation.ended'
+  | 'translation.limit_reached'
+  | 'translation.budget.threshold'
+  | 'call.translation.report_ready';
 
 export interface WebhookPayload {
   event: WebhookEvent;
@@ -22,6 +28,17 @@ export interface WebhookPayload {
   type: string;
   status: string;
   timestamp: string;
+  /** Event-specific details (Live Translate events); absent for call lifecycle events. */
+  data?: Record<string, unknown>;
+}
+
+/** Project-level event (no call), e.g. `translation.budget.threshold`. */
+export interface ProjectWebhookPayload {
+  event: WebhookEvent;
+  callId: null;
+  projectId: string;
+  timestamp: string;
+  data?: Record<string, unknown>;
 }
 
 const MAX_ATTEMPTS = 3;
@@ -39,7 +56,11 @@ export class WebhookService {
     private readonly entitlements: EntitlementService,
   ) {}
 
-  async fireForCall(callId: string, event: WebhookEvent): Promise<void> {
+  async fireForCall(
+    callId: string,
+    event: WebhookEvent,
+    data?: Record<string, unknown>,
+  ): Promise<void> {
     try {
       const call = await this.prisma.call.findUnique({
         where: { id: callId },
@@ -70,6 +91,7 @@ export class WebhookService {
         type: call.type,
         status: call.status,
         timestamp: new Date().toISOString(),
+        ...(data !== undefined ? { data } : {}),
       };
 
       // Fire-and-forget from the caller's perspective (call.service.ts never
@@ -91,6 +113,50 @@ export class WebhookService {
   }
 
   /**
+   * Project-level event without a call (`callId: null` in the payload), e.g.
+   * the CostGuard budget threshold. Same entitlement check, signing and
+   * retry as fireForCall; the delivery row is keyed `project:<projectId>`.
+   * Never throws.
+   */
+  async fireForProject(
+    projectId: string,
+    event: WebhookEvent,
+    data?: Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      const project = await this.prisma.project.findUnique({
+        where: { id: projectId },
+      });
+      if (!project || !project.webhookUrl) return;
+      if (
+        !(await this.entitlements.hasFeature(
+          project.ownerId,
+          FeatureKey.WEBHOOKS,
+        ))
+      ) {
+        return;
+      }
+      const payload: ProjectWebhookPayload = {
+        event,
+        callId: null,
+        projectId,
+        timestamp: new Date().toISOString(),
+        ...(data !== undefined ? { data } : {}),
+      };
+      await this.deliverWithRetry(
+        `project:${projectId}`,
+        project.webhookUrl,
+        project.webhookSecret,
+        payload,
+      );
+    } catch (err: any) {
+      this.logger.error(
+        `Webhook dispatch failed for project ${projectId} (${event}): ${err?.message || err}`,
+      );
+    }
+  }
+
+  /**
    * Delivers with up to MAX_ATTEMPTS tries and exponential backoff between
    * them. Every attempt is reflected in a WebhookDelivery row (event id +
    * attempt count + last error) so a persistently failing endpoint shows up
@@ -100,7 +166,7 @@ export class WebhookService {
     callId: string,
     url: string,
     secret: string | null,
-    payload: WebhookPayload,
+    payload: WebhookPayload | ProjectWebhookPayload,
   ): Promise<void> {
     const delivery = await this.prisma.webhookDelivery.create({
       data: {
@@ -150,7 +216,7 @@ export class WebhookService {
   private async attemptDelivery(
     url: string,
     secret: string | null,
-    payload: WebhookPayload,
+    payload: WebhookPayload | ProjectWebhookPayload,
   ): Promise<void> {
     const body = JSON.stringify(payload);
     const headers: Record<string, string> = {

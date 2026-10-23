@@ -97,6 +97,8 @@ export interface CreditRates {
   audioCreditsPerMinute: number;
   videoCreditsPerMinute: number;
   screenShareCreditsPerMinute: number;
+  /** Credits per minute of an AI voice agent call (absent on older servers). */
+  aiCreditsPerMinute?: number;
   taxPercent: number;
   topUpExpiryPolicy: 'NEVER' | 'DAYS' | 'SUBSCRIPTION_END';
   topUpExpiryDays: number | null;
@@ -187,7 +189,9 @@ export interface CurrentUsage {
     callsCompleted: number;
   };
   credits: { audio: number; video: number; screenShare: number; total: number; charged: number };
-  creditRates: { audioCreditsPerMinute: number; videoCreditsPerMinute: number; screenShareCreditsPerMinute: number };
+  creditRates: { audioCreditsPerMinute: number; videoCreditsPerMinute: number; screenShareCreditsPerMinute: number; aiCreditsPerMinute?: number };
+  /** AI voice calls billed this period (billed separately from `usage`). */
+  ai?: { sessions: number; minutes: number; credits: number };
   wallet: WalletSummary;
   subscription: Subscription;
 }
@@ -554,12 +558,32 @@ export function usageBreakdown(meta: Record<string, unknown> | null | undefined)
   ];
 }
 
+/** Ledger reference the server uses for AI voice call debits. */
+export const AI_SESSION_REFERENCE = 'AI_SESSION';
+
+/** Minutes and credits of an AI voice call debit, or null for any other row. */
+export function aiLedgerUsage(row: Pick<CreditTransactionRow, 'metadata'> & { referenceType?: string | null; amount?: number }) {
+  if (row.referenceType !== AI_SESSION_REFERENCE) return null;
+  const m = row.metadata ?? {};
+  const credits = row.amount !== undefined ? Math.abs(row.amount) : num(m.aiCredits) - num(m.shortfall);
+  return { minutes: num(m.aiMinutes), credits };
+}
+
+/** "1.5" / "12" — AI minutes with at most two decimals. */
+export function formatAiMinutes(minutes: number) {
+  return minutes.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+}
+
 /** One-line description for a credit ledger row. */
-export function describeCreditTransaction(row: Pick<CreditTransactionRow, 'type' | 'metadata' | 'referenceId'>) {
+export function describeCreditTransaction(
+  row: Pick<CreditTransactionRow, 'type' | 'metadata' | 'referenceId'> & { referenceType?: string | null; amount?: number },
+) {
   const m = (row.metadata ?? {}) as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v : null);
   switch (row.type) {
     case 'USAGE_DEBIT': {
+      const ai = aiLedgerUsage(row);
+      if (ai) return `AI voice call: ${formatAiMinutes(ai.minutes)} min, ${formatCredits(ai.credits)} credits`;
       const callId = str(m.callId) ?? row.referenceId;
       const used = usageBreakdown(m).filter((p) => p.minutes > 0);
       const media = used.length

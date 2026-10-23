@@ -9,6 +9,8 @@ import logo from "../../assets/images/logo.webp";
 
 const footerLinks = {
    Product: [
+      { name: "All Features", href: "/features" },
+      { name: "AI Voice Agents", href: "/features/ai-voice-agents" },
       { name: "Video Calling", href: "/features/video-calling" },
       { name: "Audio Calling", href: "/features/audio-calling" },
       { name: "Screen Sharing", href: "/features/screen-sharing" },

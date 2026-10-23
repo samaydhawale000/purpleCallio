@@ -44,6 +44,14 @@ export function PricingAuthority({ className = "", showPlans = true }: { classNa
                               <td className="py-3">{formatRate(rate as number)}</td>
                            </tr>
                         ))}
+                        {state.data.creditRates.aiCreditsPerMinute != null && (
+                           <tr className="border-b border-[#E7DFF5] last:border-0">
+                              <th className="py-3 pr-4 font-medium text-[#170B2E]">AI voice</th>
+                              <td className="py-3">
+                                 {formatRate(state.data.creditRates.aiCreditsPerMinute)} per call minute (paid plans)
+                              </td>
+                           </tr>
+                        )}
                      </tbody>
                   </table>
                </div>

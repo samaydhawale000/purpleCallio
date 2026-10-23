@@ -63,8 +63,8 @@ export function MeetingRoom({
       {waitElapsed && others.length === 0 && showWaitingRoom && (
         <div role="status" style={{ color: '#94A3B8', fontSize: 14, padding: 12 }}>
           <p>{waitingRoomLabel} Check the invite or connection.</p>
-          <button type="button" onClick={() => { void leave().then(join); }}>Retry connection</button>
-          <button type="button" onClick={() => { void leave(); }}>Leave call</button>
+          <button type="button" style={{ cursor: 'pointer' }} onClick={() => { void leave().then(join); }}>Retry connection</button>
+          <button type="button" style={{ cursor: 'pointer' }} onClick={() => { void leave(); }}>Leave call</button>
         </div>
       )}
       {children}
@@ -155,7 +155,7 @@ export function ParticipantTile({
         <audio ref={audioRef} autoPlay muted={muted} />
       )}
 
-      {audioBlocked && !muted && <button type="button" onClick={() => { const element = videoRef.current ?? audioRef.current; if (element) void element.play().then(() => setAudioBlocked(false)).catch(() => setAudioBlocked(true)); }} style={{ position: 'absolute', inset: 'auto 8px 8px', zIndex: 2 }}>Click to enable audio</button>}
+      {audioBlocked && !muted && <button type="button" onClick={() => { const element = videoRef.current ?? audioRef.current; if (element) void element.play().then(() => setAudioBlocked(false)).catch(() => setAudioBlocked(true)); }} style={{ position: 'absolute', inset: 'auto 8px 8px', zIndex: 2, cursor: 'pointer' }}>Click to enable audio</button>}
 
       {name && (
         <span

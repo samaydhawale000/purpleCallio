@@ -4,6 +4,7 @@ export type BillingTab =
   | 'topups'
   | 'features'
   | 'credit-rates'
+  | 'translation'
   | 'subscriptions'
   | 'payments'
   | 'custom-plans'
@@ -15,6 +16,7 @@ export const BILLING_TABS: { key: BillingTab; label: string }[] = [
   { key: 'topups', label: 'Top-ups' },
   { key: 'features', label: 'Features' },
   { key: 'credit-rates', label: 'Credit Rates' },
+  { key: 'translation', label: 'Live Translate' },
   { key: 'subscriptions', label: 'Subscriptions' },
   { key: 'payments', label: 'Payments' },
   { key: 'custom-plans', label: 'Custom Plans' },
@@ -28,6 +30,7 @@ export const BILLING_NAV: { label: string; tab: BillingTab }[] = [
   { label: 'Subscriptions', tab: 'subscriptions' },
   { label: 'Payments', tab: 'payments' },
   { label: 'Credits', tab: 'credit-rates' },
+  { label: 'Live Translate', tab: 'translation' },
   { label: 'Custom Plans', tab: 'custom-plans' },
   { label: 'Billing Settings', tab: 'settings' },
 ];

@@ -123,6 +123,47 @@ export class PlanService {
    * overwrites anything an admin has configured. Values are starting
    * points — all of them are editable from Admin → Billing.
    */
+  /**
+   * An active plan whose current version lists no features would deny its
+   * subscribers entitlement-gated features (webhooks, custom branding) and
+   * show "—" for every row on the pricing page. That only happens when a
+   * plan was saved without ticking any feature, so give such plans the core
+   * features as a new version. Existing subscribers keep their snapshot.
+   */
+  private async backfillEmptyPlanFeatures() {
+    const plans = await this.prisma.plan.findMany({
+      where: { status: PlanStatus.ACTIVE, currentVersionId: { not: null } },
+      include: { currentVersion: true },
+    });
+    for (const plan of plans) {
+      const current = plan.currentVersion;
+      if (!current || current.features.length > 0) continue;
+      await this.prisma.$transaction(async (tx) => {
+        const last = await tx.planVersion.findFirst({
+          where: { planId: plan.id },
+          orderBy: { version: 'desc' },
+        });
+        const version = await tx.planVersion.create({
+          data: {
+            ...this.termsData({
+              ...this.versionToTerms(current),
+              features: CORE_FEATURES,
+            }),
+            planId: plan.id,
+            version: (last?.version ?? 0) + 1,
+          },
+        });
+        await tx.plan.update({
+          where: { id: plan.id },
+          data: { currentVersionId: version.id },
+        });
+      });
+      this.logger.warn(
+        `Plan "${plan.slug}" had no features; added the core features as version ${current.version + 1}.`,
+      );
+    }
+  }
+
   async ensureDefaults() {
     await this.prisma.billingConfig.upsert({
       where: { key: 'default' },
@@ -203,6 +244,42 @@ export class PlanService {
       for (const p of plans)
         await this.createPlan(p, null, { skipAudit: true });
       this.logger.log('Seeded default plans.');
+    }
+
+    await this.backfillEmptyPlanFeatures();
+
+    const activeFree = await this.prisma.plan.findFirst({
+      where: {
+        type: PlanType.FREE,
+        status: PlanStatus.ACTIVE,
+        currentVersionId: { not: null },
+      },
+    });
+    if (!activeFree) {
+      let slug = 'free';
+      for (
+        let n = 2;
+        await this.prisma.plan.findUnique({ where: { slug } });
+        n++
+      )
+        slug = `free-${n}`;
+      await this.createPlan(
+        {
+          slug,
+          name: 'Free',
+          type: 'FREE',
+          displayOrder: 0,
+          ctaAction: 'SIGNUP',
+          ctaLabel: 'Start free',
+          description: 'Build and test with a monthly credit allowance.',
+          pricePaise: 0,
+          includedCredits: 1500,
+          features: CORE_FEATURES,
+        },
+        null,
+        { skipAudit: true },
+      );
+      this.logger.warn(`No active Free plan found; seeded "${slug}".`);
     }
 
     if ((await this.prisma.topUpPackage.count()) === 0) {
@@ -466,6 +543,9 @@ export class PlanService {
     );
     if (display.status && display.status !== existing.status) {
       await this.assertNotLastFreePlan(existing, display.status);
+    }
+    if (display.type && display.type !== existing.type) {
+      await this.assertNotLastFreePlan(existing, PlanStatus.ARCHIVED);
     }
 
     const termsChanged = this.termsDiffer(terms, existing.currentVersion);

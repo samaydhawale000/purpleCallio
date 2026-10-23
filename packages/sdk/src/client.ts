@@ -6,6 +6,11 @@ import type {
   CreateCallResult,
   JoinCallResult,
 } from './types';
+import type {
+  AiSession,
+  CreateAiSessionParams,
+  CreateAiSessionResult,
+} from './ai/types';
 
 /**
  * Low-level REST client for the PurpleCallio API.
@@ -29,6 +34,25 @@ export class PurpleCallioClient {
     this.apiUrl = apiUrl.replace(/\/$/, '');
   }
 
+  /**
+   * AI voice agents. Create a session here (server-side) and hand only its
+   * `token` and `connectUrl` to the browser's `PurpleCallioAgentCall`.
+   */
+  readonly ai = {
+    /** `POST /ai/sessions` → `{ sessionId, callId, token, expiresAt, connectUrl }`. */
+    createSession: (params: CreateAiSessionParams): Promise<CreateAiSessionResult> =>
+      this.request<CreateAiSessionResult>('POST', '/ai/sessions', {
+        agentId: params.agentId,
+        participant: params.participant,
+        metadata: params.metadata,
+      }),
+    getSession: (sessionId: string): Promise<AiSession> =>
+      this.request<AiSession>('GET', `/ai/sessions/${encodeURIComponent(sessionId)}`),
+    /** Ends the session if it is still live; safe to call more than once. */
+    endSession: (sessionId: string): Promise<AiSession> =>
+      this.request<AiSession>('POST', `/ai/sessions/${encodeURIComponent(sessionId)}/end`),
+  };
+
   private async request<T>(
     method: string,
     path: string,
@@ -46,8 +70,17 @@ export class PurpleCallioClient {
     });
 
     if (!res.ok) {
-      const err = (await res.json().catch(() => ({}))) as { message?: string };
-      throw new Error(err.message ?? `PurpleCallio error ${res.status}: ${path}`);
+      const err = (await res.json().catch(() => ({}))) as {
+        message?: string | string[];
+        code?: string;
+      };
+      const error = new Error((err.message as string | undefined) ?? `PurpleCallio error ${res.status}: ${path}`) as Error & {
+        code?: string;
+        status?: number;
+      };
+      if (typeof err.code === 'string') error.code = err.code;
+      error.status = res.status;
+      throw error;
     }
 
     return res.json() as Promise<T>;

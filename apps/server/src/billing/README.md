@@ -25,6 +25,7 @@ choose plan ─► checkout (server prices it) ─► provider payment ─► se
 | Custom plans (support conversation + private offers)                                   | `custom-plans/custom-plan.service.ts`                              |
 | Credit rates, tax, thresholds, expiry policy (admin-editable)                          | `billing-config.service.ts` (`BillingConfig` row)                  |
 | Usage → credits (metering stays in `usage-segment` / `rating-engine`)                  | `usage-billing.service.ts`                                         |
+| AI voice call → credits (`aiCreditsPerMinute`, per call minute; no `CallUsage` rows)   | `../ai/ai-billing.service.ts`                                      |
 | Housekeeping jobs (no money movement)                                                  | `billing-jobs.service.ts`                                          |
 | One-time pay-as-you-go → prepaid migration                                             | `legacy-billing-migration.service.ts`                              |
 | Audit trail                                                                            | `billing-audit.service.ts` (writes `AuditLog` with old/new values) |

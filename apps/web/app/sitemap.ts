@@ -4,6 +4,9 @@ import { PURPLECALLIO_URL } from "./lib/brand";
 const publicPaths = [
   "",
   "/what-is-purplecallio",
+  "/features",
+  "/features/ai-voice-agents",
+  "/features/live-translation",
   "/features/video-calling",
   "/features/audio-calling",
   "/features/screen-sharing",
@@ -31,6 +34,8 @@ const publicPaths = [
   "/docs/webhooks",
   "/docs/security",
   "/docs/usage-billing",
+  "/docs/ai-agents",
+  "/docs/live-translate",
   "/examples",
   "/examples/javascript-video",
   "/examples/javascript-audio",

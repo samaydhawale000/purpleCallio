@@ -57,13 +57,16 @@ describe('Plan editor', () => {
 
     render(<PlanEditor planId={null} />);
     // Features come from the API, not a hard-coded list.
-    const teamRooms = await screen.findByLabelText('Team rooms');
-    expect(screen.getByLabelText('Audit export')).toBeTruthy();
+    const teamRooms = (await screen.findByLabelText('Team rooms')) as HTMLInputElement;
+    const auditExport = screen.getByLabelText('Audit export') as HTMLInputElement;
+    // A new plan starts with every active feature ticked.
+    expect(teamRooms.checked).toBe(true);
+    expect(auditExport.checked).toBe(true);
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Scale Plan' } });
     fireEvent.change(screen.getByLabelText('Price (₹)'), { target: { value: '1499.50' } });
     fireEvent.change(screen.getByLabelText('Total included credits'), { target: { value: '25000' } });
-    fireEvent.click(teamRooms);
+    fireEvent.click(auditExport);
     expect(screen.getByText(/creates a new version\. Existing subscribers keep the terms they purchased/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Create plan' }));

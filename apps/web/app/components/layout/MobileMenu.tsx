@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { X } from "lucide-react";
 import NavLinks from "./NavLinks";
 import { useAuthStore } from "../../store/auth.store";
@@ -24,7 +24,7 @@ export default function MobileMenu({
       {open && (
         <>
           {/* Backdrop */}
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -34,7 +34,7 @@ export default function MobileMenu({
           />
 
           {/* Drawer */}
-          <motion.aside
+          <m.aside
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
@@ -99,7 +99,7 @@ export default function MobileMenu({
                 )}
               </div>
             </div>
-          </motion.aside>
+          </m.aside>
         </>
       )}
     </AnimatePresence>

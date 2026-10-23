@@ -2,14 +2,24 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Atom, Bell, Blocks, BookOpen, Cable, CreditCard, Gauge, Headset, KeyRound, Lightbulb, Monitor, RotateCw, Server, Smartphone, UserRound, Webhook, Zap } from 'lucide-react';
+import { Atom, Bell, Languages, Blocks, BookOpen, Bot, Cable, CreditCard, Gauge, Headset, KeyRound, Lightbulb, Monitor, RotateCw, Server, Smartphone, UserRound, Webhook, Zap } from 'lucide-react';
 import { PricingAuthority } from '../components/PricingAuthority';
 import { PURPLECALLIO_API_URL, PURPLECALLIO_SIGNAL_URL, PURPLECALLIO_URL } from '../lib/brand';
+import {
+  AI_BROWSER_EXAMPLE,
+  AI_ERROR_CODES,
+  AI_REACT_COMPONENT_EXAMPLE,
+  AI_REACT_HOOK_EXAMPLE,
+  AI_SERVER_SESSION_EXAMPLE,
+  AI_TOOL_SCHEMA_EXAMPLE,
+} from '../lib/ai-docs';
+import { LT_REST_CREATE } from '../lib/live-translate';
 
 // ── Sidebar nav ───────────────────────────────────────────────────────────────
 const NAV = [
   { group: 'Start here', items: [{ id: 'quickstart', label: 'Quick Start', icon: Zap }, { id: 'how-it-works', label: 'How it works', icon: RotateCw }, { id: 'authentication', label: 'Authentication', icon: KeyRound }] },
   { group: 'Products', items: [{ id: 'hosted-ui', label: 'Hosted UI', icon: Monitor }, { id: 'react-components', label: 'React Components', icon: Atom }, { id: 'headless-sdk', label: 'Headless SDK', icon: Blocks }, { id: 'angular-sdk', label: 'Angular SDK', icon: Blocks }, { id: 'react-native-sdk', label: 'React Native SDK', icon: Smartphone }, { id: 'vue-sdk', label: 'Vue SDK', icon: Blocks }, { id: 'svelte-sdk', label: 'Svelte SDK', icon: Blocks }] },
+  { group: 'AI', items: [{ id: 'ai-agents', label: 'AI Voice Agents', icon: Bot }, { id: 'live-translate', label: 'Live Translate (early access)', icon: Languages }] },
   { group: 'REST API', items: [{ id: 'api-create', label: 'POST /calls' }, { id: 'api-join', label: 'POST /calls/:id/join' }, { id: 'api-leave', label: 'POST /calls/:id/leave' }, { id: 'api-accept', label: 'POST /calls/:id/accept' }, { id: 'api-reject', label: 'POST /calls/:id/reject' }, { id: 'api-end', label: 'POST /calls/:id/end' }, { id: 'api-get', label: 'GET /calls/:id' }] },
 { group: 'Real-time', items: [{ id: 'websocket', label: 'WebSocket Events', icon: Cable }, { id: 'webhooks', label: 'Webhooks', icon: Webhook }] },
   { group: 'Billing', items: [{ id: 'usage-billing', label: 'Plans, Credits & Usage', icon: CreditCard }] },
@@ -684,6 +694,81 @@ join();
             </Tip>
           </Section>
 
+          {/* ── AI Voice Agents ──────────────────────── */}
+          <Section id="ai-agents">
+            <Heading>AI Voice Agents</Heading>
+            <p className="text-[#3D3650] text-sm mb-5">
+              Real-time voice agents your users talk to from the browser. Configure the agent and its tools in
+              Dashboard → AI Agents, create a short-lived session from your backend, and connect from the browser.
+              Audio is relayed through PurpleCallio, so model provider keys never reach the browser.
+            </p>
+
+            <Tip type="info">
+              Available on every paid plan (including custom plans), not on Free. AI calls are billed in credits
+              per minute of call time; see <Link href="/pricing" className="underline">pricing</Link> for the current rate.
+            </Tip>
+
+            <p className="text-sm font-semibold text-[#170B2E] mb-3">1. Create a session on your server</p>
+            <Code code={AI_SERVER_SESSION_EXAMPLE} label="server.ts" />
+
+            <p className="text-sm font-semibold text-[#170B2E] mt-6 mb-3">2a. Talk to the agent with the browser SDK</p>
+            <Code code={AI_BROWSER_EXAMPLE} label="agent-call.ts" />
+
+            <p className="text-sm font-semibold text-[#170B2E] mt-6 mb-3">2b. Or use the React hook or component</p>
+            <Code code="npm install @purplecallio/react @purplecallio/sdk" label="install" />
+            <Code code={AI_REACT_HOOK_EXAMPLE} label="SupportAgent.tsx" />
+            <Code code={AI_REACT_COMPONENT_EXAMPLE} label="SupportWidget.tsx" />
+
+            <p className="text-sm font-semibold text-[#170B2E] mt-6 mb-3">Tools</p>
+            <p className="text-[#3D3650] text-sm mb-3">
+              Tools let the agent call your HTTPS endpoints. Arguments use a flat JSON-schema subset (string, number,
+              integer and boolean properties, optional enums). Every request is HMAC-signed with the tool&apos;s
+              <code className="font-mono text-xs px-1">bj_tool_</code> secret; private and internal addresses are refused.
+            </p>
+            <Code code={AI_TOOL_SCHEMA_EXAMPLE} label="parameters.json" />
+
+            <p className="text-sm font-semibold text-[#170B2E] mt-6 mb-3">Error codes</p>
+            <div className="rounded-xl border border-[#E7DFF5] overflow-hidden">
+              <table className="w-full text-xs">
+                <tbody>
+                  {AI_ERROR_CODES.map(([code, meaning], i) => (
+                    <tr key={code} className={i ? 'border-t border-[#E7DFF5]' : ''} style={{ background: i % 2 === 0 ? '#FFFFFF' : '#FBF8FE' }}>
+                      <td className="px-4 py-2.5 font-mono font-bold text-[#6425C4]">{code}</td>
+                      <td className="px-4 py-2.5 text-[#3D3650]">{meaning}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <Tip type="tip">
+              Signature verification, network rules for tool endpoints, limits and security notes are in the{' '}
+              <Link href="/docs/ai-agents" className="underline">AI Voice Agents guide</Link>.
+            </Tip>
+          </Section>
+
+          {/* ── Live Translate (early access) ─────────── */}
+          <Section id="live-translate">
+            <Heading>Live Translate</Heading>
+            <p className="text-[#3D3650] text-sm mb-5">
+              Real-time voice translation and captions for 1:1 calls: each person hears and reads the other in their own
+              language. Add a <code className="font-mono text-xs px-1">translation</code> block to{' '}
+              <code className="font-mono text-xs px-1">POST /calls</code>, then use <code className="font-mono text-xs px-1">TranslationClient</code>{' '}
+              or the React UI Kit in the browser. Includes DualView Translation, PurpleLex, MeaningGuard, Translation
+              Observability, CostGuard, Post-Call Suite and the Translation UI Kit.
+            </p>
+            <Tip type="info">
+              Early access: enabled per account, and fields may change before general availability. Billed per translated
+              participant-minute at the rates on the <Link href="/pricing#live-translate" className="underline">pricing page</Link>.
+              Replay of original audio is off by default.
+            </Tip>
+            <Code code={LT_REST_CREATE} label="request.sh" />
+            <Tip type="tip">
+              Full reference (SDK, React components, lexicons, MeaningGuard reasons, budgets, metrics, reports, webhooks and
+              errors) is in the <Link href="/docs/live-translate" className="underline">Live Translate guide</Link>.
+            </Tip>
+          </Section>
+
           {/* ── REST API ─────────────────────────────── */}
           <Section id="api-create">
             <Heading>REST API</Heading>
@@ -1114,7 +1199,7 @@ meeting.microphone.enable();`} />
             <div className="space-y-3 mb-6">
               {[
                 { t: 'Start on the Free plan', d: 'Every account starts on the Free plan with a monthly amount of included credits for building and testing.' },
-                { t: 'Choose a plan and pay upfront', d: 'Pick a paid plan in Dashboard → Billing and pay once at checkout (GST added). Credits are added as soon as the payment is confirmed. Keep auto-renew on to renew automatically each period, or turn it off and renew manually.' },
+                { t: 'Choose a plan and pay upfront', d: 'Pick a paid plan in Dashboard → Billing and pay for the first period at checkout (GST added). Credits are added as soon as the payment is confirmed. Keep auto-renew on to renew automatically each period, or turn it off and renew manually.' },
                 { t: 'Usage consumes credits', d: 'Audio, video, and screen-sharing participant-minutes consume credits from your balance. Track usage and your credit balance in the dashboard.' },
                 { t: 'Top up, renew, or upgrade', d: 'Buy a one-time top-up when you need more credits, let your plan auto-renew (or renew manually), or upgrade at any time. When credits run out, new calls cannot start — active calls are never interrupted.' },
               ].map((s) => (

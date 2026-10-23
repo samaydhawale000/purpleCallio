@@ -146,6 +146,7 @@ export class BillingController {
       audioCreditsPerMinute: config.audioCreditsPerMinute,
       videoCreditsPerMinute: config.videoCreditsPerMinute,
       screenShareCreditsPerMinute: config.screenShareCreditsPerMinute,
+      aiCreditsPerMinute: config.aiCreditsPerMinute,
       taxPercent: config.taxPercent,
       topUpExpiryPolicy: config.topUpExpiryPolicy,
       topUpExpiryDays: config.topUpExpiryDays,

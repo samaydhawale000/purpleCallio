@@ -22,7 +22,9 @@ import { Button } from '../../components/ui/Button';
 import {
   cancelSubscription,
   CREDIT_SOURCE_LABEL,
+  aiLedgerUsage,
   describeCreditTransaction,
+  formatAiMinutes,
   formatCredits,
   formatDate,
   formatMoney,
@@ -469,6 +471,20 @@ export default function BillingOverviewPage() {
               </thead>
               <tbody>
                 {history.map((row) => {
+                  const ai = aiLedgerUsage(row);
+                  if (ai) {
+                    return (
+                      <tr key={row.id} className="border-b border-[#E7DFF5]/60 last:border-0">
+                        <td className="py-2.5 pr-4 text-[#3D3650] whitespace-nowrap">{formatDate(row.createdAt)}</td>
+                        <td className="py-2.5 pr-4 text-[#3D3650]">AI voice call</td>
+                        <td className="py-2.5 pr-4 text-[#3D3650]">AI voice</td>
+                        <td className="py-2.5 pr-4 text-[#3D3650] whitespace-nowrap">{formatAiMinutes(ai.minutes)} min</td>
+                        <td className="py-2.5 text-right font-medium text-[#170B2E]" title={describeCreditTransaction(row)}>
+                          {formatCredits(ai.credits)}
+                        </td>
+                      </tr>
+                    );
+                  }
                   const parts = usageBreakdown(row.metadata).filter((p) => p.minutes > 0);
                   const callId = typeof row.metadata?.callId === 'string' ? row.metadata.callId : row.referenceId;
                   return (

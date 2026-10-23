@@ -59,9 +59,12 @@ export class UsageBillingService {
 
   /** LEGACY: pay-as-you-go rates (for historical invoices / internal cost). */
   async getRates(): Promise<BillingRates> {
-    const rate = await this.prisma.billingRate.findUnique({
-      where: { key: 'default' },
-    });
+    const [rate, config] = await Promise.all([
+      this.prisma.billingRate.findUnique({ where: { key: 'default' } }),
+      this.config.get(),
+    ]);
+    // GST has one source of truth: BillingConfig (Admin → Billing → Settings).
+    const taxPercent = config.taxPercent;
     if (!rate) {
       return {
         audioPaise: 20,
@@ -69,7 +72,7 @@ export class UsageBillingService {
         screenSharePaise: 10,
         freeAudioMins: 500,
         freeVideoMins: 200,
-        taxPercent: 18,
+        taxPercent,
       };
     }
     return {
@@ -78,7 +81,7 @@ export class UsageBillingService {
       screenSharePaise: rate.screenSharePaise,
       freeAudioMins: rate.freeAudioMins,
       freeVideoMins: rate.freeVideoMins,
-      taxPercent: rate.taxPercent,
+      taxPercent,
     };
   }
 
@@ -275,9 +278,10 @@ export class UsageBillingService {
   /**
    * Low-credit notices when this debit crossed a configured threshold of the
    * period's credits (e.g. 80/90/100%). Only the highest crossed threshold
-   * is sent; the per-period dedupe key stops repeats.
+   * is sent; the per-period dedupe key stops repeats. Also used by AI call
+   * billing (AiBillingService), with the same period key.
    */
-  private async notifyThresholds(
+  async notifyThresholds(
     userId: string,
     periodRef: string,
     periodStart: Date,
@@ -347,11 +351,15 @@ export class UsageBillingService {
   async getCurrentUsage(userId: string) {
     const usage = await this.getOrCreateUsage(userId);
     const sub = await this.subscriptions.getActiveSubscription(userId);
-    const [totals, config, wallet, media] = await Promise.all([
+    const [totals, config, wallet, media, ai] = await Promise.all([
       this.getAggregatedCallUsage(usage.id),
       this.config.get(),
       this.credits.getSummary(userId, sub.currentPeriodStart),
       this.entitlements.mediaCreditsUsed(
+        userId,
+        sub.currentPeriodStart ?? usage.billingCycleStart,
+      ),
+      this.aiUsageSince(
         userId,
         sub.currentPeriodStart ?? usage.billingCycleStart,
       ),
@@ -378,9 +386,27 @@ export class UsageBillingService {
         audioCreditsPerMinute: config.audioCreditsPerMinute,
         videoCreditsPerMinute: config.videoCreditsPerMinute,
         screenShareCreditsPerMinute: config.screenShareCreditsPerMinute,
+        aiCreditsPerMinute: config.aiCreditsPerMinute,
       },
+      // AI voice calls are billed separately (AiBillingService), not in
+      // `usage`/`credits` above.
+      ai,
       wallet,
       subscription: this.subscriptions.serialize(sub),
+    };
+  }
+
+  /** AI voice calls billed since `since`: count, minutes and credits. */
+  private async aiUsageSince(userId: string, since: Date) {
+    const agg = await this.prisma.aiCallSession.aggregate({
+      where: { ownerId: userId, usageRecordedAt: { gte: since } },
+      _sum: { durationSeconds: true, creditsCharged: true },
+      _count: true,
+    });
+    return {
+      sessions: agg._count,
+      minutes: round2((agg._sum.durationSeconds ?? 0) / 60),
+      credits: agg._sum.creditsCharged ?? 0,
     };
   }
 

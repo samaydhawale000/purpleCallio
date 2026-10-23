@@ -2,6 +2,7 @@ import Script from "next/script";
 import "./globals.css";
 import SiteHeader from "./components/layout/SiteHeader";
 import SiteFooter from "./components/layout/SiteFooter";
+import { MotionProvider } from "./components/motion/MotionProvider";
 import { siteUrl, defaultDescription } from "./lib/seo";
 
 export const metadata = {
@@ -26,9 +27,11 @@ export default function RootLayout({ children }) {
       className="h-full antialiased scroll-smooth"
     >
       <body className="min-h-screen bg-white text-[#170B2E] overflow-x-hidden">
-        <SiteHeader />
-        {children}
-        <SiteFooter />
+        <MotionProvider>
+          <SiteHeader />
+          {children}
+          <SiteFooter />
+        </MotionProvider>
         <Script
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
           strategy="afterInteractive"

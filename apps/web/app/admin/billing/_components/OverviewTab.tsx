@@ -15,6 +15,7 @@ import { formatCredits, formatDate, formatMoney, PURPOSE_LABEL } from '../../../
 import { formatMinutes as mins } from '../../../lib/duration';
 import { Button } from '../../../components/ui/Button';
 import { useCanWrite } from '../../../lib/admin-access';
+import { AiUsagePanel } from './AiUsagePanel';
 import { ErrorText, Field, inputCls, Panel, rowCls, Spinner, Stat, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
 
@@ -101,6 +102,8 @@ export function OverviewTab() {
           </dl>
         </Panel>
       )}
+
+      <AiUsagePanel />
 
       <InternalRatesEditor />
     </div>

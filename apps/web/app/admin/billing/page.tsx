@@ -8,6 +8,7 @@ import { PlansTab } from './_components/PlansTab';
 import { TopUpsTab } from './_components/TopUpsTab';
 import { FeaturesTab } from './_components/FeaturesTab';
 import { CreditRatesTab } from './_components/CreditRatesTab';
+import { TranslationTab } from './_components/TranslationTab';
 import { SettingsTab } from './_components/SettingsTab';
 import { SubscriptionsTab } from './_components/SubscriptionsTab';
 import { PaymentsTab } from './_components/PaymentsTab';
@@ -37,7 +38,7 @@ function BillingConsole() {
       <div>
         <h1 className="text-2xl font-bold text-[#170B2E]">Plans &amp; Pricing</h1>
         <p className="text-sm text-[#3D3650] mt-1">
-          Prepaid plans, credit top-ups, credit rates, subscriptions, payments and custom plans. Changes apply without a
+          Prepaid plans, credit top-ups, credit rates, Live Translate pricing, subscriptions, payments and custom plans. Changes apply without a
           deployment and are audit-logged.
         </p>
       </div>
@@ -71,6 +72,7 @@ function BillingConsole() {
         {tab === 'topups' && <TopUpsTab />}
         {tab === 'features' && <FeaturesTab />}
         {tab === 'credit-rates' && <CreditRatesTab />}
+        {tab === 'translation' && <TranslationTab />}
         {tab === 'subscriptions' && <SubscriptionsTab />}
         {tab === 'payments' && <PaymentsTab />}
         {tab === 'custom-plans' && <CustomPlansTab />}

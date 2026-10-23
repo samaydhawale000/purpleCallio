@@ -21,12 +21,14 @@ vi.mock('next/link', () => ({
   ),
 }));
 // Render motion elements as plain divs so exit animations don't delay DOM swaps.
-vi.mock('framer-motion', () => ({
-  AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
-  motion: {
-    div: ({ children, initial, animate, exit, transition, ...rest }: any) => <div {...rest}>{children}</div>,
-  },
-}));
+vi.mock('framer-motion', () => {
+  const div = ({ children, initial, animate, exit, transition, ...rest }: any) => <div {...rest}>{children}</div>;
+  return {
+    AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
+    motion: { div },
+    m: { div },
+  };
+});
 
 vi.mock('../app/lib/api', () => ({ api }));
 

@@ -102,6 +102,8 @@ export interface BillingConfig {
   audioCreditsPerMinute: number;
   videoCreditsPerMinute: number;
   screenShareCreditsPerMinute: number;
+  /** Credits per AI voice call minute (absent on servers before AI billing). */
+  aiCreditsPerMinute?: number;
   taxPercent: number;
   lowCreditThresholds: number[];
   minimumCreditsToStartCall: number;
@@ -470,6 +472,29 @@ export const withdrawCustomOffer = (offerId: string) => data(api.post(`${B}/cust
 // ── Reporting ──────────────────────────────────────────────
 export const getRevenue = () => data(api.get<RevenueSummary>(`${B}/revenue`));
 export const getAdminUsageSummary = () => data(api.get<AdminUsageSummary>(`${B}/usage-summary`));
+
+/** AI voice calls billed in a date range (internal: provider cost and margin). */
+export interface AdminAiUsageSummary {
+  from: string;
+  to: string;
+  sessions: number;
+  minutes: number;
+  creditsCharged: number;
+  creditsShortfall: number;
+  inputTokens: number;
+  outputTokens: number;
+  providerCostPaise: number;
+  creditValuePaise: number | null;
+  creditValueSource: 'env' | 'topup' | 'none';
+  revenuePaise: number | null;
+  marginPaise: number | null;
+  marginPercent: number | null;
+  usdInrRate: number;
+  currency: string;
+}
+
+export const getAdminAiUsage = (params: { from?: string; to?: string } = {}) =>
+  data(api.get<AdminAiUsageSummary>(`${B}/ai-usage`, { params }));
 export const getSegmentAnalytics = () => data(api.get<SegmentAnalytics>(`${B}/segment-analytics`));
 export const getInternalRates = () => data(api.get<InternalRates>(`${B}/internal-rates`));
 export const updateInternalRates = (input: Partial<InternalRates>) => data(api.patch<InternalRates>(`${B}/internal-rates`, input));

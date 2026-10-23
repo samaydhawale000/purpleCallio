@@ -585,6 +585,43 @@ Lists calls for the current project.
 
 ---
 
+# AI Voice Agents
+
+Your backend creates a session with its API key and gives the browser only the short-lived `bj_ai_` token.
+
+```ts
+// Server
+const session = await client.ai.createSession({
+  agentId: 'agent-uuid',
+  participant: { id: 'user_123', name: 'Ann' },
+  metadata: { orderId: 'A-42' },
+});
+// → { sessionId, callId, token, expiresAt, connectUrl }
+
+await client.ai.getSession(session.sessionId);
+await client.ai.endSession(session.sessionId);
+```
+
+```ts
+// Browser
+import { PurpleCallioAgentCall } from '@purplecallio/sdk';
+
+const call = new PurpleCallioAgentCall({ token, apiUrl: connectUrl });
+call.on('transcript', ({ role, text, final }) => render(role, text, final));
+call.on('speaking', () => showSpeaking());
+call.on('error', (err) => console.warn(err.code));
+call.on('ended', ({ reason }) => done(reason));
+
+await call.start(); // call from a click handler so audio can play
+call.mute();
+call.unmute();
+call.end(); // safe to call more than once
+```
+
+`connectionState` is `idle | connecting | connected | ended`; `agentState` is `listening | thinking | speaking`. Failures are `Error`s with a stable `.code` (for example `AI_SESSION_EXPIRED`, `AI_MAX_DURATION_REACHED`, `AI_MICROPHONE_DENIED`).
+
+---
+
 # Headless WebRTC Meeting
 
 The SDK also exports `PurpleCallioMeeting`.

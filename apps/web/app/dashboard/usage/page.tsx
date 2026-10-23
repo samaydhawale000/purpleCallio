@@ -14,13 +14,16 @@ import {
    Receipt,
    Mic,
    Coins,
+   Bot,
 } from "lucide-react";
 import { useAuthStore } from "../../store/auth.store";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import { api } from "../../lib/api";
 import { formatMinutes } from "../../lib/duration";
+import { formatAiMinutes } from "../../lib/billing";
 import { Badge } from "../../components/ui/Badge";
 import { Pagination } from "../../components/ui/Pagination";
+import { TranslationUsageSection } from "../translation/_components/TranslationUsageSection";
 
 interface CurrentUsage {
    cycle: { start: string; end: string };
@@ -33,7 +36,9 @@ interface CurrentUsage {
       callsCompleted: number;
    };
    credits?: { audio: number; video: number; screenShare: number; total: number; charged: number };
-   creditRates?: { audioCreditsPerMinute: number; videoCreditsPerMinute: number; screenShareCreditsPerMinute: number };
+   creditRates?: { audioCreditsPerMinute: number; videoCreditsPerMinute: number; screenShareCreditsPerMinute: number; aiCreditsPerMinute?: number };
+   /** AI voice calls billed this period (separate from the media above). */
+   ai?: { sessions: number; minutes: number; credits: number };
    wallet?: { available: number; used: number; usedPercent: number; granted: number };
    subscription?: { planName: string | null; planType: string | null };
 }
@@ -368,7 +373,27 @@ export default function UsagePage() {
                   rate={rateLabel(rates?.screenShareCreditsPerMinute, "screen share")}
                />
             </div>
+
+            {usage?.ai && usage.ai.sessions > 0 && (
+               <div
+                  data-testid="ai-usage"
+                  className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-[#E7DFF5] px-4 py-3 text-sm text-[#3D3650]"
+               >
+                  <Bot size={16} style={{ color: "#6425C4" }} aria-hidden="true" />
+                  <span className="font-medium text-[#170B2E]">AI voice calls</span>
+                  <span>
+                     {usage.ai.sessions.toLocaleString("en-IN")} {usage.ai.sessions === 1 ? "call" : "calls"} ·{" "}
+                     {formatAiMinutes(usage.ai.minutes)} min · {formatCredits(usage.ai.credits)} credits
+                  </span>
+                  {rates?.aiCreditsPerMinute != null && (
+                     <span className="text-xs">({formatCredits(rates.aiCreditsPerMinute)} credits per call minute)</span>
+                  )}
+               </div>
+            )}
          </div>
+
+         {/* CostGuard: call vs translation vs AI vs report credits */}
+         <TranslationUsageSection />
 
          {/* Chart */}
          <div

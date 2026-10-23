@@ -1106,6 +1106,71 @@ import {
 
 ---
 
+# AI Voice Agents
+
+`usePurpleCallioAI` and `<PurpleCallioAI />` connect the browser to a PurpleCallio AI voice agent. They do not need a `MeetingProvider`.
+
+Your backend creates the session with its API key and returns only the short-lived `bj_ai_` token. `getToken` is called on every `start()`, because tokens are single-use. AI voice agents need a paid plan.
+
+```ts
+// Your backend
+const session = await client.ai.createSession({
+  agentId: process.env.PURPLECALLIO_AGENT_ID!,
+  participant: { id: user.id, name: user.name },
+});
+res.json({ token: session.token });
+```
+
+## Ready-made component
+
+```tsx
+import { PurpleCallioAI } from '@purplecallio/react';
+
+<PurpleCallioAI
+  apiUrl="https://<your-purplecallio-host>" // required: your PurpleCallio server origin
+  getToken={() => fetch('/api/ai-session', { method: 'POST' }).then((r) => r.json())}
+  className="my-agent"
+/>;
+```
+
+It renders start/end/mute, status, a speaking indicator, the call duration, error text, the tool-confirmation prompt and the transcript (`showTranscript={false}` hides it). Style it with `className` and the `bj-ai`, `bj-ai-status`, `bj-ai-indicator`, `bj-ai-duration`, `bj-ai-controls`, `bj-ai-error`, `bj-ai-confirm` and `bj-ai-transcript` classes.
+
+## Hook
+
+```tsx
+import { usePurpleCallioAI } from '@purplecallio/react';
+
+function Agent() {
+  const ai = usePurpleCallioAI({
+    apiUrl: 'https://<your-purplecallio-host>', // required
+    getToken: () => fetch('/api/ai-session', { method: 'POST' }).then((r) => r.json()).then((s) => s.token),
+  });
+
+  return ai.status === 'connected' ? (
+    <button onClick={ai.end}>End ({ai.durationSeconds}s)</button>
+  ) : (
+    <button onClick={ai.start}>Talk</button>
+  );
+}
+```
+
+| Field | Description |
+|---|---|
+| `status` | `idle`, `starting` (fetching the token), `connecting`, `connected`, `ended` |
+| `agentState` | `listening`, `thinking`, `speaking` |
+| `isMuted` | Whether the microphone is muted |
+| `transcript` | `{ key, role: 'user' \| 'agent', text, final }[]`; partial lines are replaced in place |
+| `toolCalls` | `{ id, name, status, code? }[]` |
+| `pendingConfirmations` | Tool calls waiting for `confirmTool(id, approve)` |
+| `durationSeconds` | Seconds since the agent became ready; frozen when the call ends |
+| `endedReason` | `participant`, `max_duration`, `api`, `error`, … |
+| `error` | `Error` with a stable `code`, e.g. `AI_INSUFFICIENT_CREDITS` |
+| `start()` / `end()` / `mute()` / `unmute()` / `confirmTool(id, approve)` | Controls. `start()` never throws; failures land in `error`. Call it from a click so audio can play. |
+
+The call ends automatically when the component unmounts.
+
+---
+
 # Available Exports
 
 The package currently exports:
@@ -1144,6 +1209,10 @@ WaitingRoom
 ConnectionStatus
 SpeakingIndicator
 LocalVideoPreview
+
+usePurpleCallioAI
+PurpleCallioAI
+aiErrorMessage
 ```
 
 ---

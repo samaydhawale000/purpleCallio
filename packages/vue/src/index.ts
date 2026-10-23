@@ -19,3 +19,8 @@ export type {
   ParticipantMedia,
   ParticipantRole,
 } from '@purplecallio/sdk';
+
+// Live Translate
+export { useTranslation, TranslationCaptions } from './translation';
+export type { UseTranslationOptions, UseTranslationReturn } from './translation';
+export type { TranslationClient, TranslationMode, TranslationPhrase, TranslationState } from '@purplecallio/sdk';

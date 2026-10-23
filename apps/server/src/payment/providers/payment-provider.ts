@@ -1,13 +1,16 @@
 /**
- * Provider-agnostic one-time payment abstraction used by prepaid billing.
+ * Provider-agnostic payment abstraction used by prepaid billing: one-time
+ * checkout payments plus recurring mandates for auto-renew.
  *
  * The billing engine only knows about a `Payment` and these operations —
  * never a provider SDK. Razorpay is the first implementation; Stripe, bank
  * transfer or manual invoicing can be added by implementing this interface
  * and registering it in PaymentProviderRegistry.
  *
- * Deliberately has no "charge a saved card" operation: prepaid billing only
- * ever takes payments the customer completes themselves at checkout.
+ * Deliberately has no "charge a saved card" operation: we never initiate a
+ * charge ourselves. Payments are either completed by the customer at
+ * checkout, or are renewals the provider charges against a mandate the
+ * customer authorised (createSubscription) for auto-renew.
  */
 
 export interface ProviderCheckoutInput {
