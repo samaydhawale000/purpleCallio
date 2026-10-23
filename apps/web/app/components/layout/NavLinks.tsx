@@ -2,10 +2,15 @@
 
 import Link from "next/link";
 
-const links = [
+const links: { label: string; href: string; badge?: string }[] = [
   {
     label: "Features",
     href: "/features",
+  },
+  {
+    label: "Live Translate",
+    href: "/features/live-translation",
+    badge: "New",
   },
   {
     label: "Developers",
@@ -53,6 +58,15 @@ export default function NavLinks({
           `}
         >
           {link.label}
+          {link.badge && (
+            <span
+              className={`ml-1.5 rounded-full bg-[#7F40E8] px-1.5 py-0.5 align-middle font-semibold text-white ${
+                mobile ? "text-[10px]" : "text-[9px]"
+              }`}
+            >
+              {link.badge}
+            </span>
+          )}
         </Link>
       ))}
     </>

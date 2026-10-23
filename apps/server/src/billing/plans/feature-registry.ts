@@ -14,6 +14,10 @@ export const FeatureKey = {
   WEBHOOKS: 'WEBHOOKS',
   ANALYTICS: 'ANALYTICS',
   CUSTOM_BRANDING: 'CUSTOM_BRANDING',
+  // Live Translate (voice + caption translation). Not in CORE_FEATURES:
+  // admins add it to plans explicitly; accounts without it can use the
+  // one-time trial (BillingConfig.translationTrialMinutes).
+  TRANSLATION: 'TRANSLATION',
 } as const;
 
 export type FeatureKeyValue = (typeof FeatureKey)[keyof typeof FeatureKey];
@@ -72,6 +76,13 @@ export const DEFAULT_FEATURES: {
     name: 'Custom branding',
     description: 'Your logo, colors and name on hosted call pages.',
     category: 'Platform',
+  },
+  {
+    key: FeatureKey.TRANSLATION,
+    name: 'Live Translate',
+    description:
+      'Two-way voice and caption translation for 1:1 calls (billed per translated minute).',
+    category: 'Calling',
   },
 ];
 

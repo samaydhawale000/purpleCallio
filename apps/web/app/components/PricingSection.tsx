@@ -35,6 +35,7 @@ import {
   usePublicPricing,
 } from '../lib/public-pricing';
 import { useAuthStore } from '../store/auth.store';
+import { CostGuardEstimator, TranslationRateList } from './marketing/live-translate/TranslationPricing';
 
 const TAGLINES = [
   'Simple prepaid plans',
@@ -900,6 +901,31 @@ export function TopUps({ pricing }: { pricing: PublicPricing }) {
   );
 }
 
+// ── Live Translate (early access) ────────────────────────────────────────
+/** Rates come from GET /translation/estimate (admin-managed), with a "Pricing set at launch" fallback. */
+function LiveTranslatePricing() {
+  return (
+    <div id="live-translate" className="scroll-mt-24" data-testid="live-translate-pricing">
+      <h3 className="mb-2 mt-16 flex flex-wrap items-center gap-2 text-xl font-bold text-[#170B2E]">
+        Live Translate
+        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">Early access</span>
+      </h3>
+      <p className="mb-5 max-w-3xl text-sm text-[#3D3650]">
+        Real-time voice translation and captions for 1:1 calls. Billed per translated participant-minute (per listener),
+        from the same credit balance, on top of the call&apos;s own audio or video minutes. Same-language calls aren&apos;t
+        charged for translation.{' '}
+        <Link href="/features/live-translation" className="font-medium text-[#6425C4] hover:text-[#170B2E]">
+          About Live Translate →
+        </Link>
+      </p>
+      <TranslationRateList />
+      <div className="mt-5">
+        <CostGuardEstimator />
+      </div>
+    </div>
+  );
+}
+
 // ── Section ──────────────────────────────────────────────────────────────
 function SubHeading({ children }: { children: React.ReactNode }) {
   return <h3 className="mb-5 mt-16 text-xl font-bold text-[#170B2E]">{children}</h3>;
@@ -953,6 +979,8 @@ export default function PricingSection({ variant = 'summary', bare = false }: { 
 
                 <SubHeading>Top up when you need more</SubHeading>
                 <TopUps pricing={state.data} />
+
+                <LiveTranslatePricing />
 
               </>
             ) : (

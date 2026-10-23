@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, Check } from "lucide-react";
+import { ArrowRight, Check, Languages } from "lucide-react";
+import { LIVE_TRANSLATE_PATH, LIVE_TRANSLATE_STATUS } from "../lib/live-translate";
 import { Breadcrumbs } from "../components/seo/Breadcrumbs";
 import { JsonLd } from "../components/seo/JsonLd";
 import { pageMetadata, siteUrl } from "../lib/seo";
@@ -113,6 +114,34 @@ export default function FeaturesPage() {
                   );
                })}
             </RevealGroup>
+
+            <Reveal variant="zoom-up" duration={0.7} className="mt-6">
+               <Link
+                  href={LIVE_TRANSLATE_PATH}
+                  data-testid="feature-card-live-translation"
+                  className="group flex flex-col gap-6 rounded-2xl border border-[#D6C4EE] bg-[#7F40E8]/5 p-7 transition-all hover:-translate-y-1 hover:shadow-[0_20px_45px_-20px_rgba(65,6,134,0.25)] md:flex-row md:items-center"
+               >
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#7F40E8]/10 text-[#7F40E8]">
+                     <Languages size={24} aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                     <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-xl font-bold text-[#170B2E]">Live Translate</span>
+                        <span className="rounded-full bg-[#7F40E8] px-2 py-0.5 text-[10px] font-semibold text-white">New</span>
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900">{LIVE_TRANSLATE_STATUS}</span>
+                     </span>
+                     <span className="mt-1 block text-sm font-medium">Real-time voice translation and captions for 1:1 calls</span>
+                     <span className="mt-2 block text-sm leading-relaxed">
+                        Each person hears and reads the other in their own language, with DualView Translation, PurpleLex,
+                        MeaningGuard, Translation Observability, CostGuard, Post-Call Suite and the Translation UI Kit.
+                     </span>
+                  </span>
+                  <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-[#6425C4]">
+                     Explore Live Translate
+                     <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                  </span>
+               </Link>
+            </Reveal>
 
             <section className="mt-20">
                <Reveal>

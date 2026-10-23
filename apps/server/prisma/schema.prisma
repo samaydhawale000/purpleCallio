@@ -279,6 +279,8 @@ model User {
   assignedPlanRequests CustomPlanRequest[]   @relation("CustomPlanRequestAssignee")
   customPlanOffers     CustomPlanOffer[]
   privatePlans         Plan[]                @relation("PrivatePlanAssignee")
+
+  translationRateOverride TranslationRateOverride?
 }
 
 // A customer's plan subscription. Prepaid: a paid row only becomes ACTIVE
@@ -699,6 +701,9 @@ model Project {
 
   aiAgents AiAgent[]
 
+  translationSettings TranslationSettings?
+  translationLexicons TranslationLexicon[]
+
   webhookUrl    String?
   webhookSecret String?
 
@@ -766,6 +771,15 @@ model Call {
   creatorIdentity String?
   creatorIpKey    String?
 
+  // ── Live Translate ──────────────────────────────────
+  // BCP-47-ish language per participant ("auto" = detect). Null = not set.
+  callerLanguage    String?
+  receiverLanguage  String?
+  translationMode   TranslationMode @default(OFF)
+  // lexiconId, context, maxMinutes, guard, onLimit, postCallReport (see
+  // translation/translation-config.ts for the validated shape).
+  translationConfig Json?
+
   startedAt DateTime?
 
   endedAt DateTime?
@@ -774,10 +788,13 @@ model Call {
 
   updatedAt DateTime @updatedAt
 
-  events        CallEvent[]
-  usageSegments UsageSegment[]
-  session       CallSession?
-  aiSession     AiCallSession?
+  events              CallEvent[]
+  usageSegments       UsageSegment[]
+  session             CallSession?
+  aiSession           AiCallSession?
+  translationSessions TranslationSession[]
+  translationPhrases  TranslationPhrase[]
+  translationReport   TranslationReport?
 
   @@index([source, status, expiresAt])
   @@index([source, status, createdAt])
@@ -948,6 +965,9 @@ enum NotificationType {
   API_KEY_CREATED
   API_KEY_REVOKED
   PROJECT_CREATED
+  TRANSLATION_BUDGET_THRESHOLD
+  TRANSLATION_RATE_CHANGED
+  TRANSLATION_REPORT_READY
 }
 
 // Which area a notification belongs to: the customer dashboard or the admin
@@ -1073,6 +1093,25 @@ model BillingConfig {
   screenShareCreditsPerMinute Int               @default(1)
   // Credits per minute of an AI voice agent call (whole call, not per participant).
   aiCreditsPerMinute          Int               @default(15)
+  // ── Live Translate (admin-managed) ─────────────────
+  // Credits per translated participant-minute (per listener direction).
+  translationVoiceCreditsPerMinute      Int     @default(450)
+  translationCaptionsCreditsPerMinute   Int     @default(60)
+  // Optional separate voice rate for Indian-language routes (null = use the voice rate).
+  translationIndicVoiceCreditsPerMinute Int?
+  // Credits needed to start translation (null = one minute of the chosen mode).
+  translationMinimumCredits             Int?
+  // One-time free translated minutes for accounts whose plan lacks TRANSLATION.
+  translationTrialMinutes               Int     @default(0)
+  // Post-Call Suite report charge (per report).
+  postCallReportCredits                 Int     @default(100)
+  // Provider cost in paise per direction-minute, by route (margin reporting only).
+  translationProviderCostsPaise         Json    @default("{\"openai-translate\":300,\"sarvam-voice\":150,\"sarvam-captions\":50,\"mock\":0}")
+  // Admin warning when a route's gross margin drops below this %.
+  translationMarginWarnPercent          Int     @default(40)
+  // Default per-call limit and project budget bounds.
+  translationDefaultMaxMinutes          Int     @default(60)
+  translationMaxBudgetCredits           Int     @default(10000000)
   // GST applied on top of plan / top-up prices at checkout.
   taxPercent                  Int               @default(18)
   // % of period credits used that trigger a notification.
@@ -1435,4 +1474,207 @@ model AiConversationMessage {
 
   @@index([sessionId, createdAt])
   @@index([createdAt])
+}
+
+
+// ══════════════════════════════════════════════════════════
+// Live Translate (see apps/server/src/translation/README.md)
+// ══════════════════════════════════════════════════════════
+
+enum TranslationMode {
+  OFF
+  CAPTIONS
+  VOICE
+}
+
+enum TranslationSessionStatus {
+  ACTIVE
+  ENDED
+  FAILED
+}
+
+enum TranslationTermKind {
+  DO_NOT_TRANSLATE
+  TRANSLATE_AS
+  PRONOUNCE_AS
+}
+
+enum TranslationReportStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+// Per-project translation settings (1:1, created lazily with defaults).
+model TranslationSettings {
+  id                      String   @id @default(uuid())
+  projectId               String   @unique
+  project                 Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // MeaningGuard: original-audio replay is opt-in, off by default.
+  replayEnabled           Boolean  @default(false)
+  // Post-Call Suite: transcript + report storage is opt-in.
+  postCallReportEnabled   Boolean  @default(false)
+  sentimentEnabled        Boolean  @default(false)
+  transcriptRetentionDays Int      @default(30)
+  // PurpleLex call context default (healthcare, legal, saas, finance, ecommerce).
+  industry                String?
+  defaultLexiconId        String?
+  // CostGuard
+  defaultMaxMinutes       Int?
+  dailyBudgetCredits      Int?
+  monthlyBudgetCredits    Int?
+  alertThresholds         Int[]    @default([50, 80, 100])
+  // "captions_then_off" | "off"
+  onLimit                 String   @default("captions_then_off")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+// One provider session per direction of a translated call.
+model TranslationSession {
+  id                  String                   @id @default(uuid())
+  callId              String
+  call                Call                     @relation(fields: [callId], references: [id], onDelete: Cascade)
+  projectId           String
+  ownerId             String
+  // "caller_to_receiver" | "receiver_to_caller"
+  direction           String
+  sourceLanguage      String
+  targetLanguage      String
+  mode                TranslationMode
+  // Provider route, e.g. "openai-translate", "sarvam", "mock".
+  route               String
+  status              TranslationSessionStatus @default(ACTIVE)
+  // Rates locked at session start (admin changes apply to new sessions only).
+  voiceRate           Int
+  captionsRate        Int
+  startedAt           DateTime                 @default(now())
+  endedAt             DateTime?
+  endReason           String?
+  voiceSeconds        Int                      @default(0)
+  captionsSeconds     Int                      @default(0)
+  creditsCharged      Int                      @default(0)
+  providerCostPaise   Int                      @default(0)
+  trialSecondsUsed    Int                      @default(0)
+  usageRecordedAt     DateTime?
+  // Observability (per session)
+  phrases             Int                      @default(0)
+  firstAudioMsP50     Int?
+  firstAudioMsP95     Int?
+  captionDelayMsP50   Int?
+  captionDelayMsP95   Int?
+  droppedFrames       Int                      @default(0)
+  providerFailures    Int                      @default(0)
+  fallbacks           Int                      @default(0)
+  flags               Int                      @default(0)
+  flagReasons         Json?
+  replays             Int                      @default(0)
+  repeats             Int                      @default(0)
+  lexiconHits         Int                      @default(0)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  @@index([projectId, startedAt])
+  @@index([ownerId, startedAt])
+  @@index([callId])
+  @@index([status, usageRecordedAt])
+}
+
+// Phrase transcript, stored only when the project opted into the Post-Call Suite.
+model TranslationPhrase {
+  id                String    @id @default(uuid())
+  callId            String
+  call              Call      @relation(fields: [callId], references: [id], onDelete: Cascade)
+  phraseId          String
+  // "caller" | "receiver"
+  speaker           String
+  sourceLanguage    String
+  targetLanguage    String
+  original          String
+  translated        String
+  startedAt         DateTime
+  endedAt           DateTime?
+  translatedAudioAt DateTime?
+  guardStatus       String    @default("ok")
+  guardReasons      String[]  @default([])
+  expiresAt         DateTime
+  createdAt         DateTime  @default(now())
+
+  @@unique([callId, phraseId])
+  @@index([expiresAt])
+}
+
+model TranslationReport {
+  id             String                  @id @default(uuid())
+  callId         String                  @unique
+  call           Call                    @relation(fields: [callId], references: [id], onDelete: Cascade)
+  projectId      String
+  status         TranslationReportStatus @default(PENDING)
+  // { [lang]: { keyPoints[], decisions[], actionItems[{text, phraseId}] } }
+  summary        Json?
+  // talk ratio, topics, flagged moments, replays/repeats, optional tone
+  signals        Json?
+  creditsCharged Int                     @default(0)
+  error          String?
+  expiresAt      DateTime
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@index([expiresAt])
+}
+
+// PurpleLex
+model TranslationLexicon {
+  id        String                   @id @default(uuid())
+  projectId String
+  project   Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  industry  String?
+  terms     TranslationLexiconTerm[]
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+
+  @@index([projectId])
+}
+
+model TranslationLexiconTerm {
+  id            String              @id @default(uuid())
+  lexiconId     String
+  lexicon       TranslationLexicon  @relation(fields: [lexiconId], references: [id], onDelete: Cascade)
+  term          String
+  kind          TranslationTermKind @default(DO_NOT_TRANSLATE)
+  // TRANSLATE_AS: { "hi": "…", "ta": "…" }
+  translations  Json?
+  // PRONOUNCE_AS: spoken hint for TTS
+  pronunciation String?
+  caseSensitive Boolean             @default(false)
+  createdAt     DateTime            @default(now())
+
+  @@unique([lexiconId, term])
+}
+
+// CostGuard: one row per (project, period, threshold) so alerts fire once.
+model TranslationBudgetAlert {
+  id        String   @id @default(uuid())
+  projectId String
+  // "day:2026-10-22" | "month:2026-10"
+  period    String
+  threshold Int
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, period, threshold])
+}
+
+// Admin-managed per-customer translation price overrides.
+model TranslationRateOverride {
+  id                       String   @id @default(uuid())
+  userId                   String   @unique
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  voiceCreditsPerMinute    Int?
+  captionsCreditsPerMinute Int?
+  postCallReportCredits    Int?
+  note                     String?
+  updatedById              String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 }

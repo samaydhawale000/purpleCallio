@@ -6,6 +6,7 @@ import { PURPLECALLIO_HOST } from '../lib/brand';
 import { PricingAuthority } from '../components/PricingAuthority';
 import { formatRate, usePublicPricing } from '../lib/public-pricing';
 import { Reveal } from '../components/motion/Reveal';
+import { LIVE_TRANSLATE_FAQ } from '../lib/live-translate';
 
 const FAQ_GROUPS = [
   {
@@ -78,6 +79,10 @@ const FAQ_GROUPS = [
         a: 'Yes — screen sharing works in all three products. The hosted UI has a built-in Share Screen control, React has a ScreenShareButton, and the SDK exposes screenShare.start() / screenShare.stop().',
       },
     ],
+  },
+  {
+    group: 'Live Translate (early access)',
+    items: LIVE_TRANSLATE_FAQ.map(([q, a]) => ({ q, a })),
   },
 {
     group: 'Development & Support',

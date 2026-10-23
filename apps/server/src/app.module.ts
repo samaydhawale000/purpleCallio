@@ -20,6 +20,7 @@ import { SupportModule } from './support/support.module';
 import { NotificationModule } from './notification/notification.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { AiModule } from './ai/ai.module';
+import { TranslationModule } from './translation/translation.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { AiModule } from './ai/ai.module';
     AdminModule,
     SupportModule,
     AiModule,
+    TranslationModule,
   ],
   // TestController is intentionally not registered in the production app;
   // its database-count endpoint is only useful in local development.

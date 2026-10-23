@@ -3,13 +3,16 @@ import {
   ConflictException,
   ForbiddenException,
   GoneException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   NotFoundException,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 
-import { CallSource, CallStatus, CallType } from '@prisma/client';
+import { CallSource, CallStatus, CallType, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { CallSessionService } from '../../call-session/services/call-session.service';
@@ -22,6 +25,39 @@ import { EntitlementService } from '../../billing/subscriptions/entitlement.serv
 import { FeatureKey } from '../../billing/plans/feature-registry';
 import { WebrtcTransportDto } from '../dto/webrtc-transport.dto';
 import { WebrtcIceDto } from '../dto/webrtc-ice.dto';
+import { TranslationAccessService } from '../../translation/translation-access.service';
+import { TranslationRelayGateway } from '../../translation/translation-relay.gateway';
+import {
+  assertLanguage,
+  configForStorage,
+  modeFromDb,
+  modeToDb,
+  parseMode,
+  readTranslationConfig,
+  TranslationErrorCode,
+  translationBadRequest,
+  TranslationModeName,
+  TranslationRequest,
+  validateTranslationRequest,
+} from '../../translation/translation-config';
+import { normalizeLanguage } from '../../translation/languages';
+import { translationConfig as translationEnv } from '../../translation/translation.config';
+
+const TERMINAL_STATUSES: CallStatus[] = [
+  CallStatus.ENDED,
+  CallStatus.MISSED,
+  CallStatus.REJECTED,
+  CallStatus.CANCELLED,
+  CallStatus.BUSY,
+];
+
+/** Live Translate fields of POST /calls after validation. */
+interface ValidatedTranslation {
+  callerLanguage?: string;
+  receiverLanguage?: string;
+  request: TranslationRequest;
+  mode: TranslationModeName;
+}
 
 @Injectable()
 export class CallService implements OnModuleInit {
@@ -38,6 +74,9 @@ export class CallService implements OnModuleInit {
     private segmentService: UsageSegmentService,
     private ratingEngine: RatingEngineService,
     private entitlements: EntitlementService,
+    // Live Translate (optional so call specs/tests can omit them).
+    @Optional() private translationAccess?: TranslationAccessService,
+    @Optional() private translationRelay?: TranslationRelayGateway,
   ) {
     const parsed = Number(process.env.CALL_RING_TIMEOUT_MS);
     this.ringTimeoutMs =
@@ -89,6 +128,9 @@ export class CallService implements OnModuleInit {
       callerAvatar?: string;
       receiverName?: string;
       receiverAvatar?: string;
+      callerLanguage?: string;
+      receiverLanguage?: string;
+      translation?: TranslationRequest;
     },
     options?: {
       skipWebhook?: boolean;
@@ -99,6 +141,10 @@ export class CallService implements OnModuleInit {
       creatorIdentity?: string;
     },
   ) {
+    // 0. Live Translate input (PROTOCOL.md §1) — validated before anything
+    // is written so a bad request never leaves a call behind.
+    const translation = await this.validateTranslation(data);
+
     // 1. Duplicate protection: this exact (caller, receiver) pair already has
     // an active call — return it instead of creating a second one (e.g. a
     // double-clicked "Call" button, or a retried request).
@@ -173,6 +219,12 @@ export class CallService implements OnModuleInit {
       }
     }
 
+    // Translation entitlement / credits — only when translation is asked
+    // for; a call with mode off is never refused because of translation.
+    if (translation.mode !== 'off') {
+      await this.assertTranslationAllowed(data.projectId, translation.mode);
+    }
+
     const call = await this.prisma.call.create({
       data: {
         projectId: data.projectId,
@@ -188,6 +240,7 @@ export class CallService implements OnModuleInit {
         callerAvatar: data.callerAvatar,
         receiverName: data.receiverName,
         receiverAvatar: data.receiverAvatar,
+        ...this.translationColumns(translation),
       },
     });
 
@@ -232,20 +285,209 @@ export class CallService implements OnModuleInit {
           token: callerToken,
           hostedUrl,
           expiresAt: session?.expiresAt ?? null,
+          language: (call.callerLanguage as string | null | undefined) ?? null,
         },
         {
           participantId: call.receiverId,
           token: receiverToken,
           hostedUrl: receiverUrl,
           expiresAt: session?.expiresAt ?? null,
+          language:
+            (call.receiverLanguage as string | null | undefined) ?? null,
         },
       ],
+      translation: {
+        mode: modeFromDb(call.translationMode),
+        config: readTranslationConfig(call.translationConfig),
+      },
       // Backwards-compatible fields (still used by the playground)
       callerToken,
       receiverToken,
       callerUrl: hostedUrl,
       receiverUrl,
     };
+  }
+
+  // ── Live Translate ─────────────────────────────────────
+
+  private async validateTranslation(data: {
+    projectId: string;
+    callerLanguage?: unknown;
+    receiverLanguage?: unknown;
+    translation?: unknown;
+  }): Promise<ValidatedTranslation> {
+    const request = validateTranslationRequest(data.translation);
+    const mode = request.mode ?? 'off';
+    const callerLanguage = assertLanguage('callerLanguage', data.callerLanguage);
+    const receiverLanguage = assertLanguage(
+      'receiverLanguage',
+      data.receiverLanguage,
+    );
+    if (mode !== 'off') {
+      // Translating needs languages the routes actually know.
+      for (const [field, lang] of [
+        ['callerLanguage', callerLanguage],
+        ['receiverLanguage', receiverLanguage],
+      ] as const) {
+        if (lang && lang !== 'auto' && !normalizeLanguage(lang)) {
+          throw translationBadRequest(
+            TranslationErrorCode.INVALID_LANGUAGE,
+            `${field} "${lang}" is not a supported translation language (see GET /translation/languages).`,
+          );
+        }
+      }
+      if (receiverLanguage === 'auto' && callerLanguage === 'auto') {
+        throw translationBadRequest(
+          TranslationErrorCode.INVALID_LANGUAGE,
+          'At least one participant language must be set (not "auto") to translate.',
+        );
+      }
+    }
+    if (request.lexiconId) {
+      const lexicon = await this.prisma.translationLexicon.findFirst({
+        where: { id: request.lexiconId, projectId: data.projectId },
+        select: { id: true },
+      });
+      if (!lexicon) {
+        throw translationBadRequest(
+          TranslationErrorCode.LEXICON_NOT_FOUND,
+          'translation.lexiconId does not refer to a lexicon of this project.',
+        );
+      }
+    }
+    return { callerLanguage, receiverLanguage, request, mode };
+  }
+
+  private translationColumns(t: ValidatedTranslation) {
+    const stored = configForStorage(t.request);
+    return {
+      ...(t.callerLanguage ? { callerLanguage: t.callerLanguage } : {}),
+      ...(t.receiverLanguage ? { receiverLanguage: t.receiverLanguage } : {}),
+      translationMode: modeToDb(t.mode),
+      ...(Object.keys(stored).length
+        ? { translationConfig: stored as Prisma.InputJsonValue }
+        : {}),
+    };
+  }
+
+  /** 403 TRANSLATION_DISABLED / TRANSLATION_NOT_IN_PLAN, 402 TRANSLATION_INSUFFICIENT_CREDITS. */
+  private async assertTranslationAllowed(
+    projectId: string,
+    mode: 'voice' | 'captions',
+  ) {
+    if (!translationEnv().enabled) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'TRANSLATION_DISABLED',
+        message: 'Live Translate is not available on this server.',
+      });
+    }
+    if (!this.translationAccess) return;
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { ownerId: true },
+    });
+    if (!project) return;
+    const check = await this.translationAccess.canStart(project.ownerId, mode);
+    if (check.ok) return;
+    if (check.code === 'TRANSLATION_INSUFFICIENT_CREDITS') {
+      throw new HttpException(
+        {
+          statusCode: 402,
+          code: TranslationErrorCode.INSUFFICIENT_CREDITS,
+          message: 'Not enough credits to start translation. Top up to continue.',
+        },
+        HttpStatus.PAYMENT_REQUIRED,
+      );
+    }
+    throw new ForbiddenException({
+      statusCode: 403,
+      code: TranslationErrorCode.NOT_IN_PLAN,
+      message:
+        'Live Translate is not included in your plan (and no trial minutes are left).',
+    });
+  }
+
+  /**
+   * PATCH /calls/:id/translation. `auth` is the API key's project or the
+   * participant's call session. Live relays on this instance apply the
+   * change immediately (they re-emit `mode` / `ready`).
+   */
+  async updateTranslation(
+    callId: string,
+    auth: { projectId?: string; sessionCallId?: string },
+    body: { mode?: unknown; callerLanguage?: unknown; receiverLanguage?: unknown },
+  ) {
+    const call = await this.prisma.call.findUnique({
+      where: { id: callId },
+      include: { project: { select: { ownerId: true } } },
+    });
+    if (
+      !call ||
+      (auth.projectId && call.projectId !== auth.projectId) ||
+      (auth.sessionCallId && auth.sessionCallId !== call.id) ||
+      (!auth.projectId && !auth.sessionCallId)
+    ) {
+      throw new NotFoundException('Call not found');
+    }
+    if (TERMINAL_STATUSES.includes(call.status)) {
+      throw new GoneException({
+        statusCode: 410,
+        code: TranslationErrorCode.CALL_ENDED,
+        message: 'This call has ended.',
+      });
+    }
+    const input = body ?? {};
+    const mode = input.mode === undefined ? undefined : parseMode(input.mode);
+    const callerLanguage =
+      input.callerLanguage === undefined
+        ? undefined
+        : assertLanguage('callerLanguage', input.callerLanguage);
+    const receiverLanguage =
+      input.receiverLanguage === undefined
+        ? undefined
+        : assertLanguage('receiverLanguage', input.receiverLanguage);
+    for (const [field, lang] of [
+      ['callerLanguage', callerLanguage],
+      ['receiverLanguage', receiverLanguage],
+    ] as const) {
+      if (lang && lang !== 'auto' && !normalizeLanguage(lang)) {
+        throw translationBadRequest(
+          TranslationErrorCode.INVALID_LANGUAGE,
+          `${field} "${lang}" is not a supported translation language.`,
+        );
+      }
+    }
+    if (mode && mode !== 'off' && mode !== modeFromDb(call.translationMode)) {
+      await this.assertTranslationAllowed(call.projectId, mode);
+    }
+    const updated = await this.prisma.call.update({
+      where: { id: callId },
+      data: {
+        ...(mode ? { translationMode: modeToDb(mode) } : {}),
+        ...(callerLanguage !== undefined ? { callerLanguage } : {}),
+        ...(receiverLanguage !== undefined ? { receiverLanguage } : {}),
+      },
+    });
+    const result = {
+      mode: modeFromDb(updated.translationMode),
+      callerLanguage: updated.callerLanguage,
+      receiverLanguage: updated.receiverLanguage,
+    };
+    if (this.translationRelay) {
+      await this.translationRelay
+        .applyCallUpdate(callId, {
+          ...(mode ? { mode } : {}),
+          ...(callerLanguage !== undefined ? { callerLanguage } : {}),
+          ...(receiverLanguage !== undefined ? { receiverLanguage } : {}),
+        })
+        .catch((err) =>
+          this.logger.warn(
+            `Translation relay update failed for ${callId}: ${String(err)}`,
+          ),
+        );
+    }
+    return result;
   }
 
   /**
@@ -505,6 +747,16 @@ export class CallService implements OnModuleInit {
     // already-negotiated peer-to-peer media session running after rating has
     // stopped.
     this.callGateway.terminateCall(callId, 'call.ended');
+    // Live Translate: close relays (bills sessions, queues the report).
+    if (this.translationRelay) {
+      void this.translationRelay
+        .endForCall(callId, 'call_ended')
+        .catch((err) =>
+          this.logger.warn(
+            `Translation relay end failed for ${callId}: ${String(err)}`,
+          ),
+        );
+    }
 
     await this.prisma.callEvent.create({
       data: { callId, event: 'CALL_ENDED', participantId: call.callerId },
@@ -699,6 +951,11 @@ export class CallService implements OnModuleInit {
       token,
       hostedUrl: `${frontend}/call?token=${token}&callId=${call.id}`,
       expiresAt: session?.expiresAt ?? null,
+      // Live Translate: the hosted UI auto-enables translation from these.
+      language: (isCaller ? call.callerLanguage : call.receiverLanguage) ?? null,
+      callerLanguage: call.callerLanguage ?? null,
+      receiverLanguage: call.receiverLanguage ?? null,
+      translation: { mode: modeFromDb(call.translationMode) },
       branding: branded
         ? {
             companyName: call.project.companyName ?? call.project.name,

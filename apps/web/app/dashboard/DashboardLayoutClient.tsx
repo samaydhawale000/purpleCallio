@@ -10,6 +10,7 @@ import {
   PhoneCall,
   Play,
   Bot,
+  Languages,
   Gauge,
   CreditCard,
   BookOpen,
@@ -28,12 +29,15 @@ import { useRequireAuth } from '../hooks/useRequireAuth';
 import { useAiStatus } from '../lib/ai';
 import logo from '../assets/images/logo.webp';
 
-const NAV_ITEMS = [
+type NavItem = { label: string; href: string; icon: typeof LayoutDashboard; badge?: string };
+
+const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Notifications', href: '/dashboard/notifications', icon: Bell },
   { label: 'Projects & Keys', href: '/dashboard/projects', icon: FolderKanban },
   { label: 'Calls', href: '/dashboard/calls', icon: PhoneCall },
   { label: 'Playground', href: '/dashboard/playground', icon: Play },
+  { label: 'Live Translate', href: '/dashboard/translation', icon: Languages, badge: 'New' },
   { label: 'Usage', href: '/dashboard/usage', icon: Gauge },
   { label: 'Billing', href: '/dashboard/billing', icon: CreditCard },
   { label: 'Documentation', href: '/docs', icon: BookOpen },
@@ -42,7 +46,7 @@ const NAV_ITEMS = [
 ];
 
 // Shown after Playground, only while GET /ai/status says AI is enabled.
-const AI_NAV_ITEM = { label: 'AI Agents', href: '/dashboard/ai', icon: Bot };
+const AI_NAV_ITEM: NavItem = { label: 'AI Agents', href: '/dashboard/ai', icon: Bot };
 
 export default function DashboardLayout({
   children,
@@ -177,6 +181,11 @@ const logout = useAuthStore((s) => s.logout);
                 >
                   <Icon size={17} style={{ color: active ? '#7F40E8' : undefined }} />
                   {item.label}
+                  {item.badge && (
+                    <span className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#6425C4] bg-[#7F40E8]/10 border border-[#7F40E8]/20">
+                      {item.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}

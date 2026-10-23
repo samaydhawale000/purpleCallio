@@ -80,3 +80,14 @@ export type {
 } from './ai';
 export { PurpleCallioAI, aiErrorMessage } from './components/ai';
 export type { PurpleCallioAIProps } from './components/ai';
+
+// Live Translate
+export * from './translation';
+export type {
+  TranslationClient,
+  TranslationMode,
+  TranslationPhrase,
+  TranslationState,
+  TranslationLanguage,
+  TranslationLimitEvent,
+} from '@purplecallio/sdk';

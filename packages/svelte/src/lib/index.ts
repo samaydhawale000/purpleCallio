@@ -17,3 +17,9 @@ export type {
   ParticipantMedia,
   ParticipantRole,
 } from '@purplecallio/sdk';
+
+// Live Translate
+export { createTranslation } from './createTranslation.js';
+export type { CreateTranslationOptions, PurpleCallioTranslation } from './createTranslation.js';
+export { default as TranslationCaptions } from './TranslationCaptions.svelte';
+export type { TranslationClient, TranslationMode, TranslationPhrase, TranslationState } from '@purplecallio/sdk';

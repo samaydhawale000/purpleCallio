@@ -23,6 +23,7 @@ import { formatMinutes } from "../../lib/duration";
 import { formatAiMinutes } from "../../lib/billing";
 import { Badge } from "../../components/ui/Badge";
 import { Pagination } from "../../components/ui/Pagination";
+import { TranslationUsageSection } from "../translation/_components/TranslationUsageSection";
 
 interface CurrentUsage {
    cycle: { start: string; end: string };
@@ -390,6 +391,9 @@ export default function UsagePage() {
                </div>
             )}
          </div>
+
+         {/* CostGuard: call vs translation vs AI vs report credits */}
+         <TranslationUsageSection />
 
          {/* Chart */}
          <div

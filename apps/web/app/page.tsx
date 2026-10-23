@@ -9,6 +9,7 @@ import { PURPLECALLIO_DESCRIPTION, PURPLECALLIO_NAME } from "./lib/brand";
 import { CORE_FEATURES } from "./lib/feature-catalog";
 import { IntegrationSelector } from "./components/marketing/InteractiveTools";
 import { Reveal, RevealGroup, RevealItem } from "./components/motion/Reveal";
+import { LiveTranslateSection } from "./components/marketing/live-translate/LiveTranslateSection";
 import {
    ArrowRight,
    Atom,
@@ -230,7 +231,7 @@ export default function LandingPage() {
          />
 
          {/* ── Hero ── */}
-         <section className="section-base relative px-6 pt-42 pb-20 overflow-hidden">
+         <section className="section-base relative px-6 pt-42 pb-28 sm:pb-36 overflow-hidden">
             <div className="absolute inset-0 pointer-events-none">
                <StripeGradient />
             </div>
@@ -300,6 +301,16 @@ export default function LandingPage() {
                   />
                </div>
             </div>
+
+            {/* Wave edge into the next (section-alt) section */}
+            <svg
+               aria-hidden="true"
+               className="pointer-events-none absolute inset-x-0 bottom-0 h-16 w-full sm:h-44"
+               viewBox="0 0 1440 120"
+               preserveAspectRatio="none"
+            >
+               <path d="M0,40 C480,140 960,-20 1440,80 L1440,120 L0,120 Z" fill="var(--bg-tint)" />
+            </svg>
          </section>
 
          {/* ── Products: video, audio, AI ── */}
@@ -362,6 +373,9 @@ export default function LandingPage() {
                </RevealGroup>
             </div>
          </section>
+
+         {/* ── Live Translate (early access) ── */}
+         <LiveTranslateSection />
 
          {/* ── AI voice agents spotlight ── */}
          <section id="ai-voice-agents" className="px-6 py-8 sm:px-8">

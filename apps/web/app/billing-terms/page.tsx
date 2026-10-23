@@ -88,6 +88,22 @@ export default function BillingTermsPage() {
         </p>
       </LegalSection>
 
+      <LegalSection num="4A" title="Live Translate (Early Access)">
+        <p>
+          Live Translate is an early-access feature. During early access PurpleCallio may change its availability,
+          rates and limits, and will show current terms on the pricing page and in your dashboard before they apply
+          to new translation sessions.
+        </p>
+        <LegalBullets items={[
+          "Rates: translation is billed in credits per translated participant-minute, meaning each minute that a listener receives translation, at the voice or captions rate set by PurpleCallio and shown on the pricing page and in your dashboard. This is in addition to the call's own audio or video participant-minutes. Calls without translation are not charged for it.",
+          "Rate changes: a translation session keeps the rate in effect when it started. New rates apply only to sessions started after the change.",
+          "Minimum balance: starting translation requires enough credits for at least one minute of the chosen mode.",
+          "Post-Call Suite: if you opt in, each generated report is charged once at the report rate shown in your dashboard.",
+          "CostGuard limits: when a per-call limit, project budget or your credit balance is reached, translation steps down from voice to captions or pauses, according to your settings. The call itself continues and is billed as usual.",
+          "Trial minutes: where PurpleCallio offers trial minutes for accounts whose plan does not include translation, trial minutes are not charged and end once used.",
+        ]} />
+      </LegalSection>
+
       <LegalSection num="5" title="Usage Transitions and Participant Changes">
         <p>
           If a session changes communication modes during a call, PurpleCallio calculates usage separately
@@ -138,9 +154,11 @@ export default function BillingTermsPage() {
 
       <LegalSection num="10" title="Payments and Taxes">
         <p>
-          Payments are processed by our third-party payment provider (such as Razorpay). Each payment is
-          a one-time payment that you authorise at checkout. A receipt is available for every successful
-          payment.
+          Payments are processed by our third-party payment provider (such as Razorpay). Plan, custom plan
+          and top-up purchases are payments you authorise at checkout. If you keep auto-renew on for a plan,
+          you also authorise a recurring payment mandate (card or UPI Autopay) for that plan, and each
+          renewal is charged through it at the start of the period, as described in section 2. A receipt is
+          available for every successful payment, including each renewal.
         </p>
         <p>
           Prices are shown excluding GST. GST at <GstRate fallback="the rate shown at checkout" /> is added to the price of

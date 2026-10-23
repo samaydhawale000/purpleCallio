@@ -14,6 +14,7 @@ import {
 } from "../../components/marketing/InteractiveTools";
 import { PricingAuthority } from "../../components/PricingAuthority";
 import { AiAgentsDoc } from "../../components/marketing/AiAgentsDoc";
+import { LiveTranslateDoc } from "../../components/marketing/LiveTranslateDoc";
 import { PURPLECALLIO_API_URL } from "../../lib/brand";
 
 const docs = {
@@ -426,6 +427,27 @@ const docs = {
          ],
       ],
    },
+   "live-translate": {
+      title: "Live Translate (Early Access)",
+      meta: "Real-Time Voice Translation API",
+      description:
+         "Add real-time voice translation and captions to 1:1 calls: the translation block on POST /calls, the TranslationClient SDK, React UI Kit, PurpleLex, MeaningGuard, CostGuard, metrics, reports and webhooks.",
+      lead: "Live Translate lets two people on a 1:1 call speak different languages: each hears and reads the other in their own language, a short moment behind the speaker. It's in early access, so endpoints and fields may change before general availability.",
+      sections: [
+         [
+            "How it works",
+            "You set each participant's language and a translation mode when you create the call. During the call, each browser streams speech to PurpleCallio, which runs speech recognition, translation and (in voice mode) synthesized speech on the server through OpenAI or Sarvam, depending on the language pair. Both participants receive DualView captions; only the listener receives translated audio, and the original voice is turned down rather than muted.",
+         ],
+         [
+            "Modes",
+            "off (default), captions (translated text only, lower rate) and voice (captions plus translated speech). Set the mode at call creation, change it with PATCH /calls/:id/translation, or let participants switch in the call. Voice is offered only for languages that pass our testing; others fall back to captions.",
+         ],
+         [
+            "Data handling",
+            "No audio or transcript is stored by default. Replay of the original audio is off by default and opt-in per project; when on, it uses a memory-only buffer of about 30 seconds that is cleared at the end of the call. Transcripts are stored only if you enable the Post-Call Suite, for the retention period you choose.",
+         ],
+      ],
+   },
 } as const;
 type DocSlug = keyof typeof docs;
 const examples: Partial<Record<DocSlug, { title: string; code: string }>> = {
@@ -788,6 +810,7 @@ export default async function DocPage({
             </ContentSection>
          )}
          {slug === "ai-agents" && <AiAgentsDoc />}
+         {slug === "live-translate" && <LiveTranslateDoc />}
          {slug === "quickstart" && (
             <ContentSection title="First successful call in minutes">
                <QuickstartStepper />
@@ -890,6 +913,12 @@ export default async function DocPage({
                   className="text-[#6425C4] hover:text-[#170B2E]"
                >
                   AI Voice Agents →
+               </Link>
+               <Link
+                  href="/docs/live-translate"
+                  className="text-[#6425C4] hover:text-[#170B2E]"
+               >
+                  Live Translate →
                </Link>
                <Link
                   href="/sdks"

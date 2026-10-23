@@ -24,7 +24,6 @@ function safeEqual(a: string, b: string): boolean {
 export const MOCK_SIGNATURE = 'mock_signature';
 
 /**
- * Razorpay one-time payments (Orders + Checkout + signature verification).
  *
  * Without RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET (local/dev only — production
  * refuses to boot, see RazorpayPaymentService) it runs in mock mode: orders
