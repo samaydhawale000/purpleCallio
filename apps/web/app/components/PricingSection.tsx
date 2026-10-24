@@ -5,49 +5,36 @@ import Link from 'next/link';
 import {
   ArrowRight,
   Bot,
-  Building2,
   CalendarClock,
-  Check,
   Coins,
   CreditCard,
-  Minus,
   Mic,
   Monitor,
   PhoneCall,
   Receipt,
   RefreshCw,
-  Rocket,
   ShieldCheck,
   Sparkles,
+  Unlock,
   Video,
+  Wallet,
 } from 'lucide-react';
-import { formatCredits, formatMoney, intervalLabel, type CreditRates, type Plan, type PublicPricing } from '../lib/billing';
+import { formatCredits, formatMoney, type CreditRates, type PublishedCreditPricing } from '../lib/billing';
 import {
-  featureNames,
+  creditsForAmount,
   formatRate,
-  gstNote,
-  planCtaHref,
-  planCtaLabel,
-  planComparePrice,
-  planPrice,
-  sortPlans,
-  topUpExpiryText,
+  PRICE_NOT_PUBLISHED,
+  purchaseExpiryText,
   usePublicPricing,
+  usePublishedCreditPricing,
+  validityPhrase,
 } from '../lib/public-pricing';
 import { useAuthStore } from '../store/auth.store';
+import type { PublicPricing } from '../lib/public-pricing';
 import { CostGuardEstimator, TranslationRateList } from './marketing/live-translate/TranslationPricing';
 
-const TAGLINES = [
-  'Simple prepaid plans',
-  'Predictable monthly pricing',
-  'Included usage credits',
-  'No surprise usage bills',
-  'Top up when you need more',
-  'Upgrade as you grow',
-];
-
 // ── Shared states ────────────────────────────────────────────────────────
-export function PricingLoading({ label = 'Loading current plans…' }: { label?: string }) {
+export function PricingLoading({ label = 'Loading current credit pricing…' }: { label?: string }) {
   return (
     <div role="status" aria-live="polite">
       <span className="sr-only">{label}</span>
@@ -68,7 +55,7 @@ export function PricingLoading({ label = 'Loading current plans…' }: { label?:
 export function PricingError({ onRetry }: { onRetry: () => void }) {
   return (
     <div role="alert" className="rounded-xl border border-[#E7DFF5] bg-[#F8F4FD] p-6 text-sm text-[#3D3650]">
-      <p className="font-semibold text-[#170B2E]">Current plans are temporarily unavailable.</p>
+      <p className="font-semibold text-[#170B2E]">Current credit pricing is temporarily unavailable.</p>
       <p className="mt-1">We could not load pricing right now. Please try again in a moment.</p>
       <button
         type="button"
@@ -81,14 +68,7 @@ export function PricingError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-// ── Plan cards ───────────────────────────────────────────────────────────
-/** Features every published plan includes — listed once, not on every card. */
-function commonFeatureKeys(plans: Plan[]): string[] {
-  const withVersion = plans.filter((p) => p.version);
-  if (withVersion.length === 0) return [];
-  return withVersion[0].version!.features.filter((k) => withVersion.every((p) => p.version!.features.includes(k)));
-}
-
+// ── Credit helpers ───────────────────────────────────────────────────────
 /** "≈ 25,000 video or 1,00,000 audio participant-minutes" from the live rates. */
 function minutesHint(credits: number, rates: CreditRates) {
   const parts = [
@@ -164,11 +144,12 @@ function RangeField({
 }
 
 /**
- * What a one-to-one call consumes, under the plan cards: pick the call type,
- * optionally add screen sharing (it only happens inside an audio/video call)
- * and set the length. Live admin rates.
+ * What a one-to-one call consumes: pick the call type, optionally add screen
+ * sharing (it only happens inside an audio/video call) and set the length.
+ * Live admin consumption rates; when a credit price is published, the money
+ * value of those credits is shown too (before GST).
  */
-export function CreditRateStrip({ rates, plans = [] }: { rates: CreditRates; plans?: Plan[] }) {
+export function CreditRateStrip({ rates, pricing = null }: { rates: CreditRates; pricing?: PublishedCreditPricing | null }) {
   const media = mediaRates(rates);
   const callTypes = media.filter((m) => m.key !== 'screen');
   const screen = media.find((m) => m.key === 'screen')!;
@@ -195,15 +176,8 @@ export function CreditRateStrip({ rates, plans = [] }: { rates: CreditRates; pla
             : []),
         ];
   const credits = Math.ceil(lines.reduce((sum, l) => sum + l.credits, 0));
-  // Plans with a fixed credit allowance, smallest first; the smallest paid one is the default.
-  const choices = sortPlans(plans)
-    .filter((p) => !p.customPricing && (p.version?.includedCredits ?? 0) > 0)
-    .sort((a, b) => a.version!.includedCredits - b.version!.includedCredits);
-  const [planId, setPlanId] = useState<string | null>(null);
-  const plan =
-    choices.find((p) => p.id === planId) ?? choices.find((p) => p.type !== 'FREE') ?? choices[0];
-  const aiNeedsPaid = current.key === 'ai' && plan?.type === 'FREE';
-  const calls = plan && credits > 0 && !aiNeedsPaid ? Math.floor(plan.version!.includedCredits / credits) : null;
+  // Money value of this call's credits at the published price (before GST).
+  const valuePaise = pricing && credits > 0 ? credits * pricing.creditPricePaise : null;
 
   const tileCls = (on: boolean) =>
     `relative rounded-2xl p-4 text-left transition-all ${
@@ -243,7 +217,7 @@ export function CreditRateStrip({ rates, plans = [] }: { rates: CreditRates; pla
                     </span>
                   </span>
                   <span className={`mt-1 block text-xs ${on ? 'text-white/75' : 'text-[#3D3650]'}`}>
-                    {m.perParticipant ? 'per participant' : 'per call minute · paid plans'}
+                    {m.perParticipant ? 'per participant' : 'per call minute · after first purchase'}
                   </span>
                 </button>
               );
@@ -280,30 +254,6 @@ export function CreditRateStrip({ rates, plans = [] }: { rates: CreditRates; pla
         <div className="flex flex-col gap-6 bg-gradient-to-br from-[#F8F4FD] to-[#EFE5FC] p-6 sm:p-8">
           <div className="space-y-5">
             <RangeField label="Call length" value={minutes} min={5} max={120} step={5} suffix="min" onChange={setMinutes} />
-            {choices.length > 0 && (
-              <div>
-                <p className="text-sm text-[#3D3650]">Plan</p>
-                <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="Plan">
-                  {choices.map((p) => {
-                    const on = p.id === plan?.id;
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={on}
-                        onClick={() => setPlanId(p.id)}
-                        className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                          on ? 'bg-[#170B2E] text-white' : 'bg-white text-[#3D3650] ring-1 ring-[#E7DFF5] hover:text-[#170B2E]'
-                        }`}
-                      >
-                        {p.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
             {sharing && (
               <RangeField
                 label="Screen sharing time"
@@ -328,16 +278,14 @@ export function CreditRateStrip({ rates, plans = [] }: { rates: CreditRates; pla
             <p className="mt-3 text-4xl font-bold tracking-tight text-[#170B2E]">
               {formatCredits(credits)} <span className="text-lg font-semibold text-[#3D3650]">credits per call</span>
             </p>
-            {aiNeedsPaid ? (
-              <p className="mt-2 text-sm text-[#3D3650]">AI voice agents need a paid plan. Pick a paid plan to see how many calls it covers.</p>
-            ) : (
-              plan &&
-              calls != null && (
-                <p className="mt-2 text-sm text-[#3D3650]" data-testid="plan-coverage">
-                  {plan.name}&apos;s {formatCredits(plan.version!.includedCredits)} credits per {intervalLabel(plan.version)} cover{' '}
-                  <strong className="text-[#6425C4]">≈ {formatCredits(calls)}</strong> calls like this.
-                </p>
-              )
+            {current.key === 'ai' && (
+              <p className="mt-2 text-sm text-[#3D3650]">AI voice agents unlock after your first credit purchase.</p>
+            )}
+            {valuePaise != null && (
+              <p className="mt-2 text-sm text-[#3D3650]" data-testid="call-value">
+                ≈ <strong className="text-[#6425C4]">{formatMoney(valuePaise, pricing!.currency)}</strong> of credits at the
+                published price of {formatMoney(pricing!.creditPricePaise, pricing!.currency)} per credit, before GST.
+              </p>
             )}
           </div>
         </div>
@@ -346,386 +294,6 @@ export function CreditRateStrip({ rates, plans = [] }: { rates: CreditRates; pla
         A participant-minute is one connected participant for one minute: 2 people on a 10-minute video call use{' '}
         {formatRate(20 * rates.videoCreditsPerMinute)} credits.
       </p>
-    </div>
-  );
-}
-
-function FeatureList({ keys, names, dark }: { keys: string[]; names: Map<string, string>; dark?: boolean }) {
-  if (keys.length === 0) return null;
-  return (
-    <ul className="space-y-2.5">
-      {keys.map((key) => (
-        <li key={key} className={`flex items-start gap-2.5 text-sm ${dark ? 'text-white/85' : 'text-[#3D3650]'}`}>
-          <span
-            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${dark ? 'bg-white/15' : 'bg-[#7F40E8]/10'}`}
-          >
-            <Check size={11} strokeWidth={3} className={dark ? 'text-white' : 'text-[#7F40E8]'} aria-hidden="true" />
-          </span>
-          {names.get(key) ?? key}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/** Starter / Growth / Business — the main row. The popular plan is the dark feature card. */
-function PaidPlanCard({
-  plan,
-  names,
-  extraFeatures,
-  rates,
-  loggedIn,
-}: {
-  plan: Plan;
-  names: Map<string, string>;
-  extraFeatures: string[];
-  rates: CreditRates;
-  loggedIn: boolean;
-}) {
-  const v = plan.version;
-  const price = planPrice(plan);
-  const comparePrice = planComparePrice(plan);
-  const featured = plan.isPopular;
-  const badge = plan.badge ?? (featured ? 'Most popular' : null);
-  const hint = v ? minutesHint(v.includedCredits, rates) : null;
-
-  return (
-    <article
-      data-testid={`plan-card-${plan.slug}`}
-      className={`plan-card-border group relative flex flex-col rounded-3xl p-8 transition-all duration-300 ${
-        featured
-          ? 'plan-card-border--featured text-white shadow-[0_24px_60px_-12px_rgba(65,6,134,0.55)] lg:-my-4 lg:py-12'
-          : 'bg-white hover:-translate-y-1 hover:shadow-[0_20px_45px_-20px_rgba(65,6,134,0.25)]'
-      }`}
-      style={featured ? { background: 'radial-gradient(120% 80% at 0% 0%, #8B4DF0 0%, #5B1BB5 45%, #2B0F52 100%)' } : undefined}
-    >
-      {featured && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-3xl opacity-[0.07]"
-          style={{
-            backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)',
-            backgroundSize: '28px 28px',
-          }}
-        />
-      )}
-
-      <div className="relative flex items-center justify-between gap-3">
-        <h3 className={`text-xl font-bold ${featured ? 'text-white' : 'text-[#170B2E]'}`}>{plan.name}</h3>
-        {badge && (
-          <span
-            className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
-              featured ? 'bg-white text-[#5B1BB5]' : 'bg-[#7F40E8]/10 text-[#6425C4]'
-            }`}
-          >
-            <Sparkles size={12} aria-hidden="true" /> {badge}
-          </span>
-        )}
-      </div>
-      {plan.description && (
-        <p className={`relative mt-2 min-h-[2.75rem] text-sm leading-relaxed ${featured ? 'text-white/75' : 'text-[#3D3650]'}`}>
-          {plan.description}
-        </p>
-      )}
-
-      <div className="relative mt-6 flex items-baseline gap-1.5">
-        <span className={`text-5xl font-bold tracking-tight ${featured ? 'text-white' : 'text-[#170B2E]'}`}>{price.amount}</span>
-        {price.suffix && <span className={`text-sm ${featured ? 'text-white/70' : 'text-[#3D3650]'}`}>{price.suffix}</span>}
-      </div>
-      {comparePrice && (
-        <p className={`relative mt-1 text-lg font-medium line-through ${featured ? 'text-white/50' : 'text-[#3D3650]/60'}`}>
-          <span className="sr-only">Regular price </span>
-          {comparePrice}
-        </p>
-      )}
-
-      {v && (
-        <div
-          className={`relative mt-6 rounded-2xl p-4 ${featured ? 'bg-white/10 ring-1 ring-white/20' : 'bg-[#F8F4FD] ring-1 ring-[#E7DFF5]'}`}
-        >
-          <div className="flex items-center gap-2">
-            <Coins size={16} className={featured ? 'text-white' : 'text-[#7F40E8]'} aria-hidden="true" />
-            <p className={`text-sm ${featured ? 'text-white' : 'text-[#170B2E]'}`}>
-              <strong className="text-base">{formatCredits(v.includedCredits)}</strong> credits / {intervalLabel(v)}
-            </p>
-          </div>
-          {hint && <p className={`mt-1.5 text-xs ${featured ? 'text-white/65' : 'text-[#3D3650]'}`}>{hint}</p>}
-        </div>
-      )}
-
-      <Link
-        href={planCtaHref(plan, loggedIn)}
-        className={`relative mt-6 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-all ${
-          featured
-            ? 'bg-white text-[#410686] hover:bg-[#F3ECFE]'
-            : 'border border-[#D6C4EE] text-[#170B2E] hover:border-[#7F40E8] hover:bg-[#F8F4FD]'
-        }`}
-      >
-        {planCtaLabel(plan)} <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-      </Link>
-
-      {extraFeatures.length > 0 && (
-        <div className="relative mt-7">
-          <p className={`mb-3 text-xs font-semibold uppercase tracking-wider ${featured ? 'text-white/60' : 'text-[#6425C4]'}`}>
-            Also included
-          </p>
-          <FeatureList keys={extraFeatures} names={names} dark={featured} />
-        </div>
-      )}
-    </article>
-  );
-}
-
-/** Free and Custom — wide horizontal cards below the main row. */
-function WidePlanCard({
-  plan,
-  names,
-  extraFeatures,
-  rates,
-  loggedIn,
-}: {
-  plan: Plan;
-  names: Map<string, string>;
-  extraFeatures: string[];
-  rates: CreditRates;
-  loggedIn: boolean;
-}) {
-  const v = plan.version;
-  const price = planPrice(plan);
-  const custom = plan.customPricing;
-  const Icon = custom ? Building2 : Rocket;
-  const hint = v && !custom ? minutesHint(v.includedCredits, rates) : null;
-
-  return (
-    <article
-      data-testid={`plan-card-${plan.slug}`}
-      className={`group relative flex flex-col gap-6 overflow-hidden rounded-3xl border p-8 sm:flex-row sm:items-center ${
-        custom ? 'border-[#D6C4EE]' : 'border-[#E7DFF5] bg-white'
-      }`}
-      style={custom ? { background: 'linear-gradient(135deg, #F8F4FD 0%, #EFE5FC 100%)' } : undefined}
-    >
-      <div
-        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${custom ? 'text-white' : 'bg-[#7F40E8]/10 text-[#7F40E8]'}`}
-        style={custom ? { background: 'linear-gradient(135deg, #7F40E8, #410686)' } : undefined}
-      >
-        <Icon size={26} aria-hidden="true" />
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h3 className="text-xl font-bold text-[#170B2E]">{plan.name}</h3>
-          {custom ? (
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#6425C4] ring-1 ring-[#D6C4EE]">
-              {price.amount}
-            </span>
-          ) : (
-            <span className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold text-[#170B2E]">{price.amount}</span>
-              {price.suffix && <span className="text-sm text-[#3D3650]">{price.suffix}</span>}
-            </span>
-          )}
-        </div>
-        {plan.description && <p className="mt-1.5 text-sm leading-relaxed text-[#3D3650]">{plan.description}</p>}
-        {v && !custom && (
-          <div className="mt-3">
-            <p className="inline-flex items-center gap-1.5 rounded-full bg-[#F8F4FD] px-3 py-1 text-xs text-[#170B2E] ring-1 ring-[#E7DFF5]">
-              <Coins size={13} className="text-[#7F40E8]" aria-hidden="true" />
-              <strong>{formatCredits(v.includedCredits)}</strong> credits / {intervalLabel(v)}
-            </p>
-            {hint && <p className="mt-1.5 text-xs text-[#3D3650]">{hint}</p>}
-          </div>
-        )}
-        {extraFeatures.length > 0 && (
-          <div className="mt-4">
-            <FeatureList keys={extraFeatures} names={names} />
-          </div>
-        )}
-      </div>
-
-      <Link
-        href={planCtaHref(plan, loggedIn)}
-        className={`flex shrink-0 items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all ${
-          custom ? 'text-white hover:opacity-90' : 'border border-[#D6C4EE] text-[#170B2E] hover:border-[#7F40E8] hover:bg-[#F8F4FD]'
-        }`}
-        style={custom ? { background: 'linear-gradient(135deg, #7F40E8, #410686)' } : undefined}
-      >
-        {planCtaLabel(plan)} <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-      </Link>
-    </article>
-  );
-}
-
-function IncludedEverywhere({ keys, names }: { keys: string[]; names: Map<string, string> }) {
-  if (keys.length === 0) return null;
-  return (
-    <div className="mt-6 rounded-3xl border border-[#E7DFF5] bg-white p-8" data-testid="included-in-every-plan">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#6425C4]">Every plan includes</p>
-          <p className="mt-1 text-lg font-bold text-[#170B2E]">The full platform, on every plan</p>
-        </div>
-        <p className="text-sm text-[#3D3650]">Plans differ only in price and included credits.</p>
-      </div>
-      <div className="mt-6 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-        {keys.map((key) => (
-          <div key={key} className="flex items-center gap-2.5 rounded-xl bg-[#F8F4FD] px-4 py-3 text-sm text-[#170B2E]">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#7F40E8]">
-              <Check size={12} strokeWidth={3} className="text-white" aria-hidden="true" />
-            </span>
-            {names.get(key) ?? key}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export function PlanCards({ pricing }: { pricing: PublicPricing }) {
-  const token = useAuthStore((s) => s.token);
-  const names = featureNames(pricing.features);
-  const plans = sortPlans(pricing.plans);
-  if (plans.length === 0) {
-    return <p className="text-sm text-[#3D3650]">No plans are published right now. Please check back soon.</p>;
-  }
-  const common = commonFeatureKeys(plans);
-  const extra = (p: Plan) => (p.version?.features ?? []).filter((k) => !common.includes(k));
-  const loggedIn = Boolean(token);
-
-  // Main row: priced plans. Free and "talk to us" plans sit below as wide cards.
-  const main = plans.filter((p) => p.type !== 'FREE' && !p.customPricing);
-  const secondary = plans.filter((p) => p.type === 'FREE' || p.customPricing);
-  const mainCols =
-    main.length >= 4 ? 'md:grid-cols-2 xl:grid-cols-4' : main.length === 3 ? 'md:grid-cols-3' : main.length === 2 ? 'md:grid-cols-2 max-w-4xl mx-auto' : 'max-w-md mx-auto';
-
-  return (
-    <div>
-      {main.length > 0 && (
-        <div className={`grid grid-cols-1 items-center gap-6 lg:gap-5 ${mainCols}`}>
-          {main.map((plan) => (
-            <PaidPlanCard key={plan.id} plan={plan} names={names} extraFeatures={extra(plan)} rates={pricing.creditRates} loggedIn={loggedIn} />
-          ))}
-        </div>
-      )}
-      {secondary.length > 0 && (
-        <div className={`mt-10 grid grid-cols-1 gap-6 ${secondary.length > 1 ? 'lg:grid-cols-2' : ''}`}>
-          {secondary.map((plan) => (
-            <WidePlanCard key={plan.id} plan={plan} names={names} extraFeatures={extra(plan)} rates={pricing.creditRates} loggedIn={loggedIn} />
-          ))}
-        </div>
-      )}
-      <IncludedEverywhere keys={common} names={names} />
-    </div>
-  );
-}
-
-// ── Comparison table ─────────────────────────────────────────────────────
-function Yes() {
-  return (
-    <span className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-[#7F40E8]/10" aria-label="Included">
-      <Check size={14} strokeWidth={3} className="text-[#7F40E8]" aria-hidden="true" />
-    </span>
-  );
-}
-function No() {
-  return <Minus size={16} className="mx-auto text-[#D6C4EE]" aria-label="Not included" />;
-}
-
-export function PlanComparison({ pricing }: { pricing: PublicPricing }) {
-  const token = useAuthStore((s) => s.token);
-  const plans = sortPlans(pricing.plans);
-  if (plans.length === 0) return null;
-  const r = pricing.creditRates;
-  const custom = (p: Plan) => p.customPricing;
-  const minutes = (p: Plan, rate: number) =>
-    !p.version || custom(p) || rate <= 0 ? 'Custom' : `≈ ${formatCredits(Math.floor(p.version.includedCredits / rate))} min`;
-
-  const rows: { label: string; hint?: string; render: (p: Plan) => React.ReactNode }[] = [
-    {
-      label: 'Included credits',
-      render: (p) =>
-        p.version && (p.version.includedCredits > 0 || !custom(p))
-          ? `${formatCredits(p.version.includedCredits)} / ${intervalLabel(p.version)}`
-          : 'Custom',
-    },
-    { label: 'Video calling', hint: 'participant-minutes', render: (p) => minutes(p, r.videoCreditsPerMinute) },
-    { label: 'Audio calling', hint: 'participant-minutes', render: (p) => minutes(p, r.audioCreditsPerMinute) },
-    // AI voice agents need a paid plan: any plan type except FREE, Custom included.
-    ...(r.aiCreditsPerMinute != null
-      ? [{ label: 'AI voice agents', render: (p: Plan) => (p.type === 'FREE' ? <No /> : <Yes />) }]
-      : []),
-    // Only features that differ between plans — shared ones are listed once above.
-    ...pricing.features
-      .filter((f) => !commonFeatureKeys(plans).includes(f.key))
-      .map((f) => ({
-        label: f.name,
-        render: (p: Plan) => (p.version?.features.includes(f.key) ? <Yes /> : <No />),
-      })),
-  ];
-  const col = (p: Plan) => (p.isPopular ? 'bg-[#7F40E8]/[0.05]' : '');
-
-  return (
-    <div className="overflow-x-auto rounded-2xl border border-[#E7DFF5] bg-white">
-      <table className="w-full min-w-[680px] text-left text-sm" aria-label="Plan comparison">
-        <thead>
-          <tr>
-            <th scope="col" className="w-1/4 px-5 pb-5 pt-6 align-bottom text-xs font-semibold uppercase tracking-wider text-[#3D3650]">
-              Compare plans
-            </th>
-            {plans.map((p) => {
-              const price = planPrice(p);
-              return (
-                <th key={p.id} scope="col" className={`px-4 pb-5 pt-6 text-center align-bottom ${col(p)}`}>
-                  {p.isPopular && (
-                    <span className="mb-2 inline-flex items-center gap-1 rounded-full bg-[#7F40E8] px-2.5 py-0.5 text-[11px] font-semibold text-white">
-                      <Sparkles size={11} aria-hidden="true" /> {p.badge ?? 'Most popular'}
-                    </span>
-                  )}
-                  <span className="block text-base font-bold text-[#170B2E]">{p.name}</span>
-                  <span className="mt-1 block text-sm font-normal text-[#3D3650]">
-                    {price.suffix ? (
-                      <>
-                        <strong className="text-lg text-[#170B2E]">{price.amount}</strong> / {intervalLabel(p.version)}
-                      </>
-                    ) : (
-                      price.amount
-                    )}
-                  </span>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody className="text-[#3D3650]">
-          {rows.map((row) => (
-            <tr key={row.label} className="border-t border-[#F0EAF9] transition-colors hover:bg-[#FBF9FE]">
-              <th scope="row" className="px-5 py-3.5 font-medium text-[#170B2E]">
-                {row.label}
-                {row.hint && <span className="block text-xs font-normal text-[#3D3650]">{row.hint}</span>}
-              </th>
-              {plans.map((p) => (
-                <td key={p.id} className={`px-4 py-3.5 text-center ${col(p)}`}>
-                  {row.render(p)}
-                </td>
-              ))}
-            </tr>
-          ))}
-          <tr className="border-t border-[#F0EAF9]">
-            <td className="px-5 py-5" />
-            {plans.map((p) => (
-              <td key={p.id} className={`px-4 py-5 text-center ${col(p)}`}>
-                <Link
-                  href={planCtaHref(p, !!token)}
-                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
-                    p.isPopular ? 'btn-primary text-white' : 'border border-[#E7DFF5] text-[#6425C4] hover:border-[#D6C4EE]'
-                  }`}
-                >
-                  {planCtaLabel(p)} <ArrowRight size={13} aria-hidden="true" />
-                </Link>
-              </td>
-            ))}
-          </tr>
-        </tbody>
-      </table>
     </div>
   );
 }
@@ -740,7 +308,7 @@ interface Scenario {
   share?: number;
 }
 
-export function HowCreditsWork({ pricing }: { pricing: PublicPricing }) {
+export function HowCreditsWork({ pricing, credit = null }: { pricing: PublicPricing; credit?: PublishedCreditPricing | null }) {
   const r = pricing.creditRates;
   const media = mediaRates(r);
   const scenarios: Scenario[] = [
@@ -760,15 +328,31 @@ export function HowCreditsWork({ pricing }: { pricing: PublicPricing }) {
   const total = Math.ceil(callCredits + shareCredits);
 
   const steps = [
-    { icon: CreditCard, title: 'Choose a plan', body: 'Pay upfront for a monthly plan. Credits are added the moment payment is confirmed.' },
-    { icon: Coins, title: 'Credits land in your wallet', body: 'One balance for video, audio, screen sharing and AI calls. Top up whenever you need more.' },
+    {
+      icon: CreditCard,
+      title: 'Buy credits',
+      body: 'Enter the amount you want to spend. GST is added at checkout, and credits are added once the payment is verified.',
+    },
+    {
+      icon: Coins,
+      title: 'Credits land in your wallet',
+      body: 'One balance for video, audio, screen sharing, AI voice and Live Translate. Buy more whenever you need them.',
+    },
     { icon: PhoneCall, title: 'Calls use credits by the minute', body: 'Each connected participant uses credits at the rate for their call type.' },
   ];
   const rules = [
-    { icon: CalendarClock, title: 'Plan credits expire with the period', body: 'Credits from your plan are valid until the end of that plan period.' },
-    { icon: ShieldCheck, title: 'Calls are never cut off', body: 'When credits run out, new calls wait for a top-up or renewal. Calls in progress continue.' },
-    { icon: RefreshCw, title: 'Auto-renew, with notice', body: 'Paid plans renew on your card or UPI Autopay. You are notified first and can turn it off anytime.' },
-    { icon: Receipt, title: 'Never billed after the fact', body: 'You only spend credits you already have. No surprise usage invoices.' },
+    {
+      icon: CalendarClock,
+      title: 'Each purchase has its own expiry',
+      body: `Credits expire ${validityPhrase(credit?.purchasedValidityDays)}. The credits that expire soonest are used first. Promotional credits carry their own expiry date.`,
+    },
+    { icon: ShieldCheck, title: 'Calls are never cut off', body: 'When credits run out, new calls wait for a top-up. Calls in progress continue.' },
+    {
+      icon: Unlock,
+      title: 'Paid features unlock with your first purchase',
+      body: 'Webhooks, custom branding, AI voice agents, Live Translate and other paid features unlock after your first verified credit purchase.',
+    },
+    { icon: Receipt, title: 'Never billed after the fact', body: 'You only spend credits you already have. There is no subscription and no usage invoice.' },
   ];
 
   return (
@@ -845,7 +429,7 @@ export function HowCreditsWork({ pricing }: { pricing: PublicPricing }) {
           </p>
         )}
         {s.media === 'ai' && (
-          <p className="mt-3 text-xs text-[#3D3650]">AI calls are billed per call minute, not per participant, and need a paid plan.</p>
+          <p className="mt-3 text-xs text-[#3D3650]">AI calls are billed per call minute, not per participant, and unlock after your first credit purchase.</p>
         )}
       </div>
 
@@ -870,33 +454,209 @@ function Pill({ children }: { children: React.ReactNode }) {
   return <span className="rounded-lg bg-white px-3 py-1.5 font-medium text-[#170B2E] ring-1 ring-[#E7DFF5]">{children}</span>;
 }
 
-// ── Top-ups ──────────────────────────────────────────────────────────────
-export function TopUps({ pricing }: { pricing: PublicPricing }) {
-  const items = [...pricing.topUps].sort((a, b) => a.displayOrder - b.displayOrder);
+// ── Buy credits ──────────────────────────────────────────────────────────
+const toPaise = (rupees: number) => Math.round(rupees * 100);
+
+/**
+ * Prepaid explainer + "how many credits does ₹X buy?" calculator, fed by the
+ * admin-published price (GET /billing/credit-pricing/current) and the live
+ * GST rate. Shows a "published soon" note — never a made-up rate — when no
+ * price is published. The checkout quote stays authoritative.
+ */
+export function BuyCreditsCalculator({ rates, credit }: { rates: CreditRates; credit: PublishedCreditPricing | null }) {
+  const token = useAuthStore((s) => s.token);
+  const minRupees = credit ? Math.ceil(credit.minimumPurchasePaise / 100) : 0;
+  const [rupees, setRupees] = useState<number | null>(null);
+  const amount = rupees ?? minRupees;
+  const amountPaise = toPaise(amount);
+  const belowMin = credit != null && amountPaise < credit.minimumPurchasePaise;
+  const aboveMax = credit?.maximumPurchasePaise != null && amountPaise > credit.maximumPurchasePaise;
+  const credits = credit && !belowMin && !aboveMax ? creditsForAmount(amountPaise, credit) : null;
+  const gstPaise = Math.round((amountPaise * (rates.taxPercent ?? 0)) / 100);
+  const cta = token ? '/dashboard/billing/credits#topups' : '/signup';
+
   return (
-    <div>
-      {items.length === 0 ? (
-        <p className="text-sm text-[#3D3650]">Top-up packages will be listed here when available.</p>
-      ) : (
-        <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${items.length >= 4 ? 'lg:grid-cols-4' : items.length === 3 ? 'lg:grid-cols-3' : ''}`}>
-          {items.map((t) => (
-            <div
-              key={t.id}
-              data-testid={`topup-${t.id}`}
-              className={`rounded-xl border p-5 ${t.isPopular ? 'border-[#7F40E8]' : 'border-[#E7DFF5]'} bg-white`}
-            >
-              <p className="font-semibold text-[#170B2E]">{t.name}</p>
-              {t.description && <p className="mt-1 text-xs text-[#3D3650]">{t.description}</p>}
-              <p className="mt-3 text-2xl font-bold text-[#170B2E]">{formatMoney(t.pricePaise, t.currency)}</p>
-              <p className="text-sm text-[#3D3650]">{formatCredits(t.credits)} credits</p>
-            </div>
-          ))}
+    <div
+      data-testid="buy-credits"
+      className="overflow-hidden rounded-3xl border border-[#E7DFF5] bg-white shadow-[0_24px_60px_-32px_rgba(65,6,134,0.35)]"
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.1fr]">
+        <div className="p-6 sm:p-8">
+          <p className="text-lg font-bold text-[#170B2E]">Prepaid credits, no subscription</p>
+          <ul className="mt-4 space-y-2.5 text-sm leading-relaxed text-[#3D3650]">
+            <li>
+              <strong className="text-[#170B2E]">Buy by amount.</strong>{' '}
+              {credit
+                ? `Choose how much to spend, from ${formatMoney(credit.minimumPurchasePaise, credit.currency)}${
+                    credit.maximumPurchasePaise != null ? ` up to ${formatMoney(credit.maximumPurchasePaise, credit.currency)}` : ''
+                  } per purchase.`
+                : 'Choose how much to spend; the minimum purchase is shown at checkout.'}
+            </li>
+            <li>
+              <strong className="text-[#170B2E]">GST added at checkout.</strong> You see the credits, tax and total before
+              you pay.
+            </li>
+            <li>
+              <strong className="text-[#170B2E]">Each purchase has its own expiry.</strong> {purchaseExpiryText(credit)}
+            </li>
+            <li>
+              <strong className="text-[#170B2E]">Paid features unlock</strong> after your first verified credit purchase.
+            </li>
+            <li>
+              <strong className="text-[#170B2E]">No free monthly credits.</strong> Free accounts can explore the dashboard;
+              any promotional credits we grant carry their own expiry.
+            </li>
+          </ul>
         </div>
-      )}
-      <p className="mt-4 text-xs text-[#3D3650]">
-        Top-ups are one-time credit packages you buy from your dashboard — no subscription change needed. {topUpExpiryText(pricing.creditRates)}{' '}
-        {gstNote(pricing.creditRates)}
+
+        <div className="flex flex-col gap-5 bg-gradient-to-br from-[#F8F4FD] to-[#EFE5FC] p-6 sm:p-8">
+          {credit ? (
+            <>
+              <p className="text-sm text-[#3D3650]">
+                Published price:{' '}
+                <strong className="text-[#170B2E]">
+                  {formatMoney(credit.creditPricePaise, credit.currency)} per credit
+                </strong>
+              </p>
+              <label className="block text-sm text-[#3D3650]">
+                Amount to spend (₹, before GST)
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={minRupees}
+                  step={100}
+                  value={amount}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    setRupees(Number.isFinite(n) ? Math.max(0, n) : 0);
+                  }}
+                  className="mt-2 w-full rounded-lg border border-[#D6C4EE] bg-white p-3 text-[#170B2E]"
+                />
+              </label>
+              <div aria-live="polite" className="mt-auto">
+                {credits != null ? (
+                  <>
+                    <p className="text-4xl font-bold tracking-tight text-[#170B2E]">
+                      <span data-testid="calculated-credits">{formatCredits(credits)}</span>{' '}
+                      <span className="text-lg font-semibold text-[#3D3650]">credits</span>
+                    </p>
+                    <p className="mt-1 text-sm text-[#3D3650]" data-testid="calculated-total">
+                      {formatMoney(amountPaise, credit.currency)} + GST {formatRate(rates.taxPercent)}% (
+                      {formatMoney(gstPaise, credit.currency)}) = {formatMoney(amountPaise + gstPaise, credit.currency)}
+                    </p>
+                    {minutesHint(credits, rates) && <p className="mt-1 text-xs text-[#3D3650]">{minutesHint(credits, rates)}</p>}
+                  </>
+                ) : (
+                  <p className="text-sm text-[#3D3650]" role="alert">
+                    {belowMin
+                      ? `The minimum purchase is ${formatMoney(credit.minimumPurchasePaise, credit.currency)}.`
+                      : `The maximum single purchase is ${formatMoney(credit.maximumPurchasePaise ?? 0, credit.currency)}.`}
+                  </p>
+                )}
+                <p className="mt-3 text-xs text-[#3D3650]">
+                  An estimate: the checkout quote is final. Credits are rounded down to whole units.
+                </p>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-[#3D3650]" data-testid="price-not-published">
+              {PRICE_NOT_PUBLISHED}
+            </p>
+          )}
+          <Link
+            href={cta}
+            className="btn-primary inline-flex items-center justify-center gap-2 self-start rounded-lg px-5 py-2.5 text-sm font-semibold text-white"
+          >
+            {token ? 'Buy credits' : 'Create an account to buy credits'} <ArrowRight size={14} aria-hidden="true" />
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Auto Top-Up ──────────────────────────────────────────────────────────
+export function AutoTopUpExplainer() {
+  return (
+    <div data-testid="auto-topup-explainer">
+      <p className="mb-5 max-w-3xl text-sm text-[#3D3650]">
+        Auto Top-Up is not available yet. You can buy prepaid credits manually from your wallet; this page will show the feature once its payment authorization and trigger flow are active.
       </p>
+    </div>
+  );
+}
+
+/** Shared visual pricing overview for the home page and /pricing. */
+function PrepaidPricingFeature({ rates, credit, pageHeading = false }: { rates: CreditRates; credit: PublishedCreditPricing | null; pageHeading?: boolean }) {
+  const token = useAuthStore((s) => s.token);
+  const cta = token ? '/dashboard/billing/credits#topups' : '/signup';
+  const Heading = pageHeading ? 'h1' : 'h2';
+  const price = credit ? `${formatMoney(credit.creditPricePaise, credit.currency)} per credit` : 'Published soon';
+  const purchaseSteps = ['Choose a purchase amount', 'See estimated credits and taxes', 'Complete payment securely', 'Credits added after successful payment'];
+  const steps = [
+    { icon: CreditCard, title: 'Add credits', body: 'Choose a monetary amount and review your credit estimate before checkout.' },
+    { icon: PhoneCall, title: 'Use across features', body: 'Credits are consumed based on the feature you use and its configured rate.' },
+    { icon: Receipt, title: 'Track & manage', body: 'Monitor your balance, purchase history and individual credit-lot expiry dates.' },
+  ];
+  const usageRows = [
+    { icon: Mic, feature: 'Audio calls', rate: `${formatRate(rates.audioCreditsPerMinute)} credits/min`, detail: 'Voice calls with real-time transcription' },
+    { icon: Video, feature: 'Video calls', rate: `${formatRate(rates.videoCreditsPerMinute)} credits/min`, detail: 'Video calls with real-time translation' },
+    { icon: Monitor, feature: 'Screen sharing', rate: `${formatRate(rates.screenShareCreditsPerMinute)} credits/min`, detail: 'Screen-sharing time during a call' },
+    ...(rates.aiCreditsPerMinute != null ? [{ icon: Bot, feature: 'AI calling agents', rate: `${formatRate(rates.aiCreditsPerMinute)} credits/min`, detail: 'AI voice agents and assistants' }] : []),
+    { icon: Sparkles, feature: 'Live Translate', rate: 'Varies by provider', detail: 'Real-time translation for calls and meetings' },
+  ];
+
+  return (
+    <div className="space-y-12 sm:space-y-16" data-testid="prepaid-pricing-feature">
+      <div className="grid items-center gap-10 lg:grid-cols-[0.86fr_1.14fr] lg:gap-14">
+        <div>
+          <p className="section-label font-mono text-xs uppercase tracking-[0.2em]">Simple, flexible pricing</p>
+          <Heading className="lp-h2 mt-5 max-w-xl font-bold text-[#170B2E]">Pricing that moves with your usage.</Heading>
+          <p className="mt-5 max-w-xl text-base leading-7 text-[#3D3650] sm:text-lg">Add prepaid credits to your wallet and use them across eligible PurpleCallio features. Choose your purchase amount, review the estimated credits and taxes, and continue when you&apos;re ready.</p>
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Link href={cta} data-testid="pricing-primary-cta" className="btn-primary inline-flex items-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_-14px_rgba(65,6,134,0.8)]">
+              {token ? 'Buy credits' : 'Create an account'} <ArrowRight size={16} aria-hidden="true" />
+            </Link>
+            <a href="#how-credits-work" className="inline-flex items-center gap-2 rounded-lg border border-[#D6C4EE] bg-white px-5 py-3 text-sm font-semibold text-[#6425C4] hover:bg-[#F8F4FD]">How credits work</a>
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl border border-[#E7DFF5] bg-gradient-to-br from-white via-[#FCFAFF] to-[#F5EEFF] p-6 shadow-[0_22px_55px_-36px_rgba(65,6,134,0.5)] sm:p-8">
+          <div className="absolute -right-20 -top-20 h-52 w-52 rounded-full bg-[#A05DF9]/10 blur-3xl" aria-hidden="true" />
+          <div className="relative flex items-start justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#7F40E8]/10 text-[#7F40E8] ring-1 ring-[#7F40E8]/15"><Wallet size={27} aria-hidden="true" /></span>
+              <div><h3 className="text-xl font-bold text-[#170B2E]">Prepaid Credits</h3><p className="mt-1 max-w-sm text-sm leading-6 text-[#3D3650]">Add credits to your wallet and use them across eligible PurpleCallio features.</p></div>
+            </div>
+            <span className="hidden shrink-0 items-center gap-1 rounded-full border border-[#E0D2F6] bg-white/70 px-3 py-1 text-xs font-semibold text-[#6425C4] sm:inline-flex"><Sparkles size={13} aria-hidden="true" /> Prepaid</span>
+          </div>
+          <div className="relative mt-7 grid gap-6 border-t border-[#E7DFF5] pt-6 sm:grid-cols-[0.9fr_1.1fr] sm:gap-8">
+            <div>
+              <p className="text-sm font-semibold text-[#170B2E]">Current price</p>
+              <p className="mt-1 text-3xl font-bold tracking-tight text-[#170B2E]" data-testid="credit-price">{price}</p>
+              <p className="mt-3 text-xs leading-5 text-[#5D536E]">{credit ? 'Price is shown before taxes. The final amount is calculated at checkout.' : PRICE_NOT_PUBLISHED}</p>
+              <Link href={cta} className="btn-primary mt-5 inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white">Buy credits <ArrowRight size={15} aria-hidden="true" /></Link>
+            </div>
+            <ul className="space-y-3 border-[#E7DFF5] text-sm text-[#3D3650] sm:border-l sm:pl-7">
+              {purchaseSteps.map((step, index) => <li key={step} className="flex items-center gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-[#7F40E8]/10 text-xs font-bold text-[#6425C4]">{index + 1}</span>{step}</li>)}
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div id="how-credits-work" className="grid gap-8 border-y border-[#E7DFF5] py-8 sm:py-10 lg:grid-cols-[0.9fr_2.1fr]">
+        <div><h3 className="text-2xl font-bold tracking-tight text-[#170B2E]">How it works</h3><p className="mt-3 max-w-sm text-sm leading-6 text-[#3D3650]">Getting started is simple. Add credits, use them across features, and stay in control.</p></div>
+        <ol className="grid gap-6 sm:grid-cols-3">
+          {steps.map((step, index) => <li key={step.title}><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#7F40E8]/10 text-[#7F40E8] ring-1 ring-[#7F40E8]/15"><step.icon size={21} aria-hidden="true" /></span><p className="mt-4 font-semibold text-[#170B2E]">{index + 1}. {step.title}</p><p className="mt-2 text-sm leading-6 text-[#3D3650]">{step.body}</p></li>)}
+        </ol>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-[#E7DFF5] bg-gradient-to-br from-[#FCFAFF] via-white to-[#F7F1FE] p-6 sm:p-8">
+        <div className="grid gap-7 lg:grid-cols-[0.85fr_1.6fr]">
+          <div><h3 className="text-2xl font-bold tracking-tight text-[#170B2E]">Feature usage &amp; credit consumption</h3><p className="mt-3 text-sm leading-6 text-[#3D3650]">Different features use different amounts of credits. The purchase price is separate from each feature&apos;s consumption rate.</p></div>
+          <div className="overflow-x-auto rounded-xl border border-[#E7DFF5] bg-white"><table className="min-w-[540px] w-full text-left text-sm"><thead className="border-b border-[#E7DFF5] bg-[#FCFAFF] text-xs text-[#5D536E]"><tr><th className="px-4 py-3 font-semibold">Feature</th><th className="px-4 py-3 font-semibold">Consumption rate</th><th className="px-4 py-3 font-semibold">What it&apos;s used for</th></tr></thead><tbody>{usageRows.map((row) => <tr key={row.feature} className="border-b border-[#E7DFF5] last:border-0"><td className="px-4 py-3 font-medium text-[#170B2E]"><span className="mr-2 inline-flex h-6 w-6 translate-y-1 items-center justify-center rounded-md bg-[#7F40E8]/10 text-[#7F40E8]"><row.icon size={14} aria-hidden="true" /></span>{row.feature}</td><td className="px-4 py-3 text-[#3D3650]">{row.rate}</td><td className="px-4 py-3 text-[#3D3650]">{row.detail}</td></tr>)}</tbody></table><p className="px-4 py-3 text-xs text-[#5D536E]">Rates are configured by your administrator and may vary by feature and provider.</p></div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -932,61 +692,44 @@ function SubHeading({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Public pricing, fed entirely by GET /billing/plans.
- * `summary` (homepage) renders the plan cards only; `full` (pricing page)
- * adds the comparison table, credit explainer and top-ups.
+ * Public prepaid pricing, fed by GET /billing/credit-rates (consumption rates,
+ * GST) and GET /billing/credit-pricing/current (price per credit).
+ * `summary` (homepage) renders a link to the pricing page; `full` adds the
+ * credit explainer, Auto Top-Up and Live Translate.
  */
 export default function PricingSection({ variant = 'summary', bare = false }: { variant?: 'summary' | 'full'; /** Inside a page that already has its own heading and gutters. */ bare?: boolean }) {
   const state = usePublicPricing();
+  const priceState = usePublishedCreditPricing();
   const full = variant === 'full';
+  // An unavailable price endpoint is treated like an unpublished price — never invented.
+  const credit = priceState.status === 'ready' ? priceState.data : null;
+  const loading = state.status === 'loading' || priceState.status === 'loading';
 
   return (
     <section id="pricing" className={bare ? 'scroll-mt-24' : 'section-base px-6 py-24'}>
       <div className={bare ? '' : 'mx-auto max-w-6xl'}>
-        {!bare && (
-          <>
-            <p className="section-label mb-4 font-mono text-xs uppercase tracking-widest">Pricing</p>
-            <h2 className="lp-h2 mb-4 font-bold text-[#170B2E]">Simple prepaid plans. No surprise usage bills.</h2>
-            <p className="mb-6 max-w-2xl text-[#3D3650]">
-              Choose a plan, pay upfront and get usage credits for audio, video and screen sharing. Top up when you
-              need more, and upgrade as you grow.
-            </p>
-          </>
-        )}
-        <ul className="mb-12 flex flex-wrap gap-2">
-          {TAGLINES.map((t) => (
-            <li key={t} className="rounded-full border border-[#E7DFF5] bg-[#F8F4FD] px-3 py-1 text-xs text-[#6425C4]">
-              {t}
-            </li>
-          ))}
-        </ul>
-
-        {state.status === 'loading' && <PricingLoading />}
         {state.status === 'error' && <PricingError onRetry={state.retry} />}
-        {state.status === 'ready' && (
+        {state.status !== 'error' && loading && <PricingLoading />}
+        {state.status === 'ready' && !loading && (
           <>
-            <PlanCards pricing={state.data} />
-            <CreditRateStrip rates={state.data.creditRates} plans={state.data.plans} />
-            <p className="mt-5 text-center text-xs text-[#3D3650]">{gstNote(state.data.creditRates)}</p>
+            <PrepaidPricingFeature rates={state.data.creditRates} credit={credit} pageHeading={full} />
 
             {full ? (
               <>
-                <SubHeading>Compare plans</SubHeading>
-                <PlanComparison pricing={state.data} />
+                <SubHeading>More about your credits</SubHeading>
+                <HowCreditsWork pricing={state.data} credit={credit} />
 
-                <SubHeading>How credits work</SubHeading>
-                <HowCreditsWork pricing={state.data} />
-
-                <SubHeading>Top up when you need more</SubHeading>
-                <TopUps pricing={state.data} />
+                <div id="auto-top-up" className="scroll-mt-24">
+                  <SubHeading>Auto Top-Up</SubHeading>
+                  <AutoTopUpExplainer />
+                </div>
 
                 <LiveTranslatePricing />
-
               </>
             ) : (
               <div className="mt-10 text-center">
                 <Link href="/pricing" className="text-sm font-medium text-[#6425C4] hover:text-[#170B2E]">
-                  Compare plans, credit rates and top-ups →
+                  See detailed pricing and credit tools →
                 </Link>
               </div>
             )}
@@ -995,9 +738,9 @@ export default function PricingSection({ variant = 'summary', bare = false }: { 
 
         {full && (
           <div className="mt-12 rounded-xl border border-[#E7DFF5] p-8 text-center">
-            <p className="mb-2 text-lg font-bold text-[#170B2E]">Questions about plans or credits?</p>
+            <p className="mb-2 text-lg font-bold text-[#170B2E]">Questions about credits?</p>
             <p className="mx-auto mb-6 max-w-xl text-sm text-[#3D3650]">
-              Read how plans, credits, renewals, top-ups and upgrades work, or review the billing terms.
+              Read how credit purchases, expiry, Auto Top-Up and refunds work, or review the billing terms.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
               <Link

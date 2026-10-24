@@ -1,6 +1,6 @@
 {
   "name": "@purplecallio/vue",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Official Vue 3 composable and components for PurpleCallio, a developer-focused real-time communication infrastructure platform for audio, video, screen sharing and WebRTC applications.",
   "homepage": "https://purplecallio.com",
   "main": "./dist/index.mjs",

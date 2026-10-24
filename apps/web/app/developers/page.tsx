@@ -165,7 +165,7 @@ export default function DevelopersPage() {
                   <p className="mt-3 leading-7 text-white/80">
                      Real-time, interruptible voice conversations that look things up and take actions
                      through your own APIs. PurpleCallio runs the audio relay, the model connection, tool
-                     calls, transcripts and per-minute credit billing. Available on paid plans.
+                     calls, transcripts and per-minute credit billing. Unlocks after your first verified credit purchase.
                   </p>
                </div>
                <Link

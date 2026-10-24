@@ -7,6 +7,8 @@ import { BillingNotificationService } from './billing-notification.service';
 import { CheckoutService } from './checkout/checkout.service';
 import { CreditService } from './credits/credit.service';
 import { SubscriptionService } from './subscriptions/subscription.service';
+import { CreditPricingService } from './credit-pricing.service';
+import { AutoTopUpService } from './auto-topup/auto-topup.service';
 
 /**
  * Prepaid billing housekeeping. None of these jobs moves money (auto-renew
@@ -38,6 +40,8 @@ export class BillingJobsService {
     private config: BillingConfigService,
     private checkout: CheckoutService,
     private notify: BillingNotificationService,
+    private creditPricing: CreditPricingService,
+    private autoTopUp: AutoTopUpService,
   ) {}
 
   @Cron(CronExpression.EVERY_10_MINUTES)
@@ -45,9 +49,13 @@ export class BillingJobsService {
     if (this.running) return;
     this.running = true;
     try {
+      await this.creditPricing.activateDue();
       await this.rollOverSubscriptions();
       await this.expireCredits();
       await this.abandonStaleCheckouts();
+      // Only checks customer-authorized, active test/live mandates. The
+      // provider call itself is additionally feature-gated in the provider.
+      await this.autoTopUp.triggerDue();
     } catch (err) {
       this.logger.error(`Billing housekeeping failed: ${String(err)}`);
     } finally {

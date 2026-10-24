@@ -276,7 +276,7 @@ export default function UsagePage() {
                   <p className="text-xs text-[#3D3650] mt-0.5">
                      {wallet.available <= 0
                         ? "New calls are paused until you add credits. Calls in progress are not cut off."
-                        : "Top up or upgrade your plan to keep calls running."}
+                        : "Add credits to your wallet to keep calls running."}
                   </p>
                </div>
                <Link

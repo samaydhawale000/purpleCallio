@@ -63,6 +63,38 @@ export interface ProviderPayment {
   errorDescription?: string | null;
 }
 
+/** Razorpay Charge-at-Will / eMandate.  This is intentionally separate from
+ * subscriptions: the merchant, not Razorpay's subscription scheduler,
+ * creates each subsequent payment. */
+export interface ProviderChargeAtWillAuthorizationInput {
+  authorizationId: string;
+  customer: { name?: string | null; email: string; contact: string };
+  currency: string;
+  maxAmountPaise: number;
+  expiresAt: Date;
+  /** Account-approved Razorpay eMandate method, e.g. netbanking. */
+  authType: string;
+  notes: Record<string, string>;
+}
+export interface ProviderChargeAtWillAuthorization {
+  providerOrderId: string;
+  providerCustomerId: string;
+  publicKey: string;
+  currency: string;
+}
+export interface ProviderChargeAtWillChargeInput {
+  paymentId: string;
+  providerOrderId: string;
+  providerCustomerId: string;
+  providerTokenId: string;
+  amountPaise: number;
+  currency: string;
+  email: string;
+  contact: string;
+  description: string;
+  notes: Record<string, string>;
+}
+
 export type ProviderEventType =
   | 'payment.captured'
   | 'payment.authorized'
@@ -77,6 +109,10 @@ export type ProviderEventType =
   | 'subscription.halted'
   | 'subscription.cancelled'
   | 'subscription.completed'
+  | 'token.confirmed'
+  | 'token.rejected'
+  | 'token.cancelled'
+  | 'token.paused'
   | 'unknown';
 
 // ── Recurring mandates (auto-renew) ─────────────────────────────────────
@@ -164,6 +200,10 @@ export interface PaymentProvider {
     providerSubscriptionId: string,
     atCycleEnd: boolean,
   ): Promise<void>;
+  createChargeAtWillAuthorization(
+    input: ProviderChargeAtWillAuthorizationInput,
+  ): Promise<ProviderChargeAtWillAuthorization>;
+  createChargeAtWillPayment(input: ProviderChargeAtWillChargeInput): Promise<ProviderPayment>;
 }
 
 export const PAYMENT_PROVIDER = 'PAYMENT_PROVIDER';

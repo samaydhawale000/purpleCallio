@@ -1,15 +1,15 @@
 import Link from "next/link";
 import Image from "next/image";
-import heroPreview from "./assets/images/hero-preview.webp";
 import StripeGradient from "./components/gradient/StripeGradient";
 import PricingSection from "./components/PricingSection";
 import { JsonLd } from "./components/seo/JsonLd";
 import { pageMetadata, siteUrl } from "./lib/seo";
 import { PURPLECALLIO_DESCRIPTION, PURPLECALLIO_NAME } from "./lib/brand";
-import { CORE_FEATURES } from "./lib/feature-catalog";
 import { IntegrationSelector } from "./components/marketing/InteractiveTools";
 import { Reveal, RevealGroup, RevealItem } from "./components/motion/Reveal";
 import { LiveTranslateSection } from "./components/marketing/live-translate/LiveTranslateSection";
+import { TranslationHeroVisual } from "./components/marketing/live-translate/TranslationHeroVisual";
+import { LIVE_TRANSLATE_PATH, LIVE_TRANSLATE_STATUS } from "./lib/live-translate";
 import {
    ArrowRight,
    Atom,
@@ -40,9 +40,39 @@ import {
 } from "lucide-react";
 
 const HERO_POINTS = [
-   "Video, audio & AI voice agents",
+   "Bidirectional speech translation",
+   "Voice, video & AI voice agents",
    "TURN relay included",
    "Prepaid credits, no surprise bills",
+];
+
+const PLATFORM_CAPABILITIES = [
+   {
+      icon: Globe2,
+      name: "Real-time speech translation",
+      body: "Bidirectional translated speech and captions for 1:1 calls, with language availability published by the Live Translate API.",
+      href: "/features/live-translation",
+      featured: true,
+      badge: LIVE_TRANSLATE_STATUS,
+   },
+   {
+      icon: MonitorUp,
+      name: "Audio & video calling",
+      body: "WebRTC calls with hosted UI, React components or a headless SDK, plus signaling, device controls and TURN relay.",
+      href: "/features/video-calling",
+   },
+   {
+      icon: Bot,
+      name: "AI voice agents",
+      body: "Real-time voice agents that connect securely to your APIs and workflows from the same developer platform.",
+      href: "/features/ai-voice-agents",
+   },
+   {
+      icon: Code2,
+      name: "Developer APIs & integrations",
+      body: "REST APIs, WebSocket signaling, webhooks and SDK building blocks for control over every call experience.",
+      href: "/developers",
+   },
 ];
 
 const STACK = ["React", "Next.js", "Vue", "Angular", "Svelte", "React Native", "Node.js", "REST"];
@@ -170,8 +200,8 @@ const SUPPORT_ITEMS = [
 ];
 
 export const metadata = pageMetadata({
-   title: "PurpleCallio: Video, Audio & AI Voice Agent APIs",
-   description: PURPLECALLIO_DESCRIPTION,
+   title: "PurpleCallio: Real-Time Speech Translation, Voice & Video APIs",
+   description: "Real-time, bidirectional speech translation alongside voice, video and AI communication APIs for developers.",
    path: "/",
 });
 
@@ -225,52 +255,51 @@ export default function LandingPage() {
                   operatingSystem: "Web",
                   url: siteUrl.toString(),
                   description: PURPLECALLIO_DESCRIPTION,
-                  offers: { "@type": "Offer", price: "0", priceCurrency: "INR", description: "Free plan with monthly usage credits" },
+                  offers: { "@type": "Offer", description: "Prepaid credits for eligible PurpleCallio features; current pricing is published on the pricing page." },
                },
             ]}
          />
 
          {/* ── Hero ── */}
-         <section className="section-base relative px-6 pt-42 pb-28 sm:pb-36 overflow-hidden">
+         <section className="section-base relative overflow-hidden px-6 pb-36 pt-28 sm:pt-32 lg:pb-44">
             <div className="absolute inset-0 pointer-events-none">
                <StripeGradient />
             </div>
 
-            <div className="relative max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-12 lg:gap-10 items-center">
+            <div className="relative mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:gap-8">
                <div className="min-w-0">
                   <Link
-                     href="/features/ai-voice-agents"
+                     href={LIVE_TRANSLATE_PATH}
                      className="hero-badge group inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium mb-7 transition-colors hover:border-[#7F40E8]/50"
                   >
-                     <span className="rounded-full bg-[#7F40E8] px-2 py-0.5 text-[10px] font-semibold text-white">New</span>
-                     AI voice agents are here
+                     <span className="rounded-full bg-[#7F40E8] px-2 py-0.5 text-[10px] font-semibold text-white">{LIVE_TRANSLATE_STATUS}</span>
+                     Real-time speech translation
                      <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                   </Link>
 
+                  <p className="mb-4 font-mono text-xs font-semibold tracking-[0.18em] text-[#6B35D3]">REAL-TIME SPEECH · VOICE &amp; VIDEO · AI AGENTS</p>
                   <h1 className="lp-h1 font-bold text-[#170B2E] leading-[1.05] mb-6" style={{ fontSize: "clamp(2.4rem, 4.6vw, 3.9rem)" }}>
-                     Build real-time communication into your product
-                     <span className="gradient-text-hero"> in minutes, not weeks.</span>
+                     Every language.
+                     <span className="gradient-text-hero"> One conversation.</span>
                   </h1>
 
                   <p className="text-lg text-[#3D3650] leading-relaxed mb-8 max-w-xl">
-                     Add video calls, audio calls and AI voice agents to your app
-                     through hosted UI, React components, a headless SDK or REST
-                     APIs. We run the signaling, WebRTC and TURN; you keep your
-                     product.
+                     <span className="mb-2 block font-semibold text-[#261145]">Speak naturally. Connect globally.</span>
+                     Break language barriers with real-time, bidirectional speech translation. Let people speak their own languages while PurpleCallio translates conversations in real time, with voice, video, and AI communication tools built into one developer platform.
                   </p>
 
                   <div className="flex flex-wrap gap-3 mb-8">
                      <Link
-                        href="/dashboard"
+                        href="/signup"
                         className="btn-primary inline-flex items-center gap-2 text-white font-semibold text-sm px-6 py-3.5 rounded-xl shadow-[0_10px_30px_-10px_rgba(100,37,196,0.7)] transition-all hover:-translate-y-0.5 hover:opacity-95"
                      >
                         Start building free <ArrowRight size={16} aria-hidden="true" />
                      </Link>
                      <Link
-                        href="/docs"
+                        href={LIVE_TRANSLATE_PATH}
                         className="btn-secondary inline-flex items-center gap-2 font-semibold text-sm px-6 py-3.5 rounded-xl border border-[#E7DFF5] text-[#170B2E] transition-all hover:border-[#D6C4EE]"
                      >
-                        Read the docs
+                        Explore Live Translate
                      </Link>
                   </div>
 
@@ -292,13 +321,7 @@ export default function LandingPage() {
                      className="absolute -inset-8 rounded-full opacity-60 blur-3xl"
                      style={{ background: "radial-gradient(closest-side, rgba(127,64,232,0.28), transparent)" }}
                   />
-                  <Image
-                     src={heroPreview}
-                     alt="PurpleCallio video call interface with quick integration code and API response preview"
-                     className="relative w-full h-auto"
-                     priority
-                     sizes="(min-width: 1024px) 45vw, (min-width: 640px) 80vw, 100vw"
-                  />
+                  <TranslationHeroVisual />
                </div>
             </div>
 
@@ -313,29 +336,28 @@ export default function LandingPage() {
             </svg>
          </section>
 
-         {/* ── Products: video, audio, AI ── */}
+         {/* ── Platform capabilities ── */}
          <section className="section-alt px-6 py-24">
             <div className="max-w-6xl mx-auto">
                <SectionHeading
                   center
                   label="One platform"
-                  title="Three ways to talk to your users."
-                  intro="Video calls, audio calls and AI voice agents share the same API keys, dashboard, webhooks and prepaid credit balance. Start with one, add the others when you need them."
+                  title="One platform for every conversation."
+                  intro="Live Translate brings speech-to-speech translation into the same developer platform as audio and video calling, AI voice agents, and the APIs that connect them."
                />
-               <RevealGroup stagger={0.12} className="mt-14 grid grid-cols-1 gap-5 lg:grid-cols-3">
-                  {CORE_FEATURES.map((f) => {
-                     const ai = f.slug === "ai-voice-agents";
+               <RevealGroup stagger={0.12} className="mt-14 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+                  {PLATFORM_CAPABILITIES.map((f) => {
                      return (
-                        <RevealItem key={f.slug} variant="zoom-up" duration={0.7} className="h-full">
+                        <RevealItem key={f.name} variant="zoom-up" duration={0.7} className="h-full">
                         <Link
-                           href={`/features/${f.slug}`}
+                           href={f.href}
                            className={`group relative flex h-full flex-col overflow-hidden rounded-3xl p-8 transition-all duration-300 hover:-translate-y-1 ${
-                              ai
+                              f.featured
                                  ? "text-white shadow-[0_30px_60px_-20px_rgba(65,6,134,0.55)]"
                                  : "bg-white border border-[#E7DFF5] hover:shadow-[0_24px_50px_-24px_rgba(65,6,134,0.3)]"
                            }`}
                            style={
-                              ai
+                              f.featured
                                  ? { background: "radial-gradient(120% 90% at 0% 0%, #8B4DF0 0%, #5B1BB5 45%, #2B0F52 100%)" }
                                  : undefined
                            }
@@ -343,7 +365,7 @@ export default function LandingPage() {
                            <div className="flex items-center justify-between">
                               <span
                                  className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
-                                    ai ? "bg-white/15" : "bg-[#7F40E8]/10 text-[#7F40E8]"
+                                    f.featured ? "bg-white/15" : "bg-[#7F40E8]/10 text-[#7F40E8]"
                                  }`}
                               >
                                  <f.icon size={24} aria-hidden="true" />
@@ -352,17 +374,9 @@ export default function LandingPage() {
                                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#5B1BB5]">{f.badge}</span>
                               )}
                            </div>
-                           <h3 className={`mt-7 text-2xl font-bold ${ai ? "" : "text-[#170B2E]"}`}>{f.name}</h3>
-                           <p className={`mt-2 text-sm leading-relaxed ${ai ? "text-white/80" : "text-[#3D3650]"}`}>{f.body}</p>
-                           <ul className="mt-6 flex-1 space-y-2.5">
-                              {f.highlights.map((h) => (
-                                 <li key={h} className="flex items-start gap-2 text-sm">
-                                    <Check size={16} className={`mt-0.5 shrink-0 ${ai ? "" : "text-[#7F40E8]"}`} aria-hidden="true" />
-                                    <span className={ai ? "text-white/90" : "text-[#3D3650]"}>{h}</span>
-                                 </li>
-                              ))}
-                           </ul>
-                           <span className={`mt-8 inline-flex items-center gap-1.5 text-sm font-semibold ${ai ? "" : "text-[#6425C4]"}`}>
+                           <h3 className={`mt-7 text-xl font-bold ${f.featured ? "" : "text-[#170B2E]"}`}>{f.name}</h3>
+                           <p className={`mt-2 flex-1 text-sm leading-relaxed ${f.featured ? "text-white/80" : "text-[#3D3650]"}`}>{f.body}</p>
+                           <span className={`mt-8 inline-flex items-center gap-1.5 text-sm font-semibold ${f.featured ? "" : "text-[#6425C4]"}`}>
                               Explore {f.name}
                               <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
                            </span>
@@ -418,7 +432,7 @@ export default function LandingPage() {
                            Read the docs
                         </Link>
                      </div>
-                     <p className="mt-4 text-sm text-white/70">Included on every paid plan.</p>
+                     <p className="mt-4 text-sm text-white/70">Unlocks after your first verified credit purchase.</p>
                   </Reveal>
                   <RevealGroup delay={0.25} stagger={0.1} className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
                      {AI_USE_CASES.map((uc) => (

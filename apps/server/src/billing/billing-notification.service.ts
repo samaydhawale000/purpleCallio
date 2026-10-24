@@ -155,7 +155,7 @@ export class BillingNotificationService {
         ? `${sub.planName} has ended`
         : `${sub.planName} has expired`,
       message:
-        "Your account is now on the Free plan. Renew or choose a plan in Billing whenever you're ready.",
+        "This historical subscription has ended. Add prepaid credits in Billing whenever you're ready.",
       metadata: { subscriptionId: sub.id },
       dedupeKey: `plan-ended:${sub.id}`,
     });
@@ -172,8 +172,8 @@ export class BillingNotificationService {
         ? 'Your credits are used up'
         : `You've used ${threshold}% of your credits`,
       message: exhausted
-        ? 'New calls are paused until you add credits. Buy a top-up or upgrade your plan in Billing.'
-        : `You've used ${threshold}% of your included credits. Top up or upgrade anytime from Billing.`,
+        ? 'New calls are paused until you add credits in Billing.'
+        : `You've used ${threshold}% of your credits. Add more anytime from Billing.`,
       metadata: { threshold },
       dedupeKey: `credits:${periodKey}:${threshold}`,
     });
@@ -187,6 +187,28 @@ export class BillingNotificationService {
       message: `${fmtCredits(credits)} credits have been added to your account.`,
       metadata: { paymentId },
       dedupeKey: `topup-success:${paymentId}`,
+    });
+  }
+
+  promotionalCreditsGranted(
+    userId: string,
+    credits: number,
+    expiresAt: Date,
+    reason: string,
+    bucketId: string,
+  ) {
+    return this.notifications.createNotification({
+      userId,
+      type: NotificationType.TOPUP_SUCCESS,
+      title: 'Promotional credits granted',
+      message: `${fmtCredits(credits)} promotional credits were added and expire ${fmtDate(expiresAt)}. ${reason}`,
+      metadata: {
+        bucketId,
+        promotional: 'true',
+        expiresAt: expiresAt.toISOString(),
+        reason,
+      },
+      dedupeKey: `promotion-granted:${bucketId}`,
     });
   }
 

@@ -183,7 +183,7 @@ export class AiSessionService {
       throw aiError(
         HttpStatus.FORBIDDEN,
         'AI_PAID_PLAN_REQUIRED',
-        'AI voice agents are available on paid plans. Upgrade your plan in Billing.',
+        'AI voice agents unlock after your first verified credit purchase. Add credits in Billing.',
       );
     }
 
@@ -191,7 +191,7 @@ export class AiSessionService {
       throw aiError(
         HttpStatus.FORBIDDEN,
         'AI_INSUFFICIENT_CREDITS',
-        'Your PurpleCallio credits are used up. Buy a credit top-up or upgrade your plan in Billing.',
+        'Your PurpleCallio credits are used up. Add credits in Billing.',
       );
     }
 
@@ -203,7 +203,7 @@ export class AiSessionService {
       throw aiError(
         HttpStatus.FORBIDDEN,
         'AI_INSUFFICIENT_CREDITS',
-        'Your PurpleCallio credits are used up. Buy a credit top-up or upgrade your plan in Billing.',
+        'Your PurpleCallio credits are used up. Add credits in Billing.',
       );
     }
 
@@ -328,7 +328,7 @@ export class AiSessionService {
           throw aiError(
             HttpStatus.FORBIDDEN,
             'AI_INSUFFICIENT_CREDITS',
-            'Your PurpleCallio credits are used up. Buy a credit top-up or upgrade your plan in Billing.',
+            'Your PurpleCallio credits are used up. Add credits in Billing.',
           );
         }
 

@@ -5,6 +5,7 @@ describe('AiAccessService', () => {
     planType: string | null,
     available = 100,
     minimumCreditsToStartCall = 1,
+    prepaidSince: Date | null = null,
   ) {
     const subscriptions = {
       getActiveSubscription: jest.fn().mockResolvedValue({
@@ -16,10 +17,14 @@ describe('AiAccessService', () => {
     const config = {
       get: jest.fn().mockResolvedValue({ minimumCreditsToStartCall }),
     };
+    const prisma = {
+      user: { findUnique: jest.fn().mockResolvedValue({ prepaidSince }) },
+    };
     return new AiAccessService(
       subscriptions as never,
       credits as never,
       config as never,
+      prisma as never,
     );
   }
 
@@ -30,6 +35,12 @@ describe('AiAccessService', () => {
     [null, false],
   ])('hasPaidPlan for plan type %s is %s', async (planType, expected) => {
     await expect(build(planType).hasPaidPlan('user_a')).resolves.toBe(expected);
+  });
+
+  it('unlocks AI access for prepaid accounts on the Free subscription', async () => {
+    await expect(
+      build('FREE', 100, 1, new Date()).hasPaidPlan('user_a'),
+    ).resolves.toBe(true);
   });
 
   it('needs at least one minute of credits and the start minimum', async () => {

@@ -146,7 +146,7 @@ export default function WhatIsPurpleCallioPage() {
          </Reveal>
          <Reveal>
             <ContentSection title="Pricing">
-               <p>PurpleCallio uses simple prepaid plans with included usage credits. Usage is measured in participant-minutes, and audio, video, and screen sharing each consume credits at their own rate. Top up when you need more and upgrade as you grow.</p>
+               <p>PurpleCallio uses a prepaid credit wallet. Usage is measured in participant-minutes, and audio, video, and screen sharing each consume credits at their own rate. Add credits when you need more; feature consumption is separate from the monetary price per credit.</p>
                <Link href="/pricing" className="font-medium text-[#6425C4] hover:text-[#170B2E]">View official PurpleCallio pricing →</Link>
             </ContentSection>
          </Reveal>

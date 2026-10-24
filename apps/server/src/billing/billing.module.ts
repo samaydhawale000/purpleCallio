@@ -26,7 +26,9 @@ import { BillingWebhookService } from './checkout/billing-webhook.service';
 import { CustomPlanService } from './custom-plans/custom-plan.service';
 import { AdminBillingService } from './admin-billing.service';
 import { LegacyBillingMigrationService } from './legacy-billing-migration.service';
+import { CreditPricingService } from './credit-pricing.service';
 import { BillingGuard } from '../common/guards/billing.guard';
+import { AutoTopUpService } from './auto-topup/auto-topup.service';
 import { AdminGuard } from '../admin/guards/admin.guard';
 import { PaymentModule } from '../payment/payment.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -52,6 +54,7 @@ import { SupportModule } from '../support/support.module';
     SubscriptionService,
     EntitlementService,
     AutoRenewService,
+    AutoTopUpService,
     TopUpService,
     CheckoutService,
     BillingFulfillmentService,
@@ -62,6 +65,7 @@ import { SupportModule } from '../support/support.module';
     BillingNotificationService,
     BillingJobsService,
     LegacyBillingMigrationService,
+    CreditPricingService,
     AdminBillingService,
     // Metering (participant-minutes → credits)
     UsageBillingService,

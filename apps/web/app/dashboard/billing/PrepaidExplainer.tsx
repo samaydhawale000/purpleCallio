@@ -1,13 +1,12 @@
 'use client';
 
-import { CreditCard, Gauge, LayoutList, PlusCircle, Sparkles } from 'lucide-react';
+import { CreditCard, Gauge, PlusCircle, Sparkles } from 'lucide-react';
 
 const STEPS = [
-  { icon: LayoutList, title: 'Choose a plan', body: 'Pick the plan that fits your team.' },
-  { icon: CreditCard, title: 'Pay upfront', body: 'Pay for each period at its start. Keep auto-renew on, or renew yourself.' },
-  { icon: Sparkles, title: 'Credits are added', body: 'Your plan’s included credits land in your balance right away.' },
+  { icon: CreditCard, title: 'Choose an amount', body: 'Select the amount of credits to buy.' },
+  { icon: Sparkles, title: 'Credits are added', body: 'Credits land in your balance after payment is confirmed.' },
   { icon: Gauge, title: 'Usage consumes credits', body: 'Calls use credits per participant-minute of audio, video and screen share.' },
-  { icon: PlusCircle, title: 'Top up or upgrade', body: 'Add credits or move to a bigger plan anytime.' },
+  { icon: PlusCircle, title: 'Top up when needed', body: 'Buy more credits whenever your wallet needs them.' },
 ];
 
 /** Compact "How prepaid billing works" explainer for the billing overview. */

@@ -132,14 +132,13 @@ export function AiAgentsDoc() {
          <section id="pricing" className="scroll-mt-24">
             <ContentSection title="Availability and pricing">
                <p>
-                  AI voice agents are available on every paid plan, including
-                  custom plans, and not on Free. AI calls are billed in credits
+                  AI voice agents are available after an eligible credit purchase. AI calls are billed in credits
                   per minute of call time (not per participant), rounded up once
                   per call. A session cannot start without enough credits, and an
-                  active call is never cut off if the plan lapses. Sessions that
+                  active call is never cut off if the wallet runs low. Sessions that
                   fail to connect are not billed.{" "}
                   <Link href="/pricing" className="text-[#6425C4] underline">
-                     See plans
+                     See credit pricing
                   </Link>
                   .
                </p>

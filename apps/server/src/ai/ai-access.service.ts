@@ -4,6 +4,7 @@ import { PlanType } from '@prisma/client';
 import { BillingConfigService } from '../billing/billing-config.service';
 import { CreditService } from '../billing/credits/credit.service';
 import { SubscriptionService } from '../billing/subscriptions/subscription.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Account-level gates for AI voice agents. A running call is never cut off by
@@ -15,6 +16,7 @@ export class AiAccessService {
     private subscriptions: SubscriptionService,
     private credits: CreditService,
     private billingConfig: BillingConfigService,
+    private prisma: PrismaService,
   ) {}
 
   /**
@@ -22,8 +24,17 @@ export class AiAccessService {
    * other than FREE (Custom plans included). A missing type fails closed.
    */
   async hasPaidPlan(userId: string): Promise<boolean> {
-    const sub = await this.subscriptions.getActiveSubscription(userId);
-    return sub.planType != null && sub.planType !== PlanType.FREE;
+    const [sub, user] = await Promise.all([
+      this.subscriptions.getActiveSubscription(userId),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { prepaidSince: true },
+      }),
+    ]);
+    return (
+      !!user?.prepaidSince ||
+      (sub.planType != null && sub.planType !== PlanType.FREE)
+    );
   }
 
   /**

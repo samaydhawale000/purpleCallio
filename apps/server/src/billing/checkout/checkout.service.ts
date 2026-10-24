@@ -27,14 +27,22 @@ import {
   SubscriptionService,
   snapshotData,
 } from '../subscriptions/subscription.service';
-import { TopUpService } from '../topups/topup.service';
 import { BillingFulfillmentService } from './fulfillment.service';
 import { AutoRenewService } from '../subscriptions/auto-renew.service';
+import { CreditPricingService } from '../credit-pricing.service';
+import {
+  creditExpiryFromDays,
+  creditPurchaseAllocation,
+} from '../credit-pricing.util';
+import {
+  CREDIT_PURCHASE_ACCOUNT_SELECT,
+  assertCreditPurchaseEligible,
+} from '../credit-purchase-eligibility';
 
 export type CheckoutRequest = (
   | { kind: 'plan'; planId: string }
   | { kind: 'renewal' }
-  | { kind: 'topup'; topUpPackageId: string }
+  | { kind: 'creditAmount'; amountPaise: number; currency?: string }
   | { kind: 'offer'; offerId: string }
 ) & {
   /** Plan/offer purchases only; omitted = the admin default (on). */
@@ -49,7 +57,10 @@ interface ResolvedCheckout {
   credits: number;
   plan?: PlanWithVersion;
   subscriptionId?: string; // renewal of an existing ACTIVE subscription
-  topUpPackageId?: string;
+  creditPricingVersionId?: string;
+  creditPricingVersion?: number;
+  creditPricePaise?: number;
+  creditExpiryAt?: Date;
   offerId?: string;
   summary: Record<string, unknown>;
 }
@@ -80,9 +91,9 @@ export class CheckoutService {
     private discounts: CustomerDiscountService,
     private plans: PlanService,
     private subscriptions: SubscriptionService,
-    private topUps: TopUpService,
     private fulfillment: BillingFulfillmentService,
     private autoRenew: AutoRenewService,
+    private creditPricing: CreditPricingService,
   ) {}
 
   /** Whether this checkout sets up an auto-renew mandate. */
@@ -126,6 +137,14 @@ export class CheckoutService {
     );
   }
 
+  /** Server-only snapshot for an automated wallet top-up.  Keeping this in
+   * CheckoutService means Auto Top-Up uses the identical eligibility, GST,
+   * discount, pricing-version and expiry rules as a manual purchase. */
+  async snapshotCreditTopUp(userId: string, amountPaise: number, currency = 'INR') {
+    const resolved = await this.resolveCreditAmount(userId, amountPaise, currency);
+    return { resolved, quote: await this.present(userId, resolved) };
+  }
+
   /**
    * Creates the pending Payment (and, for a new plan, the PENDING_PAYMENT
    * subscription) plus a provider order. Returns only what the browser
@@ -163,7 +182,15 @@ export class CheckoutService {
           resolved.plan?.currentVersion?.id ??
           (resolved.summary.planVersionId as string | undefined) ??
           null,
-        topUpPackageId: resolved.topUpPackageId ?? null,
+        topUpPackageId: null,
+        creditPricingVersionId: resolved.creditPricingVersionId ?? null,
+        // Fix: the same total can hide a different subtotal (discount change)
+        // and therefore a different credit quantity — only reuse an order
+        // whose credit snapshot is identical to this quote.
+        subtotalPaise: quote.subtotalPaise,
+        credits: resolved.credits,
+        // Never hand back an order whose quote already lapsed.
+        OR: [{ quoteExpiresAt: null }, { quoteExpiresAt: { gt: new Date() } }],
         customOfferId: resolved.offerId ?? null,
         createdAt: { gt: new Date(Date.now() - 30 * 60_000) },
       },
@@ -224,7 +251,11 @@ export class CheckoutService {
             resolved.plan?.currentVersion?.id ??
             (resolved.summary.planVersionId as string | undefined) ??
             null,
-          topUpPackageId: resolved.topUpPackageId ?? null,
+          topUpPackageId: null,
+          creditPricingVersionId: resolved.creditPricingVersionId ?? null,
+          creditPricePaise: resolved.creditPricePaise ?? null,
+          creditExpiryAt: resolved.creditExpiryAt ?? null,
+          quoteExpiresAt: quote.quoteExpiresAt,
           customOfferId: resolved.offerId ?? null,
           description: resolved.description,
           lineItems: quote.lineItems,
@@ -471,13 +502,27 @@ export class CheckoutService {
   ): Promise<ResolvedCheckout> {
     switch (req?.kind) {
       case 'plan':
-        return this.resolvePlan(userId, req.planId);
+        throw new BadRequestException(
+          'Subscription plans are no longer available for purchase. Buy credits from Billing → Credits.',
+        );
       case 'renewal':
-        return this.resolveRenewal(userId);
-      case 'topup':
-        return this.resolveTopUp(req.topUpPackageId);
+        throw new BadRequestException(
+          'Subscription renewals are no longer available. Buy prepaid credits from Billing → Credits.',
+        );
+      case 'creditAmount':
+        // Fix: a non-string currency from the request body used to crash
+        // on toUpperCase() with a 500.
+        if (req.currency !== undefined && typeof req.currency !== 'string')
+          throw new BadRequestException('currency must be a 3-letter code.');
+        return this.resolveCreditAmount(
+          userId,
+          req.amountPaise,
+          req.currency ?? 'INR',
+        );
       case 'offer':
-        return this.resolveOffer(userId, req.offerId);
+        throw new BadRequestException(
+          'Custom subscription offers are no longer available for checkout. Contact support for account assistance.',
+        );
       default:
         throw new BadRequestException('Unknown checkout type.');
     }
@@ -593,21 +638,86 @@ export class CheckoutService {
     return this.resolvePlan(userId, targetId);
   }
 
-  private async resolveTopUp(
-    topUpPackageId: string,
+  private async resolveCreditAmount(
+    userId: string,
+    amountPaise: number,
+    currency: string,
   ): Promise<ResolvedCheckout> {
-    if (!topUpPackageId)
-      throw new BadRequestException('topUpPackageId is required.');
-    const pkg = await this.topUps.getActive(topUpPackageId);
+    if (!Number.isSafeInteger(amountPaise) || amountPaise <= 0)
+      throw new BadRequestException(
+        'amountPaise must be a positive whole number.',
+      );
+    const normalizedCurrency = currency.toUpperCase();
+    await this.assertTopUpEligibility(userId);
+    const pricing = await this.creditPricing.current(normalizedCurrency);
+    if (!pricing)
+      throw new BadRequestException(
+        `Credit purchases in ${normalizedCurrency} are not available yet.`,
+      );
+    if (amountPaise < pricing.minimumPurchasePaise)
+      throw new BadRequestException(
+        `Minimum purchase is ${pricing.minimumPurchasePaise} ${normalizedCurrency} minor units.`,
+      );
+    if (
+      pricing.maximumPurchasePaise != null &&
+      amountPaise > pricing.maximumPurchasePaise
+    )
+      throw new BadRequestException(
+        'Purchase exceeds the configured maximum amount.',
+      );
+    const allocation = creditPurchaseAllocation(
+      amountPaise,
+      pricing.creditPricePaise,
+    );
+    const { credits } = allocation;
+    if (
+      credits < pricing.minimumCredits ||
+      (pricing.maximumCredits != null && credits > pricing.maximumCredits)
+    )
+      throw new BadRequestException(
+        'Purchase is outside the configured credit quantity limits.',
+      );
+    const expiresAt = creditExpiryFromDays(
+      new Date(),
+      pricing.purchasedValidityDays,
+    );
     return {
       purpose: PaymentPurpose.TOPUP,
-      description: `${pkg.credits.toLocaleString('en-IN')} credit top-up`,
-      basePaise: pkg.pricePaise,
-      currency: pkg.currency,
-      credits: pkg.credits,
-      topUpPackageId: pkg.id,
-      summary: { type: 'topup', name: pkg.name, credits: pkg.credits },
+      description: `${credits.toLocaleString('en-IN')} prepaid credits`,
+      basePaise: amountPaise,
+      currency: pricing.currency,
+      credits,
+      creditPricingVersionId: pricing.id,
+      creditPricingVersion: pricing.version,
+      creditPricePaise: pricing.creditPricePaise,
+      creditExpiryAt: expiresAt,
+      summary: {
+        type: 'topup',
+        credits,
+        amountPaise,
+        creditPricePaise: pricing.creditPricePaise,
+        creditAllocationPaise: allocation.allocatedPaise,
+        unallocatedRemainderPaise: allocation.unallocatedPaise,
+        pricingVersion: pricing.version,
+        expiryAt: expiresAt,
+        rounding:
+          'Credits are rounded down to whole credits. The quote shows any amount not allocated to a whole credit separately; the existing tax and discount calculation is unchanged.',
+      },
     };
+  }
+
+  /**
+   * Contract §1.1: ACTIVE + profileCompleted + not creditPurchaseBlocked.
+   * Replaces the old plan-type gate (Free accounts can buy credits; the
+   * freeAccountsCanPurchaseCredits setting is no longer a purchase gate).
+   * Throws 400 `{ code: 'CREDIT_PURCHASE_UNAVAILABLE', message }`.
+   */
+  private async assertTopUpEligibility(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: CREDIT_PURCHASE_ACCOUNT_SELECT,
+    });
+    assertCreditPurchaseEligible(user);
   }
 
   private async resolveOffer(
@@ -702,6 +812,14 @@ export class CheckoutService {
       taxPercent: config.taxPercent,
       taxPaise: amounts.taxPaise,
       totalPaise: amounts.totalPaise,
+      // Amount purchases: the snapshot written to Payment (null otherwise).
+      creditPricingVersionId: r.creditPricingVersionId ?? null,
+      pricingVersion: r.creditPricingVersion ?? null,
+      creditPricePaise: r.creditPricePaise ?? null,
+      creditExpiryAt: r.creditExpiryAt ?? null,
+      quoteExpiresAt: new Date(
+        Date.now() + config.pendingCheckoutTtlHours * 3_600_000,
+      ),
       lineItems,
       summary: r.summary,
     };

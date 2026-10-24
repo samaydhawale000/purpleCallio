@@ -322,7 +322,7 @@ export class AiAgentService {
       throw new ForbiddenException({
         code: 'AI_PAID_PLAN_REQUIRED',
         message:
-          'AI voice agents are available on paid plans. Upgrade your plan in Billing.',
+          'AI voice agents unlock after your first verified credit purchase. Add credits in Billing.',
       });
     }
   }

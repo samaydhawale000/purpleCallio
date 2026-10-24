@@ -100,6 +100,8 @@ enum PaymentPurpose {
   TOPUP
   CUSTOM_PLAN
   LEGACY
+  // Threshold-triggered prepaid top-up charged against a customer mandate.
+  AUTO_TOPUP
 }
 
 enum PlanType {
@@ -157,6 +159,14 @@ enum TopUpExpiryPolicy {
   SUBSCRIPTION_END
 }
 
+enum CreditPricingStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  SUPERSEDED
+  CANCELLED
+}
+
 enum CustomPlanRequestStatus {
   NEW
   CONTACTED
@@ -210,6 +220,17 @@ enum AuditAction {
   CUSTOM_PLAN_OFFER_CREATED
   CUSTOM_PLAN_OFFER_WITHDRAWN
   LEGACY_BILLING_MIGRATED
+  CREDIT_PRICING_DRAFT_CREATED
+  CREDIT_PRICING_DRAFT_UPDATED
+  CREDIT_PRICING_PUBLISHED
+  CREDIT_PRICING_SCHEDULED
+  CREDIT_PRICING_CANCELLED
+  PROMOTIONAL_CREDITS_GRANTED
+  AUTO_TOPUP_ENABLED
+  AUTO_TOPUP_UPDATED
+  AUTO_TOPUP_DISABLED
+  PREPAID_ACCESS_CHANGED
+  CREDIT_PURCHASE_BLOCK_CHANGED
 }
 
 model User {
@@ -281,6 +302,13 @@ model User {
   privatePlans         Plan[]                @relation("PrivatePlanAssignee")
 
   translationRateOverride TranslationRateOverride?
+
+  // Prepaid billing: first verified credit purchase (or admin approval).
+  // Unlocks BillingConfig.prepaidFeatures on top of plan features.
+  prepaidSince          DateTime?
+  // Admin block on paid credit purchases and Auto Top-Up.
+  creditPurchaseBlocked Boolean   @default(false)
+  autoTopUpSetting      AutoTopUpSetting?
 }
 
 // A customer's plan subscription. Prepaid: a paid row only becomes ACTIVE
@@ -397,6 +425,11 @@ model Payment {
   topUpPackageId String?
   customOfferId  String?
   credits        Int     @default(0)
+  // Immutable per-credit quote snapshot; null for legacy and package payments.
+  creditPricingVersionId String?
+  creditPricePaise       Int?
+  creditExpiryAt         DateTime?
+  quoteExpiresAt         DateTime?
   description    String?
   // [{ label, amountPaise, credits? }] as shown at checkout.
   lineItems      Json?
@@ -415,6 +448,36 @@ model Payment {
   @@index([userId, createdAt])
   @@index([paymentStatus, createdAt])
   @@index([providerSubscriptionId])
+}
+
+// Immutable after publication. Drafts are editable; a published version
+// supplies the authoritative rate and purchase policy for future quotes.
+model CreditPricingVersion {
+  id                        String              @id @default(uuid())
+  version                   Int
+  currency                  String              @default("INR")
+  creditPricePaise          Int
+  minimumPurchasePaise      Int                 @default(100000)
+  maximumPurchasePaise      Int?
+  minimumCredits            Int                 @default(1)
+  maximumCredits            Int?
+  purchasedValidityDays     Int                 @default(365)
+  autoTopUpEnabled          Boolean             @default(false)
+  autoTopUpMinimumPaise     Int                 @default(100000)
+  autoTopUpMaximumPaise     Int?
+  monthlyAutoTopUpLimitPaise Int?
+  promotionalPolicy         Json?
+  effectiveAt               DateTime            @default(now())
+  status                    CreditPricingStatus @default(DRAFT)
+  createdById               String
+  publishedById             String?
+  createdAt                 DateTime            @default(now())
+  publishedAt               DateTime?
+  updatedAt                 DateTime            @updatedAt
+
+  @@unique([currency, version])
+  @@index([currency, status, effectiveAt])
+  @@index([createdAt])
 }
 
 // Each provider payment attempt against a Payment's order (a customer can
@@ -968,6 +1031,10 @@ enum NotificationType {
   TRANSLATION_BUDGET_THRESHOLD
   TRANSLATION_RATE_CHANGED
   TRANSLATION_REPORT_READY
+  CREDITS_EXPIRING
+  AUTO_TOPUP_SCHEDULED
+  AUTO_TOPUP_SUCCEEDED
+  AUTO_TOPUP_FAILED
 }
 
 // Which area a notification belongs to: the customer dashboard or the admin
@@ -1015,6 +1082,8 @@ model Plan {
   name             String
   description      String?
   badge            String?
+  // Retained for compatibility with existing databases; new plan pricing uses PlanVersion.
+  compareAtPricePaise Int?
   type             PlanType
   status           PlanStatus    @default(ACTIVE)
   displayOrder     Int           @default(0)
@@ -1122,6 +1191,16 @@ model BillingConfig {
   topUpExpiryDays             Int?
   // Days before expiry to remind the customer to renew.
   renewalReminderDays         Int               @default(7)
+  // ── Prepaid model ──────────────────────────────────
+  // Features unlocked for accounts with User.prepaidSince set.
+  prepaidFeatures             String[]          @default(["HOSTED_UI", "WEBRTC_SDK", "REST_API", "REACT_COMPONENTS", "SCREEN_SHARING", "WEBHOOKS", "ANALYTICS", "CUSTOM_BRANDING", "TRANSLATION"])
+  // Days before a credit lot expires to notify the customer.
+  creditExpiryReminderDays    Int[]             @default([30, 7, 1])
+  // Auto Top-Up: bounded retries for transient failures only.
+  autoTopUpMaxRetries         Int               @default(2)
+  autoTopUpRetryDelayHours    Int               @default(6)
+  // Minimum gap between two successful auto top-ups for one account.
+  autoTopUpCooldownMinutes    Int               @default(30)
   // Unpaid checkouts are abandoned after this many hours.
   pendingCheckoutTtlHours     Int               @default(24)
   // Auto-renew checkbox pre-ticked at checkout.
@@ -1129,6 +1208,9 @@ model BillingConfig {
   // How long an auto-renewing plan stays active past its period end while
   // the provider's renewal charge is pending/retrying.
   autoRenewGraceHours         Int               @default(72)
+  // Free accounts must be explicitly enabled for paid credit purchases.
+  freeAccountsCanPurchaseCredits Boolean        @default(false)
+  freeAccountsCanUseAutoTopUp Boolean           @default(false)
   updatedById                 String?
   createdAt                   DateTime          @default(now())
   updatedAt                   DateTime          @updatedAt
@@ -1677,4 +1759,97 @@ model TranslationRateOverride {
   updatedById              String?
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
+}
+
+
+// ══════════════════════════════════════════════════════════
+// Prepaid Auto Top-Up (see src/billing/auto-topup/AUTO_TOPUP.md)
+// ══════════════════════════════════════════════════════════
+
+enum AutoTopUpMandateStatus {
+  NONE
+  PENDING
+  ACTIVE
+  FAILED
+  REVOKED
+}
+
+enum AutoTopUpAttemptStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model AutoTopUpSetting {
+  id                    String                 @id @default(uuid())
+  userId                String                 @unique
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled               Boolean                @default(false)
+  currency              String                 @default("INR")
+  // Trigger when available credits are at or below this.
+  thresholdCredits      Int
+  // Monetary purchase amount per top-up (before tax), minor units.
+  amountPaise           Int
+  // Monthly cap on confirmed + in-flight auto top-up charges (incl. tax), minor units.
+  monthlyLimitPaise     Int
+  // Explicit consent for merchant-initiated charges.
+  consentAt             DateTime?
+  consentVersion        String?
+  // Provider recurring authorization (Razorpay customer + token).
+  providerCustomerId    String?
+  providerTokenId       String?
+  mandateStatus         AutoTopUpMandateStatus @default(NONE)
+  mandateMaxAmountPaise Int?
+  mandateExpiresAt      DateTime?
+  mandateMethod         String?
+  // Mandate registration order awaiting the customer's authorization.
+  mandateOrderId        String?
+  // Set when a charge failed / needs the customer; cleared on success or update.
+  attentionReason       String?
+  attentionAt           DateTime?
+  disabledReason        String?
+  lastTriggeredAt       DateTime?
+  lastSucceededAt       DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  attempts AutoTopUpAttempt[]
+
+  @@index([enabled, mandateStatus])
+}
+
+model AutoTopUpAttempt {
+  id                     String                 @id @default(uuid())
+  userId                 String
+  settingId              String
+  setting                AutoTopUpSetting       @relation(fields: [settingId], references: [id], onDelete: Cascade)
+  // Exactly one Payment per attempt (snapshot of price, tax, credits).
+  paymentId              String?                @unique
+  idempotencyKey         String                 @unique
+  status                 AutoTopUpAttemptStatus @default(PENDING)
+  amountPaise            Int
+  taxPaise               Int
+  totalPaise             Int
+  credits                Int
+  currency               String                 @default("INR")
+  creditPricingVersionId String
+  creditPricePaise       Int
+  triggerBalance         Int
+  // UTC "YYYY-MM" for monthly spending limits.
+  monthKey               String
+  retryOfId              String?
+  retryCount             Int                    @default(0)
+  nextRetryAt            DateTime?
+  providerPaymentId      String?
+  failureCode            String?
+  failureReason          String?
+  completedAt            DateTime?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, monthKey])
+  @@index([status, nextRetryAt])
 }

@@ -33,12 +33,22 @@ export class EntitlementService {
   async getEntitlements(
     userId: string,
   ): Promise<EntitlementsSnapshot & { planName: string | null }> {
-    const sub = await this.subscriptions.getActiveSubscription(userId);
+    const [sub, user, config] = await Promise.all([
+      this.subscriptions.getActiveSubscription(userId),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { prepaidSince: true },
+      }),
+      this.config.get(),
+    ]);
     const snap = (sub.entitlementsSnapshot ??
       {}) as Partial<EntitlementsSnapshot>;
+    const features = new Set(snap.features ?? []);
+    if (user?.prepaidSince)
+      for (const feature of config.prepaidFeatures ?? []) features.add(feature);
     return {
       planName: sub.planName,
-      features: snap.features ?? [],
+      features: [...features],
       mediaCredits: snap.mediaCredits ?? {
         audio: null,
         video: null,
@@ -76,7 +86,7 @@ export class EntitlementService {
         allowed: false,
         availableCredits: wallet.available,
         reason:
-          'Your PurpleCallio credits are used up. Buy a credit top-up or upgrade your plan in Billing to continue making calls.',
+          'Your PurpleCallio credits are used up. Buy credits from Billing to continue making calls.',
       };
     }
 
@@ -90,7 +100,7 @@ export class EntitlementService {
         return {
           allowed: false,
           availableCredits: wallet.available,
-          reason: `Your plan's ${type.toLowerCase()} allowance for this period is used up. Upgrade your plan to make more ${type.toLowerCase()} calls.`,
+          reason: `Your ${type.toLowerCase()} allowance for this period is used up. Contact support if you need a higher allowance.`,
         };
       }
     }

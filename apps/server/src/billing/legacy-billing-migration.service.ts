@@ -57,7 +57,15 @@ export class LegacyBillingMigrationService implements OnApplicationBootstrap {
       this.logger.error(`Could not seed billing defaults: ${String(err)}`);
       return;
     }
-    // Don't hold up boot; the request path also migrates lazily.
+    // Existing paid subscriptions and entitlements require an approved
+    // migration policy. Never rewrite them just because the server restarted.
+    if (process.env.PREPAID_BILLING_MIGRATION_APPROVED !== 'true') {
+      this.logger.warn(
+        'Legacy prepaid account migration is paused; set PREPAID_BILLING_MIGRATION_APPROVED=true only after the migration policy is approved.',
+      );
+      return;
+    }
+    // Don't hold up boot while the explicitly approved migration runs.
     setImmediate(() => {
       this.run().catch((err) =>
         this.logger.error(`Prepaid migration failed: ${String(err)}`),
@@ -236,12 +244,12 @@ export class LegacyBillingMigrationService implements OnApplicationBootstrap {
       type: NotificationType.PLAN_ACTIVATED,
       title: 'Billing is now prepaid',
       message:
-        `PurpleCallio now uses prepaid plans with included credits — no more usage invoices after the fact. ` +
-        `You're on the Free plan with ${fmt(freeCredits)} credits each month` +
+        `PurpleCallio now uses a prepaid credit wallet — no more usage invoices after the fact. ` +
+        `Your account has ${fmt(freeCredits)} transition credits` +
         (transitionCredits > 0
           ? `, plus ${fmt(transitionCredits)} transition credits (valid ${TRANSITION_DAYS} days) based on your recent usage.`
           : '.') +
-        ' Choose a plan in Billing whenever you need more.',
+        ' Add credits in Billing whenever you need more.',
       dedupeKey: `migration:prepaid:${userId}`,
     });
   }

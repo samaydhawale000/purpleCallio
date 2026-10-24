@@ -1,14 +1,17 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Get,
   Param,
   Patch,
   Post,
+  NotFoundException,
   Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { CreditBucketSource, CreditTransactionType } from '@prisma/client';
 import type { CustomPlanRequestStatus } from '@prisma/client';
 import { AdminGuard } from '../admin/guards/admin.guard';
 import { AdminBillingService } from './admin-billing.service';
@@ -30,6 +33,11 @@ import { UsageBillingService } from './usage-billing.service';
 import type { BillingRates } from './usage-billing.service';
 import { UsageSegmentService } from './usage-segment.service';
 import { AutoRenewService } from './subscriptions/auto-renew.service';
+import { CreditPricingService } from './credit-pricing.service';
+import type { CreditPricingInput } from './credit-pricing.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { creditExpiryFromDays } from './credit-pricing.util';
+import { BillingNotificationService } from './billing-notification.service';
 
 type FeatureBody = Parameters<PlanService['upsertFeature']>[0];
 
@@ -55,6 +63,9 @@ export class AdminBillingController {
     private ratingEngine: RatingEngineService,
     private audit: BillingAuditService,
     private autoRenew: AutoRenewService,
+    private creditPricing: CreditPricingService,
+    private prisma: PrismaService,
+    private billingNotifications: BillingNotificationService,
   ) {}
 
   // ── Plans ───────────────────────────────────────────
@@ -121,6 +132,210 @@ export class AdminBillingController {
   }
 
   // ── Top-ups ─────────────────────────────────────────
+  @Get('credit-pricing')
+  async listCreditPricing() {
+    return {
+      versions: await this.creditPricing.list(),
+      active: await this.creditPricing.current('INR'),
+    };
+  }
+
+  @Post('credit-pricing/preview')
+  previewCreditPricing(@Body() body: CreditPricingInput) {
+    return this.creditPricing.preview(body);
+  }
+
+  @Post('credit-pricing')
+  createCreditPricingDraft(@Req() req: any, @Body() body: CreditPricingInput) {
+    return this.creditPricing.createDraft(body, req.user.userId);
+  }
+
+  @Patch('credit-pricing/:id')
+  updateCreditPricingDraft(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: CreditPricingInput,
+  ) {
+    return this.creditPricing.updateDraft(id, body, req.user.userId);
+  }
+
+  @Post('credit-pricing/:id/publish')
+  publishCreditPricing(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { confirm?: boolean },
+  ) {
+    return this.creditPricing.publish(
+      id,
+      req.user.userId,
+      body?.confirm === true,
+    );
+  }
+
+  @Post('credit-pricing/:id/cancel')
+  cancelCreditPricing(@Req() req: any, @Param('id') id: string) {
+    return this.creditPricing.cancel(id, req.user.userId);
+  }
+
+  @Post('promotional-credits')
+  async grantPromotionalCredits(
+    @Req() req: any,
+    @Body()
+    body: {
+      userId?: string;
+      credits?: number;
+      reason?: string;
+      validityDays?: number;
+      campaignReference?: string;
+      idempotencyKey?: string;
+    },
+  ) {
+    if (!body?.userId?.trim())
+      throw new BadRequestException('userId is required.');
+    if (!Number.isSafeInteger(body.credits) || (body.credits as number) <= 0)
+      throw new BadRequestException('credits must be a positive whole number.');
+    if (!body.reason?.trim() || body.reason.trim().length > 300)
+      throw new BadRequestException(
+        'A reason of at most 300 characters is required.',
+      );
+    if (
+      !Number.isInteger(body.validityDays) ||
+      (body.validityDays as number) < 1 ||
+      (body.validityDays as number) > 3650
+    )
+      throw new BadRequestException('validityDays must be between 1 and 3650.');
+    if (
+      !body.idempotencyKey ||
+      !/^[A-Za-z0-9_-]{8,100}$/.test(body.idempotencyKey)
+    )
+      throw new BadRequestException('A valid idempotencyKey is required.');
+    const customer = await this.prisma.user.findUnique({
+      where: { id: body.userId.trim() },
+      select: { id: true },
+    });
+    if (!customer) throw new NotFoundException('Customer not found.');
+    const expiresAt = creditExpiryFromDays(
+      new Date(),
+      body.validityDays as number,
+    );
+    const idempotencyKey = `promotion:${req.user.userId}:${body.idempotencyKey}`;
+    const result = await this.credits.grant({
+      userId: customer.id,
+      amount: body.credits as number,
+      type: CreditTransactionType.PROMOTION,
+      source: CreditBucketSource.PROMOTION,
+      expiresAt,
+      referenceType: 'AdminPromotion',
+      referenceId: body.campaignReference?.trim() || null,
+      idempotencyKey,
+      metadata: {
+        reason: body.reason.trim(),
+        campaignReference: body.campaignReference?.trim() || null,
+      },
+      actorId: req.user.userId,
+    });
+    if (!result.duplicate) {
+      await this.audit.log({
+        action: 'PROMOTIONAL_CREDITS_GRANTED',
+        actorId: req.user.userId,
+        entity: 'CreditBucket',
+        entityId: result.bucketId,
+        newValue: {
+          userId: customer.id,
+          amount: body.credits,
+          expiresAt,
+          reason: body.reason.trim(),
+          campaignReference: body.campaignReference?.trim() || null,
+          ledgerTransactionId: result.transaction.id,
+        },
+      });
+      await this.billingNotifications.promotionalCreditsGranted(
+        customer.id,
+        body.credits as number,
+        expiresAt,
+        body.reason.trim(),
+        result.bucketId!,
+      );
+    }
+    return {
+      bucketId: result.bucketId,
+      transactionId: result.transaction.id,
+      expiresAt,
+      duplicate: result.duplicate,
+    };
+  }
+
+  @Patch('customers/:userId/prepaid')
+  async updatePrepaidAccess(
+    @Req() req: any,
+    @Param('userId') userId: string,
+    @Body()
+    body: {
+      prepaidAccess?: boolean;
+      creditPurchaseBlocked?: boolean;
+      reason?: string;
+    },
+  ) {
+    if (
+      typeof body?.prepaidAccess !== 'boolean' &&
+      typeof body?.creditPurchaseBlocked !== 'boolean'
+    )
+      throw new BadRequestException(
+        'Set prepaidAccess or creditPurchaseBlocked to true or false.',
+      );
+    if (!body.reason?.trim() || body.reason.trim().length > 300)
+      throw new BadRequestException(
+        'A reason of at most 300 characters is required.',
+      );
+    const before = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        prepaidSince: true,
+        creditPurchaseBlocked: true,
+      },
+    });
+    if (!before) throw new NotFoundException('Customer not found.');
+    const data: { prepaidSince?: Date | null; creditPurchaseBlocked?: boolean } = {};
+    if (typeof body.prepaidAccess === 'boolean')
+      data.prepaidSince = body.prepaidAccess
+        ? before.prepaidSince ?? new Date()
+        : null;
+    if (typeof body.creditPurchaseBlocked === 'boolean')
+      data.creditPurchaseBlocked = body.creditPurchaseBlocked;
+    const after = await this.prisma.user.update({
+      where: { id: userId },
+      data,
+      select: {
+        id: true,
+        prepaidSince: true,
+        creditPurchaseBlocked: true,
+      },
+    });
+    if (typeof body.prepaidAccess === 'boolean')
+      await this.audit.log({
+        action: 'PREPAID_ACCESS_CHANGED',
+        actorId: req.user.userId,
+        entity: 'User',
+        entityId: userId,
+        oldValue: { prepaidSince: before.prepaidSince },
+        newValue: { prepaidSince: after.prepaidSince, reason: body.reason.trim() },
+      });
+    if (typeof body.creditPurchaseBlocked === 'boolean')
+      await this.audit.log({
+        action: 'CREDIT_PURCHASE_BLOCK_CHANGED',
+        actorId: req.user.userId,
+        entity: 'User',
+        entityId: userId,
+        oldValue: { creditPurchaseBlocked: before.creditPurchaseBlocked },
+        newValue: {
+          creditPurchaseBlocked: after.creditPurchaseBlocked,
+          reason: body.reason.trim(),
+        },
+      });
+    return after;
+  }
+
   @Get('topups')
   listTopUps() {
     return this.topUps.listAll();

@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -25,7 +26,6 @@ import { UsageSegmentService } from './usage-segment.service';
 import { RatingEngineService } from './rating-engine.service';
 import { InvoicePdfService, receiptLabel } from './invoice-pdf.service';
 import { PlanService } from './plans/plan.service';
-import { TopUpService } from './topups/topup.service';
 import { CreditService } from './credits/credit.service';
 import { SubscriptionService } from './subscriptions/subscription.service';
 import { CheckoutService } from './checkout/checkout.service';
@@ -34,6 +34,8 @@ import { BillingWebhookService } from './checkout/billing-webhook.service';
 import { CustomPlanService } from './custom-plans/custom-plan.service';
 import { AutoRenewService } from './subscriptions/auto-renew.service';
 import { omit } from './omit.util';
+import { CreditPricingService } from './credit-pricing.service';
+import { AutoTopUpService } from './auto-topup/auto-topup.service';
 
 interface VerifyBody {
   paymentId?: string;
@@ -61,34 +63,35 @@ export class BillingController {
     private ratingEngine: RatingEngineService,
     private invoicePdf: InvoicePdfService,
     private plans: PlanService,
-    private topUps: TopUpService,
     private credits: CreditService,
     private subscriptions: SubscriptionService,
     private checkout: CheckoutService,
     private webhooks: BillingWebhookService,
     private customPlans: CustomPlanService,
     private autoRenew: AutoRenewService,
+    private creditPricing: CreditPricingService,
+    private autoTopUp: AutoTopUpService,
   ) {}
 
   // ── Public (pricing page, docs) ─────────────────────
   /** Single source of truth for public pricing: plans + features + top-ups + rates. */
   @Get('plans')
   async publicPlans() {
-    const [plans, features, topUps, config] = await Promise.all([
-      this.plans.listPublicPlans(),
+    const [features, config] = await Promise.all([
       this.plans.listFeatures({ publicOnly: true }),
-      this.topUps.listActive(),
       this.config.get(),
     ]);
     return {
-      plans,
+      // Subscription plans remain stored for history/admin review but are no
+      // longer part of the customer purchase catalog.
+      plans: [],
       features: features.map((f) => ({
         key: f.key,
         name: f.name,
         description: f.description,
         category: f.category,
       })),
-      topUps,
+      topUps: [],
       creditRates: this.publicRates(config),
     };
   }
@@ -131,7 +134,17 @@ export class BillingController {
 
   @Get('topups')
   async publicTopUps() {
-    return this.topUps.listActive();
+    return [];
+  }
+
+  @Get('credit-pricing/current')
+  async currentCreditPricing(@Query('currency') currency?: string) {
+    return this.creditPricing.current(currency ?? 'INR');
+  }
+
+  @Get('credit-pricing')
+  async publishedCreditPricing() {
+    return this.creditPricing.currentCurrencies();
   }
 
   @Get('credit-rates')
@@ -192,7 +205,10 @@ export class BillingController {
   @Post('subscription/auto-renew')
   @UseGuards(JwtGuard)
   async setAutoRenew(@Req() req: any, @Body() body: { enabled: boolean }) {
-    if (body?.enabled) return this.autoRenew.startEnable(req.user.userId);
+    if (body?.enabled)
+      throw new NotFoundException(
+        'Subscription auto-renew is retired. Configure prepaid credit Auto Top-Up instead.',
+      );
     return this.autoRenew.disableForCustomer(req.user.userId);
   }
 
@@ -208,7 +224,9 @@ export class BillingController {
       signature: string;
     },
   ) {
-    return this.autoRenew.confirmEnable(req.user.userId, body);
+    throw new NotFoundException(
+      'Subscription auto-renew verification is retired.',
+    );
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
@@ -284,12 +302,19 @@ export class BillingController {
   @UseGuards(JwtGuard)
   async topUpCheckout(
     @Req() req: any,
-    @Body() body: { topUpPackageId: string },
+    @Body()
+    body: { topUpPackageId?: string; amountPaise?: number; currency?: string },
   ) {
-    return this.checkout.start(req.user.userId, {
-      kind: 'topup',
-      topUpPackageId: body?.topUpPackageId,
-    });
+    if (body?.amountPaise !== undefined) {
+      return this.checkout.start(req.user.userId, {
+        kind: 'creditAmount',
+        amountPaise: body.amountPaise,
+        currency: body.currency,
+      });
+    }
+    throw new BadRequestException(
+      'Fixed credit packages are no longer available. Choose a monetary top-up amount instead.',
+    );
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
@@ -468,6 +493,32 @@ export class BillingController {
     const sub = await this.subscriptions.getActiveSubscription(req.user.userId);
     return this.credits.getSummary(req.user.userId, sub.currentPeriodStart);
   }
+
+  // ── Auto Top-Up (customer-authorized Razorpay eMandate only) ───────
+  @Get('auto-topup')
+  @UseGuards(JwtGuard)
+  async getAutoTopUp(@Req() req: any) { return this.autoTopUp.get(req.user.userId); }
+
+  @Post('auto-topup')
+  @UseGuards(JwtGuard)
+  async saveAutoTopUp(@Req() req: any, @Body() body: { thresholdCredits: number; amountPaise: number; monthlyLimitPaise: number; currency?: string }) {
+    return { setting: await this.autoTopUp.save(req.user.userId, body) };
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('auto-topup/mandate')
+  @UseGuards(JwtGuard)
+  async startAutoTopUpMandate(@Req() req: any, @Body() body: { consent: boolean; consentVersion?: string }) {
+    return this.autoTopUp.startMandate(req.user.userId, body?.consent === true, body?.consentVersion);
+  }
+
+  @Post('auto-topup/enable')
+  @UseGuards(JwtGuard)
+  async enableAutoTopUp(@Req() req: any) { return { setting: await this.autoTopUp.enable(req.user.userId) }; }
+
+  @Post('auto-topup/disable')
+  @UseGuards(JwtGuard)
+  async disableAutoTopUp(@Req() req: any) { return { setting: await this.autoTopUp.disable(req.user.userId) }; }
 
   @Get('credits/history')
   @UseGuards(JwtGuard)

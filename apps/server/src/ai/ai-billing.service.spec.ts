@@ -266,6 +266,7 @@ function createWorld() {
     subscriptions as never,
     credits as never,
     config,
+    { user: { findUnique: jest.fn().mockResolvedValue({ prepaidSince: null }) } } as never,
   );
   const sessions = new AiSessionService(store, access, billing);
   return {

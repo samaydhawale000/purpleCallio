@@ -92,8 +92,70 @@ export interface AdminTopUp extends TopUpPackage {
 }
 
 export type TopUpInput = Partial<
-  Pick<TopUpPackage, 'name' | 'description' | 'pricePaise' | 'currency' | 'credits' | 'status' | 'displayOrder' | 'isPopular'>
+  Pick<
+    TopUpPackage,
+    'name' | 'description' | 'pricePaise' | 'currency' | 'credits' | 'status' | 'displayOrder' | 'isPopular'
+  >
 >;
+
+export interface AdminCreditPricingVersion {
+  id: string;
+  version: number;
+  currency: string;
+  creditPricePaise: number;
+  minimumPurchasePaise: number;
+  maximumPurchasePaise: number | null;
+  minimumCredits: number;
+  maximumCredits: number | null;
+  purchasedValidityDays: number;
+  autoTopUpEnabled: boolean;
+  autoTopUpMinimumPaise: number;
+  autoTopUpMaximumPaise: number | null;
+  monthlyAutoTopUpLimitPaise: number | null;
+  effectiveAt: string;
+  status: 'DRAFT' | 'SCHEDULED' | 'PUBLISHED' | 'SUPERSEDED' | 'CANCELLED';
+  createdById: string;
+  publishedById: string | null;
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+export interface CreditPricingInput {
+  currency: string;
+  /** Whole minor currency units: paise for INR. */
+  creditPricePaise: number;
+  /** Minimum customer purchase amount, in paise for INR. */
+  minimumPurchasePaise: number;
+  purchasedValidityDays: number;
+}
+
+export const listCreditPricing = () =>
+  api
+    .get<{
+      versions: AdminCreditPricingVersion[];
+      active: AdminCreditPricingVersion | null;
+    }>('/admin/billing/credit-pricing')
+    .then((r) => r.data);
+export const previewCreditPricing = (input: CreditPricingInput) =>
+  api.post('/admin/billing/credit-pricing/preview', input).then((r) => r.data);
+export const createCreditPricingDraft = (input: CreditPricingInput) =>
+  api.post<AdminCreditPricingVersion>('/admin/billing/credit-pricing', input).then((r) => r.data);
+export const updateCreditPricingDraft = (id: string, input: CreditPricingInput) =>
+  api.patch<AdminCreditPricingVersion>(`/admin/billing/credit-pricing/${id}`, input).then((r) => r.data);
+export const publishCreditPricing = (id: string) =>
+  api
+    .post<AdminCreditPricingVersion>(`/admin/billing/credit-pricing/${id}/publish`, { confirm: true })
+    .then((r) => r.data);
+export const cancelCreditPricing = (id: string) =>
+  api.post<AdminCreditPricingVersion>(`/admin/billing/credit-pricing/${id}/cancel`).then((r) => r.data);
+export const grantPromotionalCredits = (input: {
+  userId: string;
+  credits: number;
+  reason: string;
+  validityDays: number;
+  campaignReference?: string;
+  idempotencyKey: string;
+}) => api.post('/admin/billing/promotional-credits', input).then((r) => r.data);
 
 export type TopUpExpiryPolicy = 'NEVER' | 'DAYS' | 'SUBSCRIPTION_END';
 
@@ -115,6 +177,8 @@ export interface BillingConfig {
   autoRenewDefault: boolean;
   /** Hours an auto-renewing plan stays active past period end while the renewal charge is retried. */
   autoRenewGraceHours: number;
+  freeAccountsCanPurchaseCredits: boolean;
+  freeAccountsCanUseAutoTopUp: boolean;
   updatedAt?: string;
 }
 
@@ -182,7 +246,11 @@ export interface CustomerBilling extends SubscriptionOverview {
   wallet: WalletSummary;
   creditHistory: Paginated<CreditTransactionRow>;
   payments: AdminPaymentRow[];
-  legacy: { hasSavedCard: boolean; spendingLimitPaise: number | null; usageInvoices: number };
+  legacy: {
+    hasSavedCard: boolean;
+    spendingLimitPaise: number | null;
+    usageInvoices: number;
+  };
 }
 
 export interface CreditAdjustmentInput {
@@ -226,7 +294,13 @@ export interface CustomPlanDetail {
   ticket: { id: string; ticketNumber: string; status: string };
   subscription: Subscription;
   wallet: WalletSummary;
-  usageLast30Days: { calls: number; audioMinutes: number; videoMinutes: number; screenShareMinutes: number; credits: number };
+  usageLast30Days: {
+    calls: number;
+    audioMinutes: number;
+    videoMinutes: number;
+    screenShareMinutes: number;
+    credits: number;
+  };
   payments: {
     id: string;
     purpose: PaymentPurpose;
@@ -314,7 +388,13 @@ export interface AdminUsageSummary {
 export interface SegmentAnalytics {
   since: string;
   segmentCount: number;
-  totals: { audioMins: number; videoMins: number; screenShareMins: number; costPaise: number; calls: number };
+  totals: {
+    audioMins: number;
+    videoMins: number;
+    screenShareMins: number;
+    costPaise: number;
+    calls: number;
+  };
 }
 
 export type MigrationSummary = Record<string, unknown> | null;
@@ -400,7 +480,10 @@ export function optionalInt(value: string): number | null {
 }
 
 export function apiError(e: unknown, fallback = 'Something went wrong'): string {
-  const err = e as { response?: { data?: { message?: unknown } }; message?: string };
+  const err = e as {
+    response?: { data?: { message?: unknown } };
+    message?: string;
+  };
   const msg = err?.response?.data?.message;
   if (Array.isArray(msg)) return msg.join(', ');
   if (typeof msg === 'string' && msg) return msg;
@@ -426,7 +509,11 @@ export const updatePlan = (id: string, input: PlanInput) => data(api.patch<Plan>
 export const archivePlan = (id: string) => data(api.post<Plan>(`${B}/plans/${id}/archive`));
 export const duplicatePlan = (id: string) => data(api.post<Plan>(`${B}/plans/${id}/duplicate`));
 export const listPlanSubscribers = (id: string, page = 1) =>
-  data(api.get<Paginated<PlanSubscriberRow>>(`${B}/plans/${id}/subscribers`, { params: { page } }));
+  data(
+    api.get<Paginated<PlanSubscriberRow>>(`${B}/plans/${id}/subscribers`, {
+      params: { page },
+    }),
+  );
 
 export const listAdminFeatures = () => data(api.get<AdminFeature[]>(`${B}/features`));
 export const upsertFeature = (input: Partial<FeatureInput> & { key: string; name: string }) =>
@@ -439,19 +526,32 @@ export const updateTopUp = (id: string, input: TopUpInput) => data(api.patch<Top
 
 // ── Config ─────────────────────────────────────────────────
 export const getCreditRates = () => data(api.get<BillingConfig>(`${B}/credit-rates`));
-export const updateCreditRates = (input: BillingConfigUpdate) => data(api.patch<BillingConfig>(`${B}/credit-rates`, input));
+export const updateCreditRates = (input: BillingConfigUpdate) =>
+  data(api.patch<BillingConfig>(`${B}/credit-rates`, input));
 export const getBillingSettings = () => data(api.get<BillingConfig>(`${B}/settings`));
-export const updateBillingSettings = (input: BillingConfigUpdate) => data(api.patch<BillingConfig>(`${B}/settings`, input));
+export const updateBillingSettings = (input: BillingConfigUpdate) =>
+  data(api.patch<BillingConfig>(`${B}/settings`, input));
 
 // ── Subscriptions & payments ───────────────────────────────
-export const listAdminSubscriptions = (p: { page?: number; status?: string; planId?: string; search?: string; legacy?: boolean }) =>
+export const listAdminSubscriptions = (p: {
+  page?: number;
+  status?: string;
+  planId?: string;
+  search?: string;
+  legacy?: boolean;
+}) =>
   data(
     api.get<Paginated<AdminSubscriptionRow>>(`${B}/subscriptions`, {
       params: clean({ ...p, legacy: p.legacy ? 'true' : undefined }),
     }),
   );
-export const listAdminPayments = (p: { page?: number; status?: string; purpose?: string; search?: string; userId?: string }) =>
-  data(api.get<Paginated<AdminPaymentRow>>(`${B}/payments`, { params: clean(p) }));
+export const listAdminPayments = (p: {
+  page?: number;
+  status?: string;
+  purpose?: string;
+  search?: string;
+  userId?: string;
+}) => data(api.get<Paginated<AdminPaymentRow>>(`${B}/payments`, { params: clean(p) }));
 export const refundPayment = (id: string, reason: string) => data(api.post(`${B}/payments/${id}/refund`, { reason }));
 
 // ── Customers ──────────────────────────────────────────────
@@ -461,7 +561,11 @@ export const adjustCustomerCredits = (id: string, input: CreditAdjustmentInput) 
 
 // ── Custom plans ───────────────────────────────────────────
 export const listCustomPlans = (p: { page?: number; status?: string; search?: string }) =>
-  data(api.get<Paginated<CustomPlanListRow>>(`${B}/custom-plans`, { params: clean(p) }));
+  data(
+    api.get<Paginated<CustomPlanListRow>>(`${B}/custom-plans`, {
+      params: clean(p),
+    }),
+  );
 export const getCustomPlan = (id: string) => data(api.get<CustomPlanDetail>(`${B}/custom-plans/${id}`));
 export const updateCustomPlan = (id: string, input: CustomPlanUpdate) =>
   data(api.patch<CustomPlanDetail>(`${B}/custom-plans/${id}`, input));
@@ -497,7 +601,8 @@ export const getAdminAiUsage = (params: { from?: string; to?: string } = {}) =>
   data(api.get<AdminAiUsageSummary>(`${B}/ai-usage`, { params }));
 export const getSegmentAnalytics = () => data(api.get<SegmentAnalytics>(`${B}/segment-analytics`));
 export const getInternalRates = () => data(api.get<InternalRates>(`${B}/internal-rates`));
-export const updateInternalRates = (input: Partial<InternalRates>) => data(api.patch<InternalRates>(`${B}/internal-rates`, input));
+export const updateInternalRates = (input: Partial<InternalRates>) =>
+  data(api.patch<InternalRates>(`${B}/internal-rates`, input));
 export const getMigrationSummary = () => data(api.get<MigrationSummary>(`${B}/migration`));
 
 /** Admin users, found by paging the customer list (no dedicated admin-list endpoint exists). */
@@ -506,7 +611,13 @@ export async function listAdminUsers(maxPages = 20): Promise<UserRef[]> {
   for (let page = 1; page <= maxPages; page++) {
     const res = await api.get<Paginated<UserRef & { role?: string }>>('/admin/customers', { params: { page } });
     for (const u of res.data.data ?? []) {
-      if (u.role === 'ADMIN') admins.push({ id: u.id, email: u.email, name: u.name, companyName: u.companyName ?? null });
+      if (u.role === 'ADMIN')
+        admins.push({
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          companyName: u.companyName ?? null,
+        });
     }
     if (page >= (res.data.pageCount ?? 1)) break;
   }

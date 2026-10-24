@@ -174,7 +174,7 @@ export const AI_SSRF_RULES: string[] = [
 
 export const AI_ERROR_CODES: [string, string][] = [
   ['AI_DISABLED', 'AI voice agents are not enabled on this deployment.'],
-  ['AI_PAID_PLAN_REQUIRED', 'The account is on the Free plan. Upgrade to any paid plan.'],
+  ['AI_PAID_PLAN_REQUIRED', 'AI voice agents unlock after your first verified credit purchase.'],
   ['AI_AGENT_NOT_FOUND', 'The agent id does not exist or belongs to another account.'],
   ['AI_AGENT_DISABLED', 'The agent is disabled in the dashboard.'],
   ['AI_QUOTA_EXCEEDED', 'The daily or monthly AI minute limit is used up.'],

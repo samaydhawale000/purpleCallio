@@ -167,8 +167,17 @@ export class BillingFulfillmentService {
           postCommit,
           opts.providerPeriodEnd,
         );
-      } else if (paid.purpose === PaymentPurpose.TOPUP) {
+      } else if (
+        paid.purpose === PaymentPurpose.TOPUP ||
+        paid.purpose === PaymentPurpose.AUTO_TOPUP
+      ) {
         await this.grantTopUp(tx, paid);
+        // The first paid credit purchase establishes prepaid feature access.
+        // A conditional update preserves the original timestamp on later buys.
+        await tx.user.updateMany({
+          where: { id: paid.userId!, prepaidSince: null },
+          data: { prepaidSince: paid.paidAt ?? new Date() },
+        });
         postCommit.push(() =>
           this.notify.topUpSucceeded(paid.userId!, paid.credits, paid.id),
         );
@@ -181,7 +190,8 @@ export class BillingFulfillmentService {
       await this.audit.log(
         {
           action:
-            paid.purpose === PaymentPurpose.TOPUP
+            paid.purpose === PaymentPurpose.TOPUP ||
+            paid.purpose === PaymentPurpose.AUTO_TOPUP
               ? 'TOPUP_PURCHASED'
               : 'PAYMENT_RECEIVED',
           actorId: paid.userId,
@@ -276,10 +286,17 @@ export class BillingFulfillmentService {
 
   private async grantTopUp(tx: Tx, payment: Payment) {
     const config = await this.config.get(tx);
-    let expiresAt: Date | null = null;
-    if (config.topUpExpiryPolicy === 'DAYS' && config.topUpExpiryDays) {
+    let expiresAt: Date | null = payment.creditExpiryAt ?? null;
+    if (
+      !payment.creditPricingVersionId &&
+      config.topUpExpiryPolicy === 'DAYS' &&
+      config.topUpExpiryDays
+    ) {
       expiresAt = new Date(Date.now() + config.topUpExpiryDays * 86_400_000);
-    } else if (config.topUpExpiryPolicy === 'SUBSCRIPTION_END') {
+    } else if (
+      !payment.creditPricingVersionId &&
+      config.topUpExpiryPolicy === 'SUBSCRIPTION_END'
+    ) {
       const postCommit: PostCommit = [];
       const sub = await this.subscriptions.ensureCurrentLocked(
         tx,
@@ -300,6 +317,8 @@ export class BillingFulfillmentService {
         idempotencyKey: `topup:${payment.id}`,
         metadata: {
           topUpPackageId: payment.topUpPackageId,
+          creditPricingVersionId: payment.creditPricingVersionId,
+          creditPricePaise: payment.creditPricePaise,
           description: payment.description,
           pricePaise: payment.subtotalPaise,
         },

@@ -13,6 +13,7 @@ import { SettingsTab } from './_components/SettingsTab';
 import { SubscriptionsTab } from './_components/SubscriptionsTab';
 import { PaymentsTab } from './_components/PaymentsTab';
 import { CustomPlansTab } from './_components/CustomPlansTab';
+import { CreditPricingTab } from './_components/CreditPricingTab';
 import { BILLING_TABS, type BillingTab } from './_components/tabs';
 
 export default function AdminBillingPage() {
@@ -36,10 +37,9 @@ function BillingConsole() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#170B2E]">Plans &amp; Pricing</h1>
+        <h1 className="text-2xl font-bold text-[#170B2E]">Prepaid Billing</h1>
         <p className="text-sm text-[#3D3650] mt-1">
-          Prepaid plans, credit top-ups, credit rates, Live Translate pricing, subscriptions, payments and custom plans. Changes apply without a
-          deployment and are audit-logged.
+          Published credit prices, credit usage rates, payments and billing settings. Historical billing records are retained read-only for audit purposes. Pricing changes are audit-logged.
         </p>
       </div>
 
@@ -72,6 +72,7 @@ function BillingConsole() {
         {tab === 'topups' && <TopUpsTab />}
         {tab === 'features' && <FeaturesTab />}
         {tab === 'credit-rates' && <CreditRatesTab />}
+        {tab === 'credit-pricing' && <CreditPricingTab />}
         {tab === 'translation' && <TranslationTab />}
         {tab === 'subscriptions' && <SubscriptionsTab />}
         {tab === 'payments' && <PaymentsTab />}

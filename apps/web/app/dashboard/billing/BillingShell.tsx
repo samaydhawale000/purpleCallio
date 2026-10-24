@@ -13,11 +13,9 @@ import { useAuthStore } from '../../store/auth.store';
  */
 const NAV: { label: string; href: string; match?: (p: string) => boolean }[] = [
   { label: 'Overview', href: '/dashboard/billing', match: (p) => p === '/dashboard/billing' },
-  { label: 'Plans', href: '/dashboard/billing/plans', match: (p) => p.startsWith('/dashboard/billing/plans') || p.startsWith('/dashboard/billing/offers') },
   { label: 'Credits', href: '/dashboard/billing/credits', match: (p) => p.startsWith('/dashboard/billing/credits') },
   { label: 'Usage', href: '/dashboard/usage', match: (p) => p.startsWith('/dashboard/usage') },
   { label: 'Payments & receipts', href: '/dashboard/billing/payments', match: (p) => p.startsWith('/dashboard/billing/payments') || p.startsWith('/dashboard/billing/invoices') },
-  { label: 'Top-ups', href: '/dashboard/billing/credits#topups', match: () => false },
   { label: 'Payment methods', href: '/dashboard/billing/payments#payment-methods', match: () => false },
 ];
 

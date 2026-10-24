@@ -94,7 +94,7 @@ describe('AI voice rate', () => {
   it('is listed with the media rates on the pricing page', () => {
     render(<CreditRateStrip rates={config as unknown as CreditRates} />);
     expect(screen.getByTestId('ai-rate').textContent).toContain('AI voice15 credits/min');
-    expect(screen.getByTestId('ai-rate').textContent).toContain('paid plans');
+    expect(screen.getByTestId('ai-rate').textContent).toContain('after first purchase');
   });
 
   it('estimates a one-to-one call, with screen sharing only as an add-on', () => {
@@ -120,22 +120,11 @@ describe('AI voice rate', () => {
     expect(screen.getByText(/credits per call/).parentElement!.textContent).toContain('150');
   });
 
-  it('lets visitors pick a plan and see how many calls its credits cover', () => {
-    const plan = (id: string, name: string, type: string, credits: number) =>
-      ({ id, slug: id, name, type, displayOrder: 0, customPricing: false, version: { includedCredits: credits, billingInterval: 'MONTH', intervalCount: 1, features: [] } }) as never;
-    const plans = [plan('free', 'Free', 'FREE', 1000), plan('starter', 'Starter', 'PAID', 6000), plan('growth', 'Growth', 'PAID', 20000)];
-    render(<CreditRateStrip rates={config as unknown as CreditRates} plans={plans} />);
-    // 2 people × 30 min video × 4 = 240 credits; the smallest paid plan is the default.
-    expect(screen.getByRole('radio', { name: 'Starter' }).getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByTestId('plan-coverage').textContent).toContain('≈ 25');
-    fireEvent.click(screen.getByRole('radio', { name: 'Growth' }));
-    expect(screen.getByTestId('plan-coverage').textContent).toContain("Growth's 20,000 credits");
-    expect(screen.getByTestId('plan-coverage').textContent).toContain('≈ 83');
-    // AI on the Free plan isn't possible.
-    fireEvent.click(screen.getByRole('radio', { name: 'Free' }));
-    fireEvent.click(screen.getByTestId('ai-rate'));
-    expect(screen.getByText(/AI voice agents need a paid plan/)).toBeTruthy();
-    expect(screen.queryByTestId('plan-coverage')).toBeNull();
+  it('shows usage rates without subscription plan choices', () => {
+    render(<CreditRateStrip rates={config as unknown as CreditRates} />);
+    expect(screen.getByTestId('credit-rate-strip')).toBeTruthy();
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(screen.getByText(/credits per call/)).toBeTruthy();
   });
 });
 

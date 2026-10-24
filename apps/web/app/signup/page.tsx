@@ -93,7 +93,7 @@ export default function SignupPage() {
           <div className="relative flex flex-wrap gap-2">
             <span className="inline-flex items-center gap-1.5 text-xs text-white/90 px-3 py-1.5 rounded-full border border-white/15">
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#10B981' }} />
-              Free plan, no credit card
+              Create an account, no credit card
             </span>
             <span className="inline-flex items-center gap-1.5 text-xs text-white/90 px-3 py-1.5 rounded-full border border-white/15">
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#10B981' }} />

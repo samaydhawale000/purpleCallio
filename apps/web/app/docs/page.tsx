@@ -704,8 +704,8 @@ join();
             </p>
 
             <Tip type="info">
-              Available on every paid plan (including custom plans), not on Free. AI calls are billed in credits
-              per minute of call time; see <Link href="/pricing" className="underline">pricing</Link> for the current rate.
+              Available after your first verified credit purchase. AI calls are billed in credits per minute of
+              call time; see <Link href="/pricing" className="underline">pricing</Link> for the current rate.
             </Tip>
 
             <p className="text-sm font-semibold text-[#170B2E] mb-3">1. Create a session on your server</p>
@@ -1185,23 +1185,21 @@ meeting.microphone.enable();`} />
 
 {/* ── Usage & Billing ─────────────────────────── */}
           <Section id="usage-billing">
-            <Heading>Plans, Credits & Usage</Heading>
+            <Heading>Prepaid Credits & Usage</Heading>
             <p className="text-[#3D3650] text-sm mb-5">
-              PurpleCallio uses simple prepaid plans. Choose a plan, pay upfront,
-              and get usage credits. Calls are measured in participant-minutes and
-              consume credits at the current rate for each media type — no
-              surprise usage bills.
+              PurpleCallio uses a prepaid credit wallet. Choose a monetary amount, review the estimated
+              credits and taxes, and pay upfront. Calls are measured in participant-minutes and consume
+              credits at the current rate for each media type.
             </p>
 
             <PricingAuthority className="mb-6" />
 
-            <p className="text-sm font-semibold text-[#170B2E] mb-3">How plans and credits work</p>
+            <p className="text-sm font-semibold text-[#170B2E] mb-3">How credits work</p>
             <div className="space-y-3 mb-6">
               {[
-                { t: 'Start on the Free plan', d: 'Every account starts on the Free plan with a monthly amount of included credits for building and testing.' },
-                { t: 'Choose a plan and pay upfront', d: 'Pick a paid plan in Dashboard → Billing and pay for the first period at checkout (GST added). Credits are added as soon as the payment is confirmed. Keep auto-renew on to renew automatically each period, or turn it off and renew manually.' },
+                { t: 'Add credits to your wallet', d: 'Choose a purchase amount in Dashboard → Billing, then review the estimated credits, GST and final total before paying. Credits are added after payment is confirmed.' },
                 { t: 'Usage consumes credits', d: 'Audio, video, and screen-sharing participant-minutes consume credits from your balance. Track usage and your credit balance in the dashboard.' },
-                { t: 'Top up, renew, or upgrade', d: 'Buy a one-time top-up when you need more credits, let your plan auto-renew (or renew manually), or upgrade at any time. When credits run out, new calls cannot start — active calls are never interrupted.' },
+                { t: 'Add more when needed', d: 'Return to your wallet whenever you need more credits. When credits run out, new calls cannot start — active calls are never interrupted.' },
               ].map((s) => (
                 <div key={s.t} className="flex gap-3 rounded-xl border border-[#E7DFF5] p-4" style={{ background: '#FFFFFF' }}>
                   <span className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center font-mono text-xs font-bold" style={{ background: 'linear-gradient(135deg, rgba(127,64,232,0.2), rgba(65,6,134,0.2))', color: '#6425C4', border: '1px solid rgba(127,64,232,0.25)' }}>✓</span>
@@ -1214,9 +1212,8 @@ meeting.microphone.enable();`} />
             </div>
 
             <Tip type="info">
-              Plan credits expire at the end of the plan period; top-up expiry is shown at purchase. Need higher
-              volumes? Choose “Talk to us” on the <Link href="/pricing" className="underline">pricing page</Link> to
-              request a custom plan.
+              Each purchase has its own expiry date, shown at checkout and in your wallet. Consumption rates are
+              separate from the monetary price of a credit; see the <Link href="/pricing" className="underline">pricing page</Link> for current details.
             </Tip>
           </Section>
 

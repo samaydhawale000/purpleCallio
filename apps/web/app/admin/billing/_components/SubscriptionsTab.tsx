@@ -1,18 +1,16 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { Search } from 'lucide-react';
 import {
-  listAdminPlans,
   listAdminSubscriptions,
   migrationSourceLabel,
-  SUBSCRIPTION_STATUSES,
 } from '../../../lib/admin-billing';
-import { formatCredits, formatDate, formatMoney, intervalLabel } from '../../../lib/billing';
+import { formatCredits, formatDate, formatMoney } from '../../../lib/billing';
 import { Badge } from '../../../components/ui/Badge';
 import { Pagination } from '../../../components/ui/Pagination';
-import { Checkbox, ErrorText, inputCls, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useResource } from './ui';
+import { ErrorText, inputCls, Panel, rowCls, Spinner, Table, tdCls, useResource } from './ui';
 
 export function SearchBox({ placeholder, onSearch }: { placeholder: string; onSearch: (q: string) => void }) {
   const [value, setValue] = useState('');
@@ -30,16 +28,11 @@ export function SearchBox({ placeholder, onSearch }: { placeholder: string; onSe
 
 export function SubscriptionsTab() {
   const [page, setPage] = useState(1);
-  const [status, setStatus] = useState('');
-  const [planId, setPlanId] = useState('');
   const [search, setSearch] = useState('');
-  const [legacy, setLegacy] = useState(false);
-  const plans = useResource(listAdminPlans, []);
   const { data, loading, error } = useResource(
-    () => listAdminSubscriptions({ page, status, planId, search, legacy }),
-    [page, status, planId, search, legacy],
+    () => listAdminSubscriptions({ page, search }),
+    [page, search],
   );
-  const planNames = useMemo(() => new Map((plans.data ?? []).map((p) => [p.id, p.name])), [plans.data]);
 
   const filter = <T,>(setter: (v: T) => void) => (v: T) => {
     setPage(1);
@@ -47,22 +40,12 @@ export function SubscriptionsTab() {
   };
 
   return (
-    <Panel title="Subscriptions" subtitle="Each customer's current and past plan periods.">
+    <Panel title="Legacy billing records" subtitle="Read-only records retained from the retired subscription model. They do not control prepaid wallet access, pricing or renewals.">
+      <div className="mb-4 rounded-lg border border-[#E7DFF5] bg-[#F8F4FD] px-3 py-2 text-xs text-[#3D3650]">
+        New credit purchases are managed through Credit Pricing and Payments. These records are shown only for historical support and audit work.
+      </div>
       <div className="flex flex-wrap gap-3 items-center mb-4">
-        <SearchBox placeholder="Search customer email, name, company… (Enter)" onSearch={filter(setSearch)} />
-        <select aria-label="Status" className={`${inputCls} w-auto`} value={status} onChange={(e) => filter(setStatus)(e.target.value)}>
-          <option value="">All statuses</option>
-          {SUBSCRIPTION_STATUSES.map((s) => (
-            <option key={s} value={s}>{s.replace(/_/g, ' ').toLowerCase()}</option>
-          ))}
-        </select>
-        <select aria-label="Plan" className={`${inputCls} w-auto`} value={planId} onChange={(e) => filter(setPlanId)(e.target.value)}>
-          <option value="">All plans</option>
-          {(plans.data ?? []).map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-        <Checkbox label="Legacy accounts only" checked={legacy} onChange={filter(setLegacy)} />
+        <SearchBox placeholder="Search customer email, name or company… (Enter)" onSearch={filter(setSearch)} />
       </div>
       {loading ? (
         <Spinner tall={false} />
@@ -71,8 +54,8 @@ export function SubscriptionsTab() {
       ) : (
         <>
           <Table
-            headers={['Customer', 'Plan', 'Status', 'Price', 'Credits', 'Period end', 'Changes']}
-            empty={data.data.length === 0 ? 'No subscriptions match these filters.' : undefined}
+            headers={['Customer', 'Former plan', 'Recorded status', 'Original price', 'Credits granted', 'Recorded end', 'Notes']}
+            empty={data.data.length === 0 ? 'No legacy billing records match this search.' : undefined}
           >
             {data.data.map((s) => {
               const legacyLabel = migrationSourceLabel(s.migrationSource);
@@ -85,7 +68,7 @@ export function SubscriptionsTab() {
                     <div className="text-[11px]">{s.customer.email}</div>
                   </td>
                   <td className={tdCls}>
-                    <span className="text-[#170B2E]">{s.planName ?? '—'}</span>
+                    <span className="text-[#170B2E]">{s.planName ?? 'No recorded plan'}</span>
                     {s.planType && <div className="text-[11px]">{s.planType}</div>}
                     {legacyLabel && (
                       <Badge variant={s.migrationSource === 'legacy_payg_paying' ? 'warning' : 'default'} className="mt-1">
@@ -93,26 +76,14 @@ export function SubscriptionsTab() {
                       </Badge>
                     )}
                   </td>
-                  <td className={tdCls}><StatusBadge status={s.status} /></td>
+                  <td className={tdCls}><Badge variant="default">Historical record</Badge></td>
                   <td className={`${tdCls} whitespace-nowrap`}>
-                    {s.planType === 'FREE' ? 'Free' : `${formatMoney(s.pricePaise, s.currency)}${s.billingInterval ? ` / ${intervalLabel({ billingInterval: s.billingInterval, intervalCount: s.intervalCount })}` : ''}`}
+                    {s.planType === 'FREE' ? 'No charge' : formatMoney(s.pricePaise, s.currency)}
                   </td>
                   <td className={tdCls}>{formatCredits(s.includedCredits)}</td>
                   <td className={`${tdCls} whitespace-nowrap`}>{formatDate(s.currentPeriodEnd)}</td>
                   <td className={tdCls}>
-                    {s.planType !== 'FREE' && (
-                      <div className={`text-[11px] ${s.autoRenew ? 'text-emerald-700' : 'text-[#3D3650]'}`}>
-                        Auto-renew {s.autoRenew ? 'on' : 'off'}
-                        {s.autoRenew && s.renewalAmountPaise != null ? ` · ${formatMoney(s.renewalAmountPaise, s.currency)}` : ''}
-                        {s.autoRenewStatus === 'pending' ? ' · retrying' : ''}
-                        {!s.autoRenew && s.autoRenewOffReason ? ` (${s.autoRenewOffReason.replace(/_/g, ' ')})` : ''}
-                      </div>
-                    )}
-                    {s.cancelAtPeriodEnd && <div className="text-[11px] text-amber-700">Cancels at period end</div>}
-                    {s.scheduledPlanId && (
-                      <div className="text-[11px] text-[#6425C4]">Downgrade to {planNames.get(s.scheduledPlanId) ?? 'another plan'} at period end</div>
-                    )}
-                    {s.planType === 'FREE' && !s.cancelAtPeriodEnd && !s.scheduledPlanId && '—'}
+                    <span className="text-[11px] text-[#3D3650]">Retained for audit only</span>
                   </td>
                 </tr>
               );

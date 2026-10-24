@@ -43,6 +43,8 @@ export type BillingConfigUpdate = Partial<
     | 'pendingCheckoutTtlHours'
     | 'autoRenewDefault'
     | 'autoRenewGraceHours'
+    | 'freeAccountsCanPurchaseCredits'
+    | 'freeAccountsCanUseAutoTopUp'
     // Live Translate (translation/PROTOCOL.md §4)
     | 'translationVoiceCreditsPerMinute'
     | 'translationCaptionsCreditsPerMinute'
@@ -199,6 +201,21 @@ export class BillingConfigService {
         );
       }
       data.autoRenewDefault = input.autoRenewDefault;
+    }
+    if (input.freeAccountsCanPurchaseCredits !== undefined) {
+      if (typeof input.freeAccountsCanPurchaseCredits !== 'boolean')
+        throw new BadRequestException(
+          'freeAccountsCanPurchaseCredits must be true or false.',
+        );
+      data.freeAccountsCanPurchaseCredits =
+        input.freeAccountsCanPurchaseCredits;
+    }
+    if (input.freeAccountsCanUseAutoTopUp !== undefined) {
+      if (typeof input.freeAccountsCanUseAutoTopUp !== 'boolean')
+        throw new BadRequestException(
+          'freeAccountsCanUseAutoTopUp must be true or false.',
+        );
+      data.freeAccountsCanUseAutoTopUp = input.freeAccountsCanUseAutoTopUp;
     }
     if (input.lowCreditThresholds !== undefined) {
       const t = input.lowCreditThresholds;

@@ -206,7 +206,7 @@ const FAQ: [string, string][] = [
    ],
    [
       "Which plans include AI voice agents?",
-      "Every paid plan, including custom plans. The Free plan doesn't include AI calls, but you can still explore the dashboard.",
+      "AI voice agents unlock after your first verified credit purchase. You can still explore the dashboard before purchasing credits.",
    ],
    [
       "How are AI calls billed?",
@@ -294,7 +294,7 @@ export default function AiVoiceAgentsPage() {
                            Read the docs
                         </Link>
                      </div>
-                     <p className="mt-4 text-sm text-white/70">Included on every paid plan.</p>
+                     <p className="mt-4 text-sm text-white/70">Unlocks after your first verified credit purchase.</p>
                   </div>
 
                   {/* Example conversation */}
@@ -456,8 +456,8 @@ export default function AiVoiceAgentsPage() {
                         </span>
                      </li>
                      {[
-                        "Included on every paid plan, including custom plans.",
-                        "One prepaid balance for video, audio and AI calls. Top up any time.",
+                        "Unlocks after your first verified credit purchase.",
+                        "One prepaid balance for video, audio and AI calls. Add credits any time.",
                         "A call can't run longer than your remaining credits cover, so there are no surprise bills.",
                         "Failed connections are never charged.",
                      ].map((t) => (

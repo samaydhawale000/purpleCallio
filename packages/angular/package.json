@@ -1,6 +1,6 @@
 {
   "name": "@purplecallio/angular",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Official Angular service, directive and components for PurpleCallio, a developer-first real-time communication platform for voice, video and WebRTC.",
   "homepage": "https://purplecallio.com",
   "main": "./dist/fesm2022/purplecallio-angular.mjs",

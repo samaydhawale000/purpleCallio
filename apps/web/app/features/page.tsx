@@ -176,15 +176,15 @@ export default function FeaturesPage() {
             <Reveal as="section" variant="zoom-up" duration={0.8} className="mt-16 rounded-2xl border border-[#D6C4EE] bg-[#7F40E8]/5 p-8">
                <h2 className="text-2xl font-bold text-[#170B2E]">Not sure where to start?</h2>
                <p className="mt-3 max-w-2xl">
-                  Every account starts on the Free plan with monthly credits for video and audio calls. AI
-                  voice agents are included on every paid plan.
+                  Create an account, add prepaid credits when you need them, and use one wallet across eligible
+                  calling and AI features. Feature consumption rates are shown before you buy.
                </p>
                <div className="mt-6 flex flex-wrap gap-3">
                   <Link href="/signup" className="btn-primary rounded-lg px-5 py-3 text-sm font-medium text-white">
                      Create a free account
                   </Link>
                   <Link href="/pricing" className="rounded-lg border border-[#D6C4EE] px-5 py-3 text-sm font-medium text-[#3D3650]">
-                     Compare plans
+                     Explore pricing
                   </Link>
                </div>
             </Reveal>

@@ -283,7 +283,7 @@ export function apiErrorCode(e: any): string | undefined {
 
 const AI_ERROR_TEXT: Record<string, string> = {
   AI_DISABLED: 'AI voice agents are not enabled.',
-  AI_PAID_PLAN_REQUIRED: 'AI voice agents are available on paid plans.',
+  AI_PAID_PLAN_REQUIRED: 'AI voice agents unlock after your first verified credit purchase.',
   AI_AGENT_NOT_FOUND: 'This agent no longer exists.',
   AI_AGENT_DISABLED: 'This agent is disabled. Enable it to start a call.',
   AI_QUOTA_EXCEEDED: 'You have used your AI minutes for today or this month.',

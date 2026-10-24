@@ -3,7 +3,14 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, Clock, Loader2, RefreshCw, ShieldCheck, XCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  ShieldCheck,
+  XCircle,
+} from 'lucide-react';
 import { useRequireAuth } from '../../../hooks/useRequireAuth';
 import { Button } from '../../../components/ui/Button';
 import {
@@ -11,15 +18,18 @@ import {
   formatCredits,
   formatDate,
   formatMoneyExact,
-  getPublicPricing,
   quoteCheckout,
   type CheckoutQuote,
   type CheckoutRequest,
-  type Feature,
   type PaymentOutcome,
 } from '../../../lib/billing';
 import { runCheckout } from '../../../lib/checkout';
-import { BillingHeader, ErrorBanner, PageLoader, useAuthErrorHandler } from '../BillingShell';
+import {
+  BillingHeader,
+  ErrorBanner,
+  PageLoader,
+  useAuthErrorHandler,
+} from '../BillingShell';
 
 type Phase =
   | { kind: 'review' }
@@ -34,13 +44,21 @@ function useCheckoutRequest(): CheckoutRequest | null {
   const renew = params.get('renew');
   const topup = params.get('topup');
   const offer = params.get('offer');
+  const amountPaise = params.get('amountPaise');
+  const currency = params.get('currency') ?? undefined;
   return useMemo(() => {
+    if (amountPaise)
+      return {
+        kind: 'creditAmount',
+        amountPaise: Number(amountPaise),
+        currency,
+      };
     if (plan) return { kind: 'plan', planId: plan };
     if (renew) return { kind: 'renewal' };
     if (topup) return { kind: 'topup', topUpPackageId: topup };
     if (offer) return { kind: 'offer', offerId: offer };
     return null;
-  }, [plan, renew, topup, offer]);
+  }, [plan, renew, topup, offer, amountPaise, currency]);
 }
 
 function CheckoutContent() {
@@ -49,28 +67,29 @@ function CheckoutContent() {
   const handleAuthError = useAuthErrorHandler();
 
   const [quote, setQuote] = useState<CheckoutQuote | null>(null);
-  const [features, setFeatures] = useState<Feature[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'review' });
   const [notice, setNotice] = useState<string | null>(null);
-  // Plan purchases: auto-renew is pre-ticked (admin default) and can be unticked.
-  const [autoRenew, setAutoRenew] = useState(true);
 
   const load = useCallback(async () => {
     if (!request) {
-      setError('Nothing to check out. Choose a plan or a credit top-up first.');
+      setError('Choose a credit purchase from your wallet to continue.');
       setLoading(false);
       return;
     }
     try {
-      const [q, pricing] = await Promise.all([quoteCheckout(request), getPublicPricing().catch(() => null)]);
+      const q = await quoteCheckout(request);
       setQuote(q);
-      setAutoRenew(q.autoRenew?.available ? q.autoRenew.on : false);
-      setFeatures(pricing?.features ?? []);
       setError(null);
     } catch (e) {
-      if (!handleAuthError(e)) setError(billingErrorMessage(e, 'Could not prepare this checkout. Please try again.'));
+      if (!handleAuthError(e))
+        setError(
+          billingErrorMessage(
+            e,
+            'Could not prepare this checkout. Please try again.',
+          ),
+        );
     } finally {
       setLoading(false);
     }
@@ -85,31 +104,49 @@ function CheckoutContent() {
     setNotice(null);
     setPhase({ kind: 'processing' });
     try {
-      const offersAutoRenew = !!quote?.autoRenew?.available;
-      const result = await runCheckout(offersAutoRenew ? { ...request, autoRenew } : request);
-      if (result.kind === 'paid') setPhase({ kind: 'paid', outcome: result.outcome });
-      else if (result.kind === 'pending') setPhase({ kind: 'pending', outcome: result.outcome });
-      else if (result.kind === 'failed') setPhase({ kind: 'failed', message: result.message, outcome: result.outcome });
+      const result = await runCheckout(request);
+      if (result.kind === 'paid')
+        setPhase({ kind: 'paid', outcome: result.outcome });
+      else if (result.kind === 'pending')
+        setPhase({ kind: 'pending', outcome: result.outcome });
+      else if (result.kind === 'failed')
+        setPhase({
+          kind: 'failed',
+          message: result.message,
+          outcome: result.outcome,
+        });
       else {
         setPhase({ kind: 'review' });
         setNotice('Payment window closed. You have not been charged.');
       }
     } catch (e) {
       if (handleAuthError(e)) return;
-      setPhase({ kind: 'failed', message: billingErrorMessage(e, 'Payment could not be started.'), outcome: null });
+      setPhase({
+        kind: 'failed',
+        message: billingErrorMessage(e, 'Payment could not be started.'),
+        outcome: null,
+      });
     }
   };
 
-  const isTopUp = quote?.summary.type === 'topup' || request?.kind === 'topup';
-  const title = isTopUp ? 'Buy credits' : request?.kind === 'renewal' ? 'Renew plan' : 'Checkout';
-  const back = isTopUp ? '/dashboard/billing/credits#topups' : '/dashboard/billing/plans';
-  const featureName = (k: string) => features.find((f) => f.key === k)?.name ?? k;
+  const isTopUp =
+    quote?.summary.type === 'topup' ||
+    request?.kind === 'topup' ||
+    request?.kind === 'creditAmount';
+  const title = 'Buy credits';
+  const back = '/dashboard/billing/credits#topups';
 
   const header = (
     <div className="flex flex-col gap-4">
-      <BillingHeader title={title} subtitle="Review your order before you pay." />
+      <BillingHeader
+        title={title}
+        subtitle="Review your order before you pay."
+      />
       {phase.kind === 'review' && (
-        <Link href={back} className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E] w-fit">
+        <Link
+          href={back}
+          className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E] w-fit"
+        >
           <ArrowLeft size={14} /> Back
         </Link>
       )}
@@ -129,7 +166,17 @@ function CheckoutContent() {
     return (
       <div className="flex flex-col gap-6">
         {header}
-        <ErrorBanner message={error ?? 'Checkout is unavailable.'} onRetry={request ? () => { setLoading(true); load(); } : undefined} />
+        <ErrorBanner
+          message={error ?? 'Checkout is unavailable.'}
+          onRetry={
+            request
+              ? () => {
+                  setLoading(true);
+                  load();
+                }
+              : undefined
+          }
+        />
       </div>
     );
   }
@@ -137,33 +184,33 @@ function CheckoutContent() {
   if (phase.kind === 'paid') {
     const o = phase.outcome;
     const credits = o.credits || quote.credits;
-    const renewsAutomatically = !!quote.autoRenew?.available && autoRenew;
     return (
       <div className="flex flex-col gap-6">
         {header}
-        <ResultCard tone="success" icon={<CheckCircle2 size={28} className="text-emerald-600" />} title="Payment successful">
-          {isTopUp ? (
-            <p>{formatCredits(credits)} credits added to your account.</p>
-          ) : (
-            <>
-              <p>You’re now on {o.subscription?.planName ?? quote.summary.planName}.</p>
-              <p>{formatCredits(credits)} credits have been added to your account.</p>
-              {o.subscription?.currentPeriodEnd && (
-                <p>
-                  {renewsAutomatically
-                    ? `Renews automatically on ${formatDate(o.subscription.currentPeriodEnd)} — turn auto-renew off anytime from Billing.`
-                    : `Active until ${formatDate(o.subscription.currentPeriodEnd)}.`}
-                </p>
-              )}
-            </>
+        <ResultCard
+          tone="success"
+          icon={<CheckCircle2 size={28} className="text-emerald-600" />}
+          title="Payment successful"
+        >
+          <p>
+            {formatCredits(credits)} credits added to your account
+            {quote.summary.expiryAt
+              ? ` and expire ${formatDate(quote.summary.expiryAt)}.`
+              : '.'}
+          </p>
+          {o.receiptNumber != null && (
+            <p className="text-xs">
+              A receipt is available under Payments &amp; receipts.
+            </p>
           )}
-          {o.receiptNumber != null && <p className="text-xs">A receipt is available under Payments &amp; receipts.</p>}
           <div className="flex flex-wrap justify-center gap-2 pt-3">
             <Link href="/dashboard/billing">
               <Button size="sm">Go to billing</Button>
             </Link>
             <Link href="/dashboard/billing/payments">
-              <Button size="sm" variant="secondary">View receipt</Button>
+              <Button size="sm" variant="secondary">
+                View receipt
+              </Button>
             </Link>
           </div>
         </ResultCard>
@@ -175,19 +222,25 @@ function CheckoutContent() {
     return (
       <div className="flex flex-col gap-6">
         {header}
-        <ResultCard tone="error" icon={<XCircle size={28} className="text-red-600" />} title="Payment failed">
-          <p>
-            {isTopUp
-              ? 'Payment failed. No credits have been added.'
-              : 'Payment failed. Your subscription has not been activated.'}
-          </p>
-          {phase.message && <p className="text-xs">{phase.outcome?.failureReason ?? phase.message}</p>}
+        <ResultCard
+          tone="error"
+          icon={<XCircle size={28} className="text-red-600" />}
+          title="Payment failed"
+        >
+          <p>Payment failed. No credits have been added.</p>
+          {phase.message && (
+            <p className="text-xs">
+              {phase.outcome?.failureReason ?? phase.message}
+            </p>
+          )}
           <div className="flex flex-wrap justify-center gap-2 pt-3">
             <Button size="sm" onClick={() => setPhase({ kind: 'review' })}>
               Try again
             </Button>
             <Link href={back}>
-              <Button size="sm" variant="secondary">Back</Button>
+              <Button size="sm" variant="secondary">
+                Back
+              </Button>
             </Link>
           </div>
         </ResultCard>
@@ -199,14 +252,21 @@ function CheckoutContent() {
     return (
       <div className="flex flex-col gap-6">
         {header}
-        <ResultCard tone="info" icon={<Clock size={28} className="text-[#7F40E8]" />} title="We’re confirming your payment…">
+        <ResultCard
+          tone="info"
+          icon={<Clock size={28} className="text-[#7F40E8]" />}
+          title="We’re confirming your payment…"
+        >
           <p>
-            Your bank hasn’t confirmed the payment yet. We’ll activate your {isTopUp ? 'credits' : 'plan'} as soon as it does — you’ll get a
-            notification. You don’t need to pay again.
+            Your bank hasn’t confirmed the payment yet. We’ll add your credits
+            as soon as it does — you’ll get a notification. You don’t need to
+            pay again.
           </p>
           <div className="flex justify-center pt-3">
             <Link href="/dashboard/billing/payments">
-              <Button size="sm" variant="secondary">View payments</Button>
+              <Button size="sm" variant="secondary">
+                View payments
+              </Button>
             </Link>
           </div>
         </ResultCard>
@@ -216,103 +276,130 @@ function CheckoutContent() {
 
   const s = quote.summary;
   const processing = phase.kind === 'processing';
-  const offersAutoRenew = !!quote.autoRenew?.available;
-  const autoRenewOn = offersAutoRenew && autoRenew;
 
   return (
     <div className="flex flex-col gap-6">
       {header}
       {notice && (
-        <div role="status" className="rounded-lg border border-[#E7DFF5] px-4 py-3 text-sm text-[#3D3650]" style={{ background: '#F8F4FD' }}>
+        <div
+          role="status"
+          className="rounded-lg border border-[#E7DFF5] px-4 py-3 text-sm text-[#3D3650]"
+          style={{ background: '#F8F4FD' }}
+        >
           {notice}
         </div>
       )}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 max-w-5xl">
-        <section className="lg:col-span-3 rounded-2xl border border-[#E7DFF5] bg-white p-6" data-testid="checkout-summary">
-          <p className="text-xs uppercase tracking-wider text-[#3D3650]">{isTopUp ? 'Credit top-up' : 'Plan'}</p>
-          <h2 className="text-xl font-bold text-[#170B2E] mt-1">{isTopUp ? s.name ?? quote.description : s.planName ?? quote.description}</h2>
+        <section
+          className="lg:col-span-3 rounded-2xl border border-[#E7DFF5] bg-white p-6"
+          data-testid="checkout-summary"
+        >
+          <p className="text-xs uppercase tracking-wider text-[#3D3650]">
+            Credit top-up
+          </p>
+          <h2 className="text-xl font-bold text-[#170B2E] mt-1">
+            {s.name ?? quote.description}
+          </h2>
           <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-            {!isTopUp && s.intervalLabel && (
+            <div>
+              <dt className="text-xs text-[#3D3650]">Credits</dt>
+              <dd className="text-[#170B2E]">
+                {formatCredits(s.includedCredits ?? s.credits ?? quote.credits)}
+              </dd>
+            </div>
+            {isTopUp && s.creditPricePaise != null && (
               <div>
-                <dt className="text-xs text-[#3D3650]">Billing period</dt>
-                <dd className="text-[#170B2E]">1 {s.intervalLabel}{s.renewsFrom ? ` (starts ${formatDate(s.renewsFrom)})` : ''}</dd>
+                <dt className="text-xs text-[#3D3650]">
+                  Published credit price
+                </dt>
+                <dd className="text-[#170B2E]">
+                  {formatMoneyExact(s.creditPricePaise, quote.currency)} per
+                  credit {s.pricingVersion ? `(v${s.pricingVersion})` : ''}
+                </dd>
               </div>
             )}
-            <div>
-              <dt className="text-xs text-[#3D3650]">{isTopUp ? 'Credits' : 'Included credits'}</dt>
-              <dd className="text-[#170B2E]">{formatCredits(s.includedCredits ?? s.credits ?? quote.credits)}</dd>
-            </div>
+            {isTopUp && s.creditAllocationPaise != null && (
+              <div>
+                <dt className="text-xs text-[#3D3650]">
+                  Amount allocated to credits
+                </dt>
+                <dd className="text-[#170B2E]">
+                  {formatMoneyExact(s.creditAllocationPaise, quote.currency)}
+                </dd>
+              </div>
+            )}
+            {isTopUp && s.expiryAt && (
+              <div>
+                <dt className="text-xs text-[#3D3650]">Credit lot expires</dt>
+                <dd className="text-[#170B2E]">{formatDate(s.expiryAt)}</dd>
+              </div>
+            )}
           </dl>
-          {!isTopUp && (s.features?.length ?? 0) > 0 && (
-            <ul className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs text-[#3D3650]">
-              {s.features!.map((f) => (
-                <li key={f} className="flex items-center gap-1.5">
-                  <CheckCircle2 size={12} className="text-emerald-600" /> {featureName(f)}
-                </li>
-              ))}
-            </ul>
-          )}
           <p className="mt-5 text-xs text-[#3D3650]">
-            {isTopUp
-              ? 'Top-up credits are added to your balance as soon as payment is confirmed.'
-              : 'Your plan activates and its credits are added as soon as payment is confirmed.'}
+            {isTopUp && (s.unallocatedRemainderPaise ?? 0) > 0
+              ? `${formatMoneyExact(s.unallocatedRemainderPaise!, quote.currency)} is not allocated to a whole credit and is not carried forward. `
+              : ''}
+            Credits are rounded down to whole units. The payable total below
+            applies the existing discounts and tax calculation; the credit lot
+            is added only after payment is confirmed.
           </p>
         </section>
 
-        <section className="lg:col-span-2 rounded-2xl border border-[#E7DFF5] bg-white p-6 h-fit" data-testid="checkout-totals">
-          <h2 className="text-sm font-semibold text-[#170B2E] mb-3">Order summary</h2>
+        <section
+          className="lg:col-span-2 rounded-2xl border border-[#E7DFF5] bg-white p-6 h-fit"
+          data-testid="checkout-totals"
+        >
+          <h2 className="text-sm font-semibold text-[#170B2E] mb-3">
+            Order summary
+          </h2>
           <div className="flex flex-col gap-2 text-sm">
-            <Row label="Subtotal" value={formatMoneyExact(quote.subtotalPaise, quote.currency)} />
+            <Row
+              label="Subtotal"
+              value={formatMoneyExact(quote.subtotalPaise, quote.currency)}
+            />
             {quote.discountPaise > 0 && (
               <Row
                 label={`Discount${quote.discountPercent != null ? ` (${quote.discountPercent}%)` : ''}${quote.discountReason ? ` — ${quote.discountReason}` : ''}`}
                 value={`−${formatMoneyExact(quote.discountPaise, quote.currency)}`}
               />
             )}
-            <Row label={`GST (${quote.taxPercent}%)`} value={formatMoneyExact(quote.taxPaise, quote.currency)} />
+            <Row
+              label={`GST (${quote.taxPercent}%)`}
+              value={formatMoneyExact(quote.taxPaise, quote.currency)}
+            />
             <div className="flex items-center justify-between border-t border-[#E7DFF5] pt-2 text-base font-bold text-[#170B2E]">
               <span>Total</span>
-              <span data-testid="checkout-total">{formatMoneyExact(quote.totalPaise, quote.currency)}</span>
+              <span data-testid="checkout-total">
+                {formatMoneyExact(quote.totalPaise, quote.currency)}
+              </span>
             </div>
           </div>
-          {offersAutoRenew && (
-            <label
-              className={`mt-5 flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm transition-colors ${
-                autoRenew ? 'border-[#7F40E8] bg-[#F8F4FD]' : 'border-[#E7DFF5]'
-              }`}
-              data-testid="auto-renew-option"
-            >
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 accent-[#7F40E8]"
-                checked={autoRenew}
-                disabled={processing}
-                onChange={(e) => setAutoRenew(e.target.checked)}
-              />
-              <span>
-                <span className="flex items-center gap-1.5 font-semibold text-[#170B2E]">
-                  <RefreshCw size={13} className="text-[#7F40E8]" /> Auto-renew every {s.intervalLabel ?? 'period'}
-                </span>
-                <span className="mt-0.5 block text-xs text-[#3D3650]">
-                  {autoRenew
-                    ? `We’ll charge ${formatMoneyExact(quote.autoRenew.amountPaise ?? quote.totalPaise, quote.currency)} (incl. GST) at the start of each ${s.intervalLabel ?? 'period'} and add a fresh set of credits. You’re notified before each renewal and can turn it off anytime from Billing.`
-                    : 'Off — your plan ends after this period unless you renew it from Billing.'}
-                </span>
-              </span>
-            </label>
-          )}
-          <Button className="w-full mt-5" size="lg" onClick={pay} loading={processing} disabled={processing}>
-            {processing ? 'Processing payment…' : `Pay ${formatMoneyExact(quote.totalPaise, quote.currency)}`}
+          <Button
+            className="w-full mt-5"
+            size="lg"
+            onClick={pay}
+            loading={processing}
+            disabled={processing}
+          >
+            {processing
+              ? 'Processing payment…'
+              : `Pay ${formatMoneyExact(quote.totalPaise, quote.currency)}`}
           </Button>
           <p className="mt-3 text-[11px] text-[#3D3650] flex items-start gap-1.5">
-            <ShieldCheck size={13} className="shrink-0 mt-0.5 text-emerald-600" />
-            {autoRenewOn
-              ? 'Pay by card or UPI Autopay. You authorize a recurring mandate for this plan only; renewals are charged at the price shown, and any price change is announced before it applies.'
-              : 'One-time payment by card, UPI or netbanking. Nothing else is charged later.'}
+            <ShieldCheck
+              size={13}
+              className="shrink-0 mt-0.5 text-emerald-600"
+            />
+            One-time payment by card, UPI or netbanking. Nothing else is charged
+            later.
           </p>
           {processing && (
-            <p className="mt-2 text-[11px] text-[#3D3650] inline-flex items-center gap-1.5" role="status">
-              <Loader2 size={12} className="animate-spin" /> Complete the payment in the secure payment window.
+            <p
+              className="mt-2 text-[11px] text-[#3D3650] inline-flex items-center gap-1.5"
+              role="status"
+            >
+              <Loader2 size={12} className="animate-spin" /> Complete the
+              payment in the secure payment window.
             </p>
           )}
         </section>
@@ -325,7 +412,9 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 text-[#3D3650]">
       <span>{label}</span>
-      <span className="font-medium text-[#170B2E] whitespace-nowrap">{value}</span>
+      <span className="font-medium text-[#170B2E] whitespace-nowrap">
+        {value}
+      </span>
     </div>
   );
 }
@@ -341,7 +430,12 @@ function ResultCard({
   title: string;
   children: React.ReactNode;
 }) {
-  const border = tone === 'success' ? 'rgba(16,185,129,0.3)' : tone === 'error' ? 'rgba(239,68,68,0.3)' : '#E7DFF5';
+  const border =
+    tone === 'success'
+      ? 'rgba(16,185,129,0.3)'
+      : tone === 'error'
+        ? 'rgba(239,68,68,0.3)'
+        : '#E7DFF5';
   return (
     <section
       role={tone === 'error' ? 'alert' : 'status'}

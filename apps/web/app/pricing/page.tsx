@@ -1,36 +1,18 @@
 import type { Metadata } from "next";
-import { ContentSection, PublicPage } from "../components/marketing/PublicPage";
 import PricingSection from "../components/PricingSection";
-import { PlanEstimator } from "../components/marketing/InteractiveTools";
-import { Reveal } from "../components/motion/Reveal";
 import { pageMetadata } from "../lib/seo";
 
 export const metadata: Metadata = pageMetadata({
-   title: "Pricing: Prepaid Plans for Calling & AI APIs",
+   title: "Pricing: Prepaid Credits for Calling & AI APIs",
    description:
-      "Simple prepaid plans for PurpleCallio's video, audio and AI voice APIs. Pay upfront, get usage credits, top up when you need more. No surprise usage bills.",
+      "Prepaid credits for PurpleCallio's video, audio and AI voice APIs. See the published per-credit price, buy credits when you need them, and avoid surprise usage bills.",
    path: "/pricing",
 });
 
 export default function PricingPage() {
    return (
       <main className="min-h-screen bg-white pt-20">
-         <PublicPage
-            eyebrow="Pricing"
-            title="Simple prepaid plans for real-time communication"
-            intro="Choose a plan, pay upfront and get usage credits. Calls are measured in participant-minutes and consume credits from your balance — two participants in a ten-minute call use twenty participant-minutes. Predictable monthly pricing, no surprise usage bills."
-            crumbs={[
-               { label: "Home", href: "/" },
-               { label: "Pricing", href: "/pricing" },
-            ]}
-         >
-            <PricingSection variant="full" bare />
-            <Reveal amount={0.1}>
-               <ContentSection title="Estimate your monthly credits">
-                  <PlanEstimator />
-               </ContentSection>
-            </Reveal>
-         </PublicPage>
+         <PricingSection variant="full" />
       </main>
    );
 }

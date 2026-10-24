@@ -386,19 +386,19 @@ const docs = {
       ],
    },
    "usage-billing": {
-      title: "Plans, Credits and Usage",
-      meta: "Video Calling API Plans, Credits & Usage",
+      title: "Prepaid Credits and Usage",
+      meta: "Video Calling API Prepaid Credits & Usage",
       description:
-         "Understand PurpleCallio prepaid plans, included usage credits, participant-minute measurement, credit rates, top-ups and the usage dashboard.",
-      lead: "PurpleCallio uses simple prepaid plans with included usage credits. Usage is measured in participant-minutes — each participant's time in a call — and consumes credits. For example, two participants in a ten-minute call use twenty participant-minutes.",
+         "Understand PurpleCallio's prepaid credit wallet, participant-minute measurement, credit rates, purchases and the usage dashboard.",
+      lead: "PurpleCallio uses a prepaid credit wallet. Usage is measured in participant-minutes — each participant's time in a call — and consumes credits. For example, two participants in a ten-minute call use twenty participant-minutes.",
       sections: [
          [
-            "Plans and credits",
-            "Choose a plan and pay upfront; the plan's included credits are added once payment is confirmed. Audio, video and screen sharing each consume credits at their own rate per participant-minute. Current plans, credits and rates are shown on the pricing page and in the product.",
+            "Buying and using credits",
+            "Choose a monetary purchase amount and review its estimated credits, taxes and total before paying. Credits are added once payment is confirmed. Audio, video and screen sharing each consume credits at their own rate per participant-minute; those rates are separate from the monetary price per credit.",
          ],
          [
-            "Renewals, top-ups and upgrades",
-            "Paid plans auto-renew at the start of each period while auto-renew is on (default at checkout; turn it off anytime in Billing), or renew manually from the Billing page. Plan credits expire at the end of the plan period. Buy one-time top-ups when you need more credits, or upgrade at any time. When credits run out, new calls cannot start; active calls are never interrupted.",
+            "Expiry and additional purchases",
+            "Each purchase is a separate credit lot with its own expiry date. Return to the wallet whenever you need more credits. When credits run out, new calls cannot start; active calls are never interrupted.",
          ],
          [
             "Track usage",
@@ -411,7 +411,7 @@ const docs = {
       meta: "AI Voice Agents API",
       description:
          "Add a real-time AI voice agent to your app: configure agents and tools, create sessions from your backend, and talk to the agent from the browser or React.",
-      lead: "AI voice agents answer your users by voice in real time. You configure the agent in the dashboard, your backend creates a short-lived session, and the browser streams audio through PurpleCallio to the voice model. Available on every paid plan.",
+      lead: "AI voice agents answer your users by voice in real time. You configure the agent in the dashboard, your backend creates a short-lived session, and the browser streams audio through PurpleCallio to the voice model. They unlock after your first verified credit purchase.",
       sections: [
          [
             "Create an agent",

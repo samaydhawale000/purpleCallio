@@ -6,48 +6,33 @@ export default function BillingTermsPage() {
   return (
     <LegalLayout
       title="Billing & Usage Terms"
-      lastUpdated="7 October 2026"
-      intro="These Billing & Usage Terms explain how PurpleCallio's prepaid plans, usage credits, top-ups and payments work, and how usage is measured."
+      lastUpdated="23 October 2026"
+      intro="These Billing & Usage Terms explain prepaid credit purchases, wallet expiry, payments and how service usage is measured."
     >
-      <LegalSection num="1" title="Prepaid Plans">
+      <LegalSection num="1" title="Prepaid Credit Purchases">
         <p>
-          PurpleCallio services are provided through prepaid plans. You choose a plan, review the price
-          and included credits, and pay upfront. A paid plan becomes active only after PurpleCallio
-          confirms your payment, at which point the plan's included credits are added to your account.
+          PurpleCallio uses a prepaid credit wallet. You choose a monetary purchase amount, review the
+          price, applicable taxes and credits to be granted, and pay upfront. Credits are added only after
+          PurpleCallio verifies payment with its payment provider.
         </p>
         <p>
-          The plans, prices, included credits, features, limits and credit rates currently offered are
-          published on the pricing page and are loaded from PurpleCallio's billing service. The terms
-          shown to you at checkout are the terms of your purchase.
+          The administrator publishes the credit price and purchase limits. Checkout records the applicable
+          pricing version, amount, taxes, discounts, credit quantity and expiry policy. A valid quote is not
+          silently changed by a later pricing update.
         </p>
         <PricingAuthority className="mt-5" />
       </LegalSection>
 
-      <LegalSection num="2" title="Plan Duration and Renewal">
+      <LegalSection num="2" title="Subscription Plans">
         <p>
-          Each paid plan runs for the plan period shown at checkout (for example, one month). Each
-          period is paid for at its start, before its credits are added.
+          PurpleCallio does not offer new recurring subscription plans or monthly subscription credit
+          grants. Free accounts do not receive recurring monthly subscription credits. An authorized
+          administrator may grant promotional credits under the applicable campaign or account rules.
         </p>
         <p>
-          <strong>Auto-renew.</strong> When you keep auto-renew on (selected by default at checkout), you
-          authorize a recurring payment mandate (card or UPI Autopay) through our payment provider for
-          that plan. At the start of each new period the provider charges the plan price including GST,
-          and your plan and its included credits are renewed once that payment is confirmed. You are
-          notified before each renewal. If the plan's price, GST or your applicable discount changes, the
-          new amount applies from your next renewal and you are notified before it is charged. You can
-          turn auto-renew off at any time from the Billing page; no further renewal is charged after that.
-          If a renewal payment fails, the provider may retry for a few days while your plan stays active;
-          if it still fails, auto-renew stops and your plan ends.
-        </p>
-        <p>
-          <strong>Manual renewal.</strong> With auto-renew off, you renew from the Billing page and pay for
-          the next period. If you do not renew, your account moves to the Free plan when the paid period
-          ends. Renewal is priced at the plan's then-current price and included credits, which are shown to
-          you before you pay.
-        </p>
-        <p>
-          The Free plan includes a monthly amount of credits as published on the pricing page.
-          PurpleCallio may change the Free plan's included credits, features or limits.
+          Existing subscription records and pre-existing customer terms are retained as historical records.
+          They are not converted or cancelled by these terms; contact support for help with an existing
+          subscription.
         </p>
       </LegalSection>
 
@@ -57,15 +42,15 @@ export default function BillingTermsPage() {
           Service; they have no cash value, are not transferable and cannot be exchanged for money.
         </p>
         <p>
-          Plan credits expire at the end of the plan period they were issued for. Unused plan credits do
-          not carry over unless PurpleCallio states otherwise. Top-up credits expire according to the
-          top-up expiry policy shown at the time of purchase. Your Billing page shows when each set of
-          credits expires. When several sets of credits are available, PurpleCallio may consume the
-          credits that expire soonest first.
+          Purchased credits expire one year after purchase unless the checkout quote states a different
+          published validity period. Expiry uses the UTC calendar-date anniversary. Each purchase is a
+          separate credit lot and does not extend earlier lots. Promotional credits are tracked separately
+          and follow the expiry date shown when granted. The wallet shows lot balances and expiry dates;
+          eligible credits are consumed earliest-expiring first.
         </p>
         <p>
           When your available credits run out, new calls cannot be started until you add credits by
-          purchasing a top-up, renewing or upgrading your plan. Calls already in progress are not
+          purchasing additional credits. Calls already in progress are not
           disconnected because your balance runs out; credits consumed by such calls are recorded against
           your account. PurpleCallio may require a minimum available balance to start a call.
         </p>
@@ -128,69 +113,51 @@ export default function BillingTermsPage() {
         </p>
       </LegalSection>
 
-      <LegalSection num="7" title="Top-ups">
+      <LegalSection num="7" title="Credit Purchases and Auto Top-Up">
         <p>
-          Top-ups are one-time purchases of additional credits. Top-up packages, prices and credit amounts
-          are shown on the pricing page and in your dashboard. A top-up does not change your plan.
+          Manual credit purchases are one-time payments. Auto Top-Up is not currently available. If
+          introduced, it will require explicit customer authorization, a monetary purchase amount and a
+          disclosed spending limit before an automatic payment can be initiated.
         </p>
       </LegalSection>
 
-      <LegalSection num="8" title="Upgrades, Downgrades and Cancellation">
-        <LegalBullets items={[
-          "Upgrade: you pay the full price of the new plan, the new plan starts immediately with its included credits, and any remaining credits from your previous plan stay usable until they expire.",
-          "Downgrade: a downgrade is scheduled for the end of your current paid period. You keep your current plan and its credits until then.",
-          "Cancellation: cancelling takes effect at the end of your current paid period. Your plan remains active, and its credits remain usable, until that date.",
-        ]} />
-      </LegalSection>
-
-      <LegalSection num="9" title="Custom Plans">
+      <LegalSection num="8" title="Payments and Taxes">
         <p>
-          Custom plans are available by agreement. Their price, included credits, limits, features and
-          duration are set out in a private offer that you can review and accept from your dashboard.
-          Payment for a custom plan is made upfront in the same way as for other plans unless otherwise
-          agreed in writing.
-        </p>
-      </LegalSection>
-
-      <LegalSection num="10" title="Payments and Taxes">
-        <p>
-          Payments are processed by our third-party payment provider (such as Razorpay). Plan, custom plan
-          and top-up purchases are payments you authorise at checkout. If you keep auto-renew on for a plan,
-          you also authorise a recurring payment mandate (card or UPI Autopay) for that plan, and each
-          renewal is charged through it at the start of the period, as described in section 2. A receipt is
-          available for every successful payment, including each renewal.
+          Payments are processed by our third-party payment provider (such as Razorpay). Credit purchases
+          are charged as shown in the verified checkout quote. A receipt is available for successful
+          payments.
         </p>
         <p>
           Prices are shown excluding GST. GST at <GstRate fallback="the rate shown at checkout" /> is added to the price of
-          plans, renewals, custom plans and top-ups. Any customer-specific discount agreed with
+          credit purchases. Any customer-specific discount agreed with
           PurpleCallio is applied before GST.
         </p>
         <p>
-          If a payment fails or is not completed, the plan or top-up is not activated and no credits are
+          If a payment fails or is not completed, no credits are
           added. You can try again from the Billing page.
         </p>
       </LegalSection>
 
-      <LegalSection num="11" title="Refunds">
+      <LegalSection num="9" title="Refunds">
         <p>
-          Payments for plans, renewals, custom plans and top-ups are not refunded automatically. Refunds
+          Credit purchase payments are not refunded automatically. Refunds
           may be issued where required by applicable law, for duplicate or erroneous charges, or at
           PurpleCallio's discretion, as described in the Refund &amp; Cancellation Policy. If a payment is
-          refunded, the credits it added may be removed and a refunded plan may end.
+          refunded, the credits it added may be removed.
         </p>
       </LegalSection>
 
-      <LegalSection num="12" title="Usage Notifications">
+      <LegalSection num="10" title="Usage Notifications">
         <p>
           PurpleCallio may notify you when your credit balance runs low, when credits are about to expire
-          and when a plan period is about to end. Customers remain responsible for monitoring their
+          Customers remain responsible for monitoring their
           credit balance.
         </p>
       </LegalSection>
 
-      <LegalSection num="13" title="Legacy Usage Invoices">
+      <LegalSection num="11" title="Legacy Billing Records">
         <p>
-          Before PurpleCallio moved to prepaid plans, some accounts were billed for usage after the fact
+          Before PurpleCallio moved to prepaid credits, some accounts were billed for usage after the fact
           (pay-as-you-go). Legacy usage invoices issued under that model before the change remain valid
           historical records, and any amounts due under them remain payable. They remain viewable from the
           Billing page.

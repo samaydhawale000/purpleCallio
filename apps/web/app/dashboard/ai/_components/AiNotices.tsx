@@ -2,9 +2,8 @@
 
 import Link from 'next/link';
 import { Bot, Sparkles } from 'lucide-react';
-import { PLANS_HREF } from '../../../lib/ai';
 
-/** Shown on every AI page while the account is on the Free plan. */
+/** Shown while the account has not yet completed a credit purchase. */
 export function AiUpgradeCard() {
   return (
     <div
@@ -18,18 +17,18 @@ export function AiUpgradeCard() {
         <Sparkles size={20} style={{ color: '#7F40E8' }} />
       </div>
       <div className="flex-1 min-w-[200px]">
-        <p className="text-sm font-semibold text-[#170B2E]">AI voice agents are available on paid plans</p>
+        <p className="text-sm font-semibold text-[#170B2E]">AI voice agents unlock with prepaid credits</p>
         <p className="text-xs text-[#3D3650] mt-0.5">
-          Upgrade to create agents and talk to them in the playground. Existing agents stay here so you can
+          Add credits to create agents and talk to them in the playground. Existing agents stay here so you can
           disable or delete them.
         </p>
       </div>
       <Link
-        href={PLANS_HREF}
+        href="/dashboard/billing/credits#topups"
         className="inline-flex items-center justify-center text-sm font-medium text-white px-4 py-2.5 rounded-lg"
         style={{ background: 'linear-gradient(135deg, #7F40E8 0%, #410686 100%)' }}
       >
-        View plans
+        Add credits
       </Link>
     </div>
   );
