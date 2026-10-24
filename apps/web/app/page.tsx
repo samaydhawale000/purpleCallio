@@ -266,7 +266,7 @@ export default function LandingPage() {
                <StripeGradient />
             </div>
 
-            <div className="relative mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:gap-8">
+            <div className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:gap-8">
                <div className="min-w-0">
                   <Link
                      href={LIVE_TRANSLATE_PATH}
