@@ -114,7 +114,7 @@ const PRICING_FAQ = [
   { q: 'How are taxes calculated?', a: 'Applicable taxes are calculated in the checkout quote and included in the final payable amount before you pay. The current tax rate is shown alongside the purchase summary where applicable.' },
   { q: 'What happens if a payment is pending or fails?', a: 'Credits are not added until the payment provider confirms a successful payment. A pending or failed payment does not create spendable wallet credits.' },
   { q: 'Can I add credits again when my balance is low?', a: 'Yes. Return to your wallet whenever you need additional credits. New calls may require an available balance, while calls already in progress are not cut off.' },
-  { q: 'Does PurpleCallio offer Auto Top-Up?', a: 'Auto Top-Up is not currently available. You can add prepaid credits manually from your wallet.' },
+  { q: 'Does PurpleCallio offer Auto Top-Up?', a: 'Yes. Eligible accounts can set a credit threshold, top-up amount and monthly maximum in Dashboard → Billing → Credits, then authorize a Razorpay eMandate. A charge is made only after the mandate is confirmed and your balance reaches the threshold. You can disable Auto Top-Up at any time.' },
   { q: 'Can I get a refund?', a: 'Credit purchases are not refunded automatically. Refunds are issued where required by law, for duplicate or erroneous charges, or at PurpleCallio\'s discretion. See the Refund & Cancellation Policy for details.' },
   { q: 'What about my old pay-as-you-go invoices?', a: 'Usage invoices issued before PurpleCallio moved to prepaid plans remain valid historical records. You can still view and download them as legacy usage invoices from the Billing page.' },
 ];

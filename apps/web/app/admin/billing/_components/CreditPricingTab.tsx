@@ -231,7 +231,7 @@ export function CreditPricingTab() {
     <div className="flex flex-col gap-6">
       <Panel
         title="Published credit price"
-        subtitle="Amount based purchases use the rate published here. No default production rate is seeded. Auto Top-Up remains unavailable until the payment provider supports customer-authorized threshold charges."
+        subtitle="Amount-based purchases use the rate published here. Eligible customers can configure Auto Top-Up with a Razorpay eMandate, a balance threshold, a purchase amount and a monthly maximum."
       >
         {data.active ? (
           <div className="text-sm text-[#170B2E]">

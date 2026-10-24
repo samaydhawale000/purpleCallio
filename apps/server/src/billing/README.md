@@ -11,7 +11,7 @@
 
 The administrator creates a draft `CreditPricingVersion`, previews it, and explicitly publishes it. Published versions are immutable and may be scheduled. No credit price is seeded because the repository contains no single approved rate to preserve; an administrator must publish the approved rate before amount-based credit checkout is available.
 
-The admin draft form exposes only currency (currently INR), price per credit, and purchased-credit validity (365 days by default). Prices use integer paise and allow up to two decimal places when entered in rupees; for example, ₹0.20 is stored as 20 paise per credit. Purchase limits remain server-side checkout policy (new drafts use the existing ₹1,000 minimum and no maximum by default), and Auto Top-Up is unavailable. Legacy optional limit keys sent by older clients are ignored during draft validation.
+The admin draft form exposes currency (currently INR), price per credit, purchased-credit validity (365 days by default), and Auto Top-Up policy bounds. Prices use integer paise and allow up to two decimal places when entered in rupees; for example, ₹0.20 is stored as 20 paise per credit. Purchase limits and Auto Top-Up limits remain server-side checkout policy. Legacy optional limit keys sent by older clients are ignored during draft validation.
 
 Checkout accepts a monetary amount. The server validates account eligibility and the active pricing version's amount/quantity limits, computes `floor(amountMinor / creditPriceMinor)`, and shows the value allocated to whole credits plus any remainder that is not carried forward. The existing discount and tax calculation remains unchanged and appears separately in the payable total. The payment snapshot retains the pricing version, rate, credits, quote expiry, and lot expiry. The browser cannot choose authoritative prices or credits.
 
@@ -27,22 +27,22 @@ An account may purchase if it is active, has completed its profile, and is not b
 
 Subscription plan purchase, renewal, upgrade, custom-offer checkout, and new subscription auto-renew setup are disabled. Historical subscription rows and provider webhooks are preserved. This code does not cancel provider mandates or alter existing paid terms. Before deployment, inventory active subscriptions and mandates and follow an approved customer migration/consent policy.
 
-**Auto Top-Up is not implemented or available.** The schema includes future settings/attempt records and credit-pricing policy bounds, but there are no customer endpoints, authorized threshold-triggered provider charge, retry/reconciliation workflow, or customer configuration UI. The active `PaymentProvider` deliberately exposes customer-completed checkout and provider-scheduled subscription mandates only; it has no server-initiated charge operation. Razorpay saved-card tokens are not a merchant authorization for an off-session wallet charge: their normal reuse flow requires customer interaction. Razorpay Subscriptions are fixed plan-and-interval mandates, so the existing subscription auto-renew integration cannot safely be repurposed for a balance-threshold purchase. The marketing page and terms state that Auto Top-Up is unavailable.
+**Auto Top-Up is supported for eligible accounts.** A customer saves a credit threshold, top-up amount and monthly maximum, explicitly authorizes a Razorpay eMandate, and enables the setting only after the signed mandate flow confirms it. The server claims one threshold-triggered attempt at a time, reserves confirmed and in-flight monthly spend, creates a provider charge, and grants credits only after authoritative payment confirmation. Failed attempts are recorded with bounded retries and surfaced as customer attention states.
 
-To enable this feature, first obtain and verify a Razorpay product/API that explicitly permits variable, merchant-initiated threshold debits for the target market, including mandate registration, customer consent, pre-debit/AFA compliance, cancellation, and signed payment-status webhooks. Then add that capability to `PaymentProvider`, build the customer authorization and settings APIs, atomically claim threshold attempts from wallet debit events, and fulfill confirmed payments idempotently through `BillingFulfillmentService`. Do not use a saved-card token or a scheduled subscription mandate as a substitute.
+The Razorpay integration requires provider credentials, `RAZORPAY_CHARGE_AT_WILL_ENABLED=true`, and an account-approved `RAZORPAY_EMANDATE_AUTH_TYPE`. Production charging remains separately gated by `RAZORPAY_CHARGE_AT_WILL_LIVE_ENABLED=true` after verified test-mode validation. Do not substitute a saved-card token or a scheduled subscription mandate for this customer-authorized flow.
 
 ## Schema and migrations
 
 The database is PostgreSQL/Prisma (not MongoDB). Additive migrations are:
 
 - `20261023120000_credit_pricing_versions`: immutable versioned price and purchase policy.
-- `20261023130000_prepaid_access_auto_topup`: prepaid access/eligibility fields and future Auto Top-Up records.
+- `20261023130000_prepaid_access_auto_topup`: prepaid access/eligibility fields and Auto Top-Up settings and attempt records.
 
 Apply migrations through the normal deployment process after a database backup. Review migration SQL and the target database before applying. No production database, customer account, or Razorpay account was accessed during this code change.
 
 ## Relevant endpoints
 
-- Customer: `GET /billing/credit-pricing/current`, `GET /billing/credit-pricing`, `GET /billing/credits`, existing credit history, quote, checkout, payment verification, and payment status endpoints.
+- Customer: `GET /billing/credit-pricing/current`, `GET /billing/credit-pricing`, `GET /billing/credits`, existing credit history, quote, checkout, payment verification, payment status, and `/billing/auto-topup` configuration, mandate and attempt endpoints.
 - Admin: `GET /admin/billing/credit-pricing`, draft create/update, preview, confirmed publish/schedule, cancel, and `POST /admin/billing/promotional-credits`.
 - Existing plan routes remain for historical data and account management where applicable, but new plan/renewal checkout is rejected.
 

@@ -580,7 +580,7 @@ export function AutoTopUpExplainer() {
   return (
     <div data-testid="auto-topup-explainer">
       <p className="mb-5 max-w-3xl text-sm text-[#3D3650]">
-        Auto Top-Up is not available yet. You can buy prepaid credits manually from your wallet; this page will show the feature once its payment authorization and trigger flow are active.
+        Keep your wallet funded automatically. Choose a credit threshold, a top-up amount and a monthly maximum in your wallet, then authorize a Razorpay eMandate. Auto Top-Up only charges after your mandate is confirmed, and you can disable it at any time.
       </p>
     </div>
   );
@@ -695,7 +695,7 @@ function SubHeading({ children }: { children: React.ReactNode }) {
  * Public prepaid pricing, fed by GET /billing/credit-rates (consumption rates,
  * GST) and GET /billing/credit-pricing/current (price per credit).
  * `summary` (homepage) renders a link to the pricing page; `full` adds the
- * credit explainer, Auto Top-Up and Live Translate.
+ * credit explainer, Auto Top-Up details and Live Translate.
  */
 export default function PricingSection({ variant = 'summary', bare = false }: { variant?: 'summary' | 'full'; /** Inside a page that already has its own heading and gutters. */ bare?: boolean }) {
   const state = usePublicPricing();

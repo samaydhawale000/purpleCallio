@@ -115,9 +115,11 @@ export default function BillingTermsPage() {
 
       <LegalSection num="7" title="Credit Purchases and Auto Top-Up">
         <p>
-          Manual credit purchases are one-time payments. Auto Top-Up is not currently available. If
-          introduced, it will require explicit customer authorization, a monetary purchase amount and a
-          disclosed spending limit before an automatic payment can be initiated.
+          Manual credit purchases are one-time payments. Eligible customers can also configure Auto
+          Top-Up by choosing a credit threshold, a monetary purchase amount and a monthly maximum, then
+          explicitly authorizing a Razorpay eMandate. An automatic charge can occur only after the
+          mandate is confirmed and the available credit balance reaches the chosen threshold. Customers
+          can disable Auto Top-Up at any time.
         </p>
       </LegalSection>
 
