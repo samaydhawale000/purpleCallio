@@ -105,10 +105,10 @@ type SessionRow = Prisma.TranslationSessionGetPayload<{ select: typeof SESSION_S
 
 /** Benchmarks are filled in from the Phase 0 evaluation; placeholders until then. */
 const BENCHMARKS = [
-  { pair: 'hi-en', route: 'openai-translate' },
-  { pair: 'en-hi', route: 'openai-translate' },
-  { pair: 'mr-en', route: 'sarvam' },
-  { pair: 'ta-en', route: 'sarvam' },
+  { pair: 'hi-en', route: 'soniox' },
+  { pair: 'en-hi', route: 'soniox' },
+  { pair: 'mr-en', route: 'soniox' },
+  { pair: 'ta-en', route: 'soniox' },
 ].map((b) => ({ ...b, termPreservation: null, note: 'pending Phase 0' }));
 
 /**

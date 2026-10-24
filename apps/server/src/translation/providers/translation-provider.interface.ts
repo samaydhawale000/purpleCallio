@@ -86,7 +86,7 @@ export abstract class TranslationProviderSession extends EventEmitter<Translatio
 }
 
 export interface TranslationProvider {
-  /** Route id: 'openai-translate' | 'sarvam' | 'mock'. */
+  /** Route id: 'soniox' | 'mock'. */
   readonly name: string;
   isConfigured(): boolean;
   supports(source: string, target: string, mode: TranslationProviderMode): boolean;

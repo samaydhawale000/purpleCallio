@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { TranslationMode } from '@prisma/client';
 
 import { LANGUAGE_TAG } from '../ai/dto/validators';
+import { normalizeLanguage } from './languages';
 
 /**
  * Validated shape of `Call.translationConfig` (see translation/PROTOCOL.md §1).
@@ -89,7 +90,7 @@ export function isValidLanguage(
 ): value is string {
   if (typeof value !== 'string') return false;
   if (value === 'auto') return !!opts.allowAuto;
-  return LANGUAGE_TAG.test(value);
+  return LANGUAGE_TAG.test(value) && normalizeLanguage(value) !== null;
 }
 
 /** Throws 400 TRANSLATION_INVALID_LANGUAGE unless the value is absent or valid. */

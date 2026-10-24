@@ -224,15 +224,10 @@ describe('TranslationReportService', () => {
 });
 
 describe('ActiveReportSummarizer', () => {
-  it('uses OpenAI when configured, else the extractive fallback', async () => {
-    let configured = false;
-    const openai = { name: 'openai', isConfigured: () => configured, summarize: jest.fn().mockResolvedValue('o') };
+  it('always uses the local extractive summarizer', async () => {
     const fallback = { name: 'extractive', isConfigured: () => true, summarize: jest.fn().mockResolvedValue('e') };
-    const s = new ActiveReportSummarizer(openai as never, fallback as never);
+    const s = new ActiveReportSummarizer(fallback as never);
     expect(s.name).toBe('extractive');
     expect(await s.summarize({} as never)).toBe('e');
-    configured = true;
-    expect(s.name).toBe('openai');
-    expect(await s.summarize({} as never)).toBe('o');
   });
 });

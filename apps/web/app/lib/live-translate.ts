@@ -18,6 +18,7 @@ import {
    type LucideIcon,
 } from "lucide-react";
 import { PURPLECALLIO_API_URL } from "./brand";
+import { SONIOX_FALLBACK_LANGUAGES } from "./soniox-languages";
 
 export const LIVE_TRANSLATE_PATH = "/features/live-translation";
 export const LIVE_TRANSLATE_DOCS_PATH = "/docs/live-translate";
@@ -125,7 +126,8 @@ export interface TranslationLanguage {
  * Voice and captions availability is unknown here, so both show as
  * "being validated" rather than as supported.
  */
-export const FALLBACK_LANGUAGES: TranslationLanguage[] = [
+export const FALLBACK_LANGUAGES: TranslationLanguage[] = SONIOX_FALLBACK_LANGUAGES;
+/* Legacy literal kept below temporarily for source-history readability.
    { code: "hi", name: "Hindi", nativeName: "हिन्दी", voice: null, captions: null },
    { code: "mr", name: "Marathi", nativeName: "मराठी", voice: null, captions: null },
    { code: "ta", name: "Tamil", nativeName: "தமிழ்", voice: null, captions: null },
@@ -142,7 +144,7 @@ export const FALLBACK_LANGUAGES: TranslationLanguage[] = [
    { code: "es", name: "Spanish", nativeName: "Español", voice: null, captions: null },
    { code: "fr", name: "French", nativeName: "Français", voice: null, captions: null },
    { code: "de", name: "German", nativeName: "Deutsch", voice: null, captions: null },
-];
+]; */
 
 export const PRICING_FALLBACK = "Pricing set at launch";
 

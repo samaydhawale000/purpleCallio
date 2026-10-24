@@ -1,21 +1,19 @@
 import { Injectable, Optional } from '@nestjs/common';
 
 import { MockTranslationProvider } from './mock/mock.provider';
-import { OpenAiTranslateProvider } from './openai/openai-translate.provider';
-import { SarvamProvider } from './sarvam/sarvam.provider';
+import { SonioxProvider } from './soniox/soniox.provider';
 import { TranslationProvider } from './translation-provider.interface';
 
-/** All translation routes by id (`openai-translate`, `sarvam`, `mock`). */
+/** All translation routes by id (`soniox`, `mock`). */
 @Injectable()
 export class TranslationProviderRegistry {
   private readonly providers = new Map<string, TranslationProvider>();
 
   constructor(
     mock: MockTranslationProvider,
-    @Optional() openai?: OpenAiTranslateProvider,
-    @Optional() sarvam?: SarvamProvider,
+    @Optional() soniox?: SonioxProvider,
   ) {
-    for (const p of [mock, openai, sarvam]) {
+    for (const p of [mock, soniox]) {
       if (p) this.providers.set(p.name, p);
     }
   }

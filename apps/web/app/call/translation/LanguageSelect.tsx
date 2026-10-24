@@ -10,6 +10,7 @@ import {
    scriptForLanguage,
 } from "@purplecallio/sdk";
 import type { CallTranslationTheme } from "./theme";
+import { SONIOX_FALLBACK_LANGUAGES } from "../../lib/soniox-languages";
 
 export interface CallLanguage {
    code: string;
@@ -17,12 +18,13 @@ export interface CallLanguage {
    nativeName: string;
    rtl?: boolean;
    /** Undefined when the server list isn't available (no badge shown). */
-   voice?: boolean;
-   captions?: boolean;
+   voice?: boolean | null;
+   captions?: boolean | null;
 }
 
 /** Used only if `GET /translation/languages` can't be reached. */
-export const FALLBACK_LANGUAGES: CallLanguage[] = [
+export const FALLBACK_LANGUAGES: CallLanguage[] = SONIOX_FALLBACK_LANGUAGES;
+/* Legacy literal kept below temporarily for source-history readability.
    { code: "en", name: "English", nativeName: "English" },
    { code: "hi", name: "Hindi", nativeName: "हिन्दी" },
    { code: "mr", name: "Marathi", nativeName: "मराठी" },
@@ -38,7 +40,7 @@ export const FALLBACK_LANGUAGES: CallLanguage[] = [
    { code: "es", name: "Spanish", nativeName: "Español" },
    { code: "fr", name: "French", nativeName: "Français" },
    { code: "de", name: "German", nativeName: "Deutsch" },
-];
+]; */
 
 const cache = new Map<string, Promise<CallLanguage[]>>();
 
