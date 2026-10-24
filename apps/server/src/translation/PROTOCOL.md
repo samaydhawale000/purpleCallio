@@ -14,7 +14,7 @@ the same change.
 - **mode**: `off` | `captions` | `voice` (DB enum `OFF` | `CAPTIONS` | `VOICE`).
 - **language**: lowercase ISO-639-1/3 code, optional region (`hi`, `en`, `en-IN`)
   or `auto` (speak side only). Validated with `LANGUAGE_TAG` plus `auto`.
-- **route**: provider route id: `openai-translate`, `sarvam`, `mock`.
+- **route**: provider route id: `soniox` (or `mock` for explicit local tests).
 - **phraseId**: `<role>-<seq>` (e.g. `caller-12`), unique per call, assigned by
   the server relay.
 
@@ -59,7 +59,7 @@ Live relays apply it immediately (server emits `mode` / `ready` again).
 ### GET /translation/languages  (public, no auth)
 ```jsonc
 { "languages": [ { "code": "mr", "name": "Marathi", "nativeName": "मराठी", "script": "Deva", "rtl": false,
-                   "voice": true, "captions": true, "routes": ["sarvam"] } ],
+                   "voice": true, "captions": true, "routes": ["soniox"] } ],
   "pairs": "all-to-all; voice availability is per target language" }
 ```
 
@@ -74,7 +74,7 @@ Live relays apply it immediately (server emits `mode` / `ready` again).
 - `DELETE /translation/lexicons/:id/terms/:termId`
 - `POST /translation/lexicons/:id/import` body `{ csv: string }` (columns `term,kind,lang:hi,lang:ta,…,pronunciation`)
 - `GET /translation/lexicons/packs` → built-in industry packs; `POST /translation/lexicons/from-pack` `{ industry, name? }`
-- `GET /translation/metrics?from&to&pair=hi-en&route=sarvam` → see §5.
+- `GET /translation/metrics?from&to&pair=hi-en&route=soniox` → see §5.
 
 ### Dashboard mirrors (JwtGuard, owner must own the project)
 Same handlers under `/dashboard/translation/projects/:projectId/...`
@@ -299,8 +299,8 @@ that need other rates resample internally (shared `translation/audio/pcm.ts`).
   "latency": { "firstAudioMsP50", "firstAudioMsP95", "captionDelayMsP50", "captionDelayMsP95" },
   "reliability": { "providerFailures", "fallbacks", "droppedFrames", "failedSessions" },
   "guard": { "phrases", "flags", "flagRate", "byReason": { "term_mismatch:amount": 3 }, "replays", "repeats", "lexiconHits" },
-  "byPair": [ { "pair": "mr-en", "route": "sarvam", "sessions", "minutes", "firstAudioMsP50", "flagRate" } ],
-  "benchmarks": [ { "pair": "hi-en", "route": "openai-translate", "termPreservation": null, "note": "pending Phase 0" } ] }
+  "byPair": [ { "pair": "mr-en", "route": "soniox", "sessions", "minutes", "firstAudioMsP50", "flagRate" } ],
+  "benchmarks": [ { "pair": "hi-en", "route": "soniox", "termPreservation": null, "note": "pending Phase 0" } ] }
 ```
 Provider cost is **never** returned to customers (admin margin endpoint only).
 Latency definitions: firstAudioMs = `translatedAudioAt - endedAt` (or
@@ -336,10 +336,10 @@ Daily purge of expired phrases/reports.
 
 ## 8. Defaults & environment
 
-`TRANSLATION_ENABLED` (default false), `TRANSLATION_DEFAULT_ROUTE` (unset →
-router table), `OPENAI_API_KEY`, `OPENAI_TRANSLATE_MODEL`
-(default `gpt-realtime-translate`), `SARVAM_API_KEY`,
+`TRANSLATION_ENABLED` (default false), `SONIOX_API_KEY`,
+`SONIOX_STT_MODEL` (default `stt-rt-v5`), `SONIOX_TTS_MODEL` (default
+`tts-rt-v2`), `SONIOX_TTS_VOICE` (default `Adrian`),
 `TRANSLATION_MOCK_PROVIDER` (`true` forces the mock route — local/internal
 testing), `TRANSLATION_MAX_CONCURRENT_CALLS_PER_ACCOUNT` (5),
-`TRANSLATION_GLOBAL_MAX_CONCURRENT_CALLS` (100), `TRANSLATION_REPORT_MODEL`
+`TRANSLATION_GLOBAL_MAX_CONCURRENT_CALLS` (100)
 (default `gpt-5-mini`).

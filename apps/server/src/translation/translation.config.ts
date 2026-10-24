@@ -9,8 +9,6 @@ export interface TranslationEnvConfig {
   mockProvider: boolean;
   maxConcurrentCallsPerAccount: number;
   globalMaxConcurrentCalls: number;
-  /** Forced route id, or null to use the router table. */
-  defaultRoute: string | null;
   /** Mock provider: delay before the translation of a phrase. */
   mockLatencyMs: number;
 }
@@ -31,7 +29,6 @@ function boolEnv(name: string, fallback: boolean): boolean {
 }
 
 export function translationConfig(): TranslationEnvConfig {
-  const route = process.env.TRANSLATION_DEFAULT_ROUTE?.trim().toLowerCase();
   return {
     enabled: boolEnv('TRANSLATION_ENABLED', false),
     mockProvider: boolEnv('TRANSLATION_MOCK_PROVIDER', false),
@@ -43,7 +40,6 @@ export function translationConfig(): TranslationEnvConfig {
       'TRANSLATION_GLOBAL_MAX_CONCURRENT_CALLS',
       100,
     ),
-    defaultRoute: route || null,
     mockLatencyMs: intEnv('TRANSLATION_MOCK_LATENCY_MS', 300, true),
   };
 }

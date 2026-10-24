@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { isIndic, normalizeLanguage, voiceSupported } from '../languages';
+import { normalizeLanguage } from '../languages';
 import { isProduction, translationConfig } from '../translation.config';
 import {
   TranslationProvider,
@@ -11,33 +11,20 @@ import { TranslationProviderRegistry } from './translation-provider.registry';
 export interface TranslationRoutePick {
   provider: TranslationProvider;
   route: string;
-  /** Tried once if the primary fails (connect or mid-call error). */
+  /** Always null: Live Translate deliberately has no provider fallback. */
   fallback: TranslationProvider | null;
   /** May be 'captions' when voice was asked for a language with no voice. */
   mode: TranslationProviderMode;
 }
 
-const SARVAM = 'sarvam';
-const OPENAI = 'openai-translate';
+const SONIOX = 'soniox';
 
 function norm(lang: string): string {
   if (lang === 'auto') return 'auto';
   return (normalizeLanguage(lang) ?? lang).toLowerCase();
 }
 
-function isEnglish(lang: string): boolean {
-  return lang === 'en' || lang.startsWith('en-');
-}
-
-/**
- * Launch routing table (PROTOCOL.md §8):
- * - Indian↔Indian and Indian↔English → sarvam (fallback openai-translate when
- *   it supports the pair);
- * - every other pair → openai-translate;
- * - voice into a language the route can't speak → captions;
- * - TRANSLATION_MOCK_PROVIDER=true, or no real route configured outside
- *   production → mock.
- */
+/** Soniox is the sole production route.  The mock is opt-in/local only. */
 @Injectable()
 export class TranslationRouter {
   constructor(private readonly registry: TranslationProviderRegistry) {}
@@ -57,38 +44,10 @@ export class TranslationRouter {
     const usable = (p: TranslationProvider | null, m: TranslationProviderMode) =>
       !!p && p.name !== 'mock' && p.isConfigured() && p.supports(source, target, m);
 
-    // Explicit override (still has to be able to serve the pair).
-    if (config.defaultRoute) {
-      const forced = this.registry.get(config.defaultRoute);
-      if (forced?.name === 'mock') return this.result(forced, null, source, target, mode);
-      if (forced && (usable(forced, mode) || usable(forced, 'captions'))) {
-        return this.result(forced, null, source, target, mode);
-      }
-    }
-
-    const sourceIndic = source !== 'auto' && isIndic(source);
-    const targetIndic = isIndic(target);
-    const indicRoute =
-      (sourceIndic && (targetIndic || isEnglish(target))) ||
-      (targetIndic && (source === 'auto' || isEnglish(source) || sourceIndic));
-    const order = indicRoute ? [SARVAM, OPENAI] : [OPENAI, SARVAM];
-    const candidates = order
-      .map((name) => this.registry.get(name))
-      .filter((p): p is TranslationProvider => !!p);
-
-    // Voice where some route can speak the target; else captions.
-    const wantVoice = mode === 'voice' && voiceSupported(target);
-    let effective: TranslationProviderMode = wantVoice ? 'voice' : 'captions';
-    let primary = candidates.find((p) => usable(p, effective)) ?? null;
-    if (!primary && effective === 'voice') {
-      effective = 'captions';
-      primary = candidates.find((p) => usable(p, 'captions')) ?? null;
-    }
-    if (primary) {
-      const fallback =
-        candidates.find((p) => p !== primary && usable(p, effective)) ?? null;
-      return { provider: primary, route: primary.name, fallback, mode: effective };
-    }
+    const soniox = this.registry.get(SONIOX);
+    if (soniox && usable(soniox, mode)) return this.result(soniox, null, source, target, mode);
+    if (soniox && mode === 'voice' && usable(soniox, 'captions'))
+      return this.result(soniox, null, source, target, 'captions');
 
     if (!isProduction() && mock && this.registry.configured().length === 0) {
       return this.result(mock, null, source, target, mode);

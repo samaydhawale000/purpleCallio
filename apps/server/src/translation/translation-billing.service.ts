@@ -53,7 +53,7 @@ export function translationCreditsFor(input: {
   return { credits: raw > 0 ? Math.ceil(raw - 1e-6) : 0, trialSeconds: trial };
 }
 
-/** Provider cost per direction-minute by route (`sarvam-voice` before `sarvam`). */
+/** Provider cost per direction-minute by route (for example `soniox-voice`). */
 export function providerCostPaiseFor(
   costs: unknown,
   route: string,

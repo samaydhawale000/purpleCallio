@@ -22,8 +22,7 @@ import { TranslationTranscriptWriter } from './translation-transcript.writer';
 import { TranslationProviderRegistry } from './providers/translation-provider.registry';
 import { TranslationRouter } from './providers/translation-router';
 import { MockTranslationProvider } from './providers/mock/mock.provider';
-import { OpenAiTranslateProvider } from './providers/openai/openai-translate.provider';
-import { SarvamProvider } from './providers/sarvam/sarvam.provider';
+import { SonioxProvider } from './providers/soniox/soniox.provider';
 
 import { TranslationSettingsService } from './translation-settings.service';
 import { TranslationLexiconService } from './translation-lexicon.service';
@@ -31,7 +30,6 @@ import { TranslationMetricsService } from './translation-metrics.service';
 import { TranslationEstimateService } from './translation-estimate.service';
 import { TranslationAdminService } from './translation-admin.service';
 import { TranslationReportService } from './report/translation-report.service';
-import { OpenAiReportSummarizer } from './report/openai-summarizer';
 import { ExtractiveReportSummarizer } from './report/extractive-summarizer';
 import { reportSummarizerProvider } from './report/summarizer.provider';
 
@@ -60,8 +58,7 @@ import { reportSummarizerProvider } from './report/summarizer.provider';
     TranslationTranscriptWriter,
     // Provider routes
     MockTranslationProvider,
-    OpenAiTranslateProvider,
-    SarvamProvider,
+    SonioxProvider,
     TranslationProviderRegistry,
     TranslationRouter,
     // REST / dashboard / admin
@@ -73,7 +70,6 @@ import { reportSummarizerProvider } from './report/summarizer.provider';
     // Stateless audit writer (not exported by BillingModule).
     BillingAuditService,
     // Post-Call Suite
-    OpenAiReportSummarizer,
     ExtractiveReportSummarizer,
     reportSummarizerProvider,
     TranslationReportService,
