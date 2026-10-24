@@ -1,24 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { formatCredits, intervalLabel } from "../lib/billing";
-import { formatRate, gstNote, planPrice, sortPlans, topUpExpiryText, usePublicPricing } from "../lib/public-pricing";
+import { formatCredits } from "../lib/billing";
+import { formatRate, gstNote, purchaseExpiryText, usePublicPricing, usePublishedCreditPricing } from "../lib/public-pricing";
 
 /**
- * The public display of record for plans and credit rates. Every value comes
+ * The public display of record for credit prices and usage rates. Every value comes
  * from GET /billing/plans — used by the FAQ, docs and billing terms.
  */
-export function PricingAuthority({ className = "", showPlans = true }: { className?: string; showPlans?: boolean }) {
+export function PricingAuthority({ className = "" }: { className?: string; showPlans?: boolean }) {
    const state = usePublicPricing();
+   const creditPrice = usePublishedCreditPricing();
 
    return (
       <section
          className={`rounded-xl border border-[#D6C4EE] bg-[#7F40E8]/5 p-5 ${className}`}
-         aria-label="Current PurpleCallio plans and credit rates"
+         aria-label="Current PurpleCallio credit pricing and usage rates"
       >
-         <p className="font-semibold text-[#170B2E]">Current plans and credit rates</p>
+         <p className="font-semibold text-[#170B2E]">Prepaid credit pricing</p>
          <p className="mt-2 text-sm leading-6 text-[#3D3650]">
-            <strong>PurpleCallio uses simple prepaid plans with included usage credits.</strong> Usage is measured in
+            <strong>PurpleCallio uses prepaid credits with no recurring subscription plan.</strong> Usage is measured in
             participant-minutes and each media type — audio, video and screen sharing — consumes credits at its own
             rate. Screen sharing is its own category, not a surcharge on video.
          </p>
@@ -44,25 +45,20 @@ export function PricingAuthority({ className = "", showPlans = true }: { classNa
                               <td className="py-3">{formatRate(rate as number)}</td>
                            </tr>
                         ))}
+                        {state.data.creditRates.aiCreditsPerMinute != null && (
+                           <tr className="border-b border-[#E7DFF5] last:border-0">
+                              <th className="py-3 pr-4 font-medium text-[#170B2E]">AI voice</th>
+                              <td className="py-3">
+                                 {formatRate(state.data.creditRates.aiCreditsPerMinute)} per call minute (after first credit purchase)
+                              </td>
+                           </tr>
+                        )}
                      </tbody>
                   </table>
                </div>
 
-               {showPlans && state.data.plans.length > 0 && (
-                  <ul className="mt-5 space-y-1 text-sm text-[#3D3650]">
-                     {sortPlans(state.data.plans).map((p) => {
-                        const price = planPrice(p);
-                        return (
-                           <li key={p.id}>
-                              <strong className="text-[#170B2E]">{p.name}:</strong> {price.amount}
-                              {price.suffix ? ` ${price.suffix}` : ""}
-                              {p.version && !p.customPricing
-                                 ? ` · ${formatCredits(p.version.includedCredits)} credits per ${intervalLabel(p.version)}`
-                                 : ""}
-                           </li>
-                        );
-                     })}
-                  </ul>
+               {creditPrice.status === "ready" && creditPrice.data && (
+                  <p className="mt-5 text-sm text-[#3D3650]">Current published price: <strong>{(creditPrice.data.creditPricePaise / 100).toLocaleString("en-IN", { style: "currency", currency: creditPrice.data.currency })} per credit</strong>. Minimum purchase: {(creditPrice.data.minimumPurchasePaise / 100).toLocaleString("en-IN", { style: "currency", currency: creditPrice.data.currency })}.</p>
                )}
 
                <div className="mt-5 space-y-2 text-sm leading-6 text-[#3D3650]">
@@ -76,25 +72,25 @@ export function PricingAuthority({ className = "", showPlans = true }: { classNa
                      independently of video usage.
                   </p>
                   <p>
-                     {gstNote(state.data.creditRates)} {topUpExpiryText(state.data.creditRates)}
+                     {gstNote(state.data.creditRates)} {creditPrice.status === "ready" ? purchaseExpiryText(creditPrice.data) : ""}
                   </p>
                   <p>
                      <Link href="/pricing" className="font-medium text-[#6425C4] hover:text-[#170B2E]">
-                        See full plan details →
+                        See prepaid credit pricing →
                      </Link>
                   </p>
                </div>
             </>
          ) : state.status === "error" ? (
             <p className="mt-4 text-sm text-[#3D3650]">
-               Current plans and credit rates are temporarily unavailable.{" "}
+               Current credit rates are temporarily unavailable.{" "}
                <button type="button" onClick={state.retry} className="font-medium text-[#6425C4] underline">
                   Retry
                </button>
             </p>
          ) : (
             <p role="status" className="mt-4 text-sm text-[#3D3650]">
-               Loading current plans and credit rates…
+               Loading current credit rates…
             </p>
          )}
       </section>

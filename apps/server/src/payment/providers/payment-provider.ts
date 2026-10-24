@@ -1,13 +1,16 @@
 /**
- * Provider-agnostic one-time payment abstraction used by prepaid billing.
+ * Provider-agnostic payment abstraction used by prepaid billing: one-time
+ * checkout payments plus recurring mandates for auto-renew.
  *
  * The billing engine only knows about a `Payment` and these operations —
  * never a provider SDK. Razorpay is the first implementation; Stripe, bank
  * transfer or manual invoicing can be added by implementing this interface
  * and registering it in PaymentProviderRegistry.
  *
- * Deliberately has no "charge a saved card" operation: prepaid billing only
- * ever takes payments the customer completes themselves at checkout.
+ * Deliberately has no "charge a saved card" operation: we never initiate a
+ * charge ourselves. Payments are either completed by the customer at
+ * checkout, or are renewals the provider charges against a mandate the
+ * customer authorised (createSubscription) for auto-renew.
  */
 
 export interface ProviderCheckoutInput {
@@ -60,6 +63,38 @@ export interface ProviderPayment {
   errorDescription?: string | null;
 }
 
+/** Razorpay Charge-at-Will / eMandate.  This is intentionally separate from
+ * subscriptions: the merchant, not Razorpay's subscription scheduler,
+ * creates each subsequent payment. */
+export interface ProviderChargeAtWillAuthorizationInput {
+  authorizationId: string;
+  customer: { name?: string | null; email: string; contact: string };
+  currency: string;
+  maxAmountPaise: number;
+  expiresAt: Date;
+  /** Account-approved Razorpay eMandate method, e.g. netbanking. */
+  authType: string;
+  notes: Record<string, string>;
+}
+export interface ProviderChargeAtWillAuthorization {
+  providerOrderId: string;
+  providerCustomerId: string;
+  publicKey: string;
+  currency: string;
+}
+export interface ProviderChargeAtWillChargeInput {
+  paymentId: string;
+  providerOrderId: string;
+  providerCustomerId: string;
+  providerTokenId: string;
+  amountPaise: number;
+  currency: string;
+  email: string;
+  contact: string;
+  description: string;
+  notes: Record<string, string>;
+}
+
 export type ProviderEventType =
   | 'payment.captured'
   | 'payment.authorized'
@@ -74,6 +109,10 @@ export type ProviderEventType =
   | 'subscription.halted'
   | 'subscription.cancelled'
   | 'subscription.completed'
+  | 'token.confirmed'
+  | 'token.rejected'
+  | 'token.cancelled'
+  | 'token.paused'
   | 'unknown';
 
 // ── Recurring mandates (auto-renew) ─────────────────────────────────────
@@ -161,6 +200,10 @@ export interface PaymentProvider {
     providerSubscriptionId: string,
     atCycleEnd: boolean,
   ): Promise<void>;
+  createChargeAtWillAuthorization(
+    input: ProviderChargeAtWillAuthorizationInput,
+  ): Promise<ProviderChargeAtWillAuthorization>;
+  createChargeAtWillPayment(input: ProviderChargeAtWillChargeInput): Promise<ProviderPayment>;
 }
 
 export const PAYMENT_PROVIDER = 'PAYMENT_PROVIDER';

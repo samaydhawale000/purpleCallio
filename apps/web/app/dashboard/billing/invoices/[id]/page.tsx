@@ -152,7 +152,7 @@ export default function InvoiceDetailPage() {
       </div>
 
       <div className="rounded-lg border border-[#E7DFF5] px-4 py-3 text-xs text-[#3D3650]" style={{ background: '#F8F4FD' }}>
-        This invoice is from the previous billing model and is kept for your records. PurpleCallio now uses prepaid plans and credits.
+        This invoice is from the previous billing model and is kept for your records. PurpleCallio now uses prepaid credit purchases.
       </div>
 
       <Card padding glow>

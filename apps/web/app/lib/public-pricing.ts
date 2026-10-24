@@ -1,56 +1,82 @@
 /**
  * Helpers for the public (marketing) pricing surfaces: pricing page, homepage,
- * FAQ, docs and legal pages. Everything is derived from GET /billing/plans via
- * `getPublicPricing()` — nothing here hard-codes a price, credit amount,
- * feature or rate.
+ * FAQ, docs and legal pages. PurpleCallio sells prepaid credits — there are no
+ * subscription plans to list. Everything shown is fetched:
+ *
+ *  - consumption rates + GST from GET /billing/credit-rates
+ *  - the admin-published price per credit from GET /billing/credit-pricing/current
+ *
+ * Nothing here hard-codes a price, credit amount or rate.
  */
 import { useCallback, useEffect, useState } from 'react';
-import {
-  formatMoney,
-  getPublicPricing,
-  intervalLabel,
-  type CreditRates,
-  type Feature,
-  type Plan,
-  type PlanVersion,
-  type PublicPricing,
-} from './billing';
+import { api } from './api';
+import { formatMoney, getPublishedCreditPricing, type CreditRates, type PublishedCreditPricing } from './billing';
 
-// ── Fetching (one request shared by every pricing widget on a page) ───────
+export interface PublicPricing {
+  creditRates: CreditRates;
+}
+
+// ── Shared fetch cache (one request per endpoint for every widget on a page) ──
 const CACHE_TTL_MS = 5 * 60 * 1000;
-let cached: { at: number; promise: Promise<PublicPricing> } | null = null;
+
+function createCache<T>(load: () => Promise<T>) {
+  let cached: { at: number; promise: Promise<T> } | null = null;
+  return {
+    get(): Promise<T> {
+      if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.promise;
+      const promise = load().catch((err) => {
+        cached = null;
+        throw err;
+      });
+      cached = { at: Date.now(), promise };
+      return promise;
+    },
+    reset() {
+      cached = null;
+    },
+  };
+}
+
+const ratesCache = createCache<PublicPricing>(() =>
+  api.get<CreditRates>('/billing/credit-rates').then((r) => ({ creditRates: r.data })),
+);
+const creditPriceCache = createCache<PublishedCreditPricing | null>(() =>
+  // An unpublished price comes back as null / an empty body.
+  getPublishedCreditPricing('INR').then((p) => (p && typeof p === 'object' && p.creditPricePaise > 0 ? p : null)),
+);
 
 export function loadPublicPricing(): Promise<PublicPricing> {
-  if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.promise;
-  const promise = getPublicPricing().catch((err) => {
-    cached = null;
-    throw err;
-  });
-  cached = { at: Date.now(), promise };
-  return promise;
+  return ratesCache.get();
+}
+
+export function loadPublishedCreditPricing(): Promise<PublishedCreditPricing | null> {
+  return creditPriceCache.get();
 }
 
 /** Test hook / manual refresh. */
 export function resetPublicPricingCache() {
-  cached = null;
+  ratesCache.reset();
+  creditPriceCache.reset();
 }
 
-export type PublicPricingState =
+export type LoadState<T> =
   | { status: 'loading'; data: null; retry: () => void }
   | { status: 'error'; data: null; retry: () => void }
-  | { status: 'ready'; data: PublicPricing; retry: () => void };
+  | { status: 'ready'; data: T; retry: () => void };
 
-export function usePublicPricing(): PublicPricingState {
-  const [data, setData] = useState<PublicPricing | null>(null);
+export type PublicPricingState = LoadState<PublicPricing>;
+
+function useCached<T>(load: () => Promise<T>, reset: () => void): LoadState<T> {
+  const [result, setResult] = useState<{ data: T } | null>(null);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
-    loadPublicPricing()
+    load()
       .then((d) => {
         if (active) {
-          setData(d);
+          setResult({ data: d });
           setError(false);
         }
       })
@@ -60,113 +86,56 @@ export function usePublicPricing(): PublicPricingState {
     return () => {
       active = false;
     };
-  }, [attempt]);
+  }, [attempt, load]);
 
   const retry = useCallback(() => {
-    resetPublicPricingCache();
+    reset();
     setError(false);
-    setData(null);
+    setResult(null);
     setAttempt((n) => n + 1);
-  }, []);
+  }, [reset]);
 
-  if (data) return { status: 'ready', data, retry };
+  if (result) return { status: 'ready', data: result.data, retry };
   if (error) return { status: 'error', data: null, retry };
   return { status: 'loading', data: null, retry };
 }
 
-// ── Plans ────────────────────────────────────────────────────────────────
-export function sortPlans(plans: Plan[]): Plan[] {
-  return [...plans].sort((a, b) => a.displayOrder - b.displayOrder);
-}
-
-/** True when the plan is the "talk to us" / custom offering. */
-export function isContactPlan(plan: Plan) {
-  return plan.customPricing || plan.ctaAction === 'CONTACT_SALES';
-}
-
-export function isFreePlan(plan: Plan) {
-  return plan.type === 'FREE' || (!plan.customPricing && (plan.version?.pricePaise ?? 0) === 0);
-}
-
-/** Price headline + interval suffix ("₹0", "₹2,999" + "per month", or "Custom pricing"). */
-export function planPrice(plan: Plan): { amount: string; suffix: string | null } {
-  if (plan.customPricing || !plan.version) return { amount: 'Custom pricing', suffix: null };
-  const v = plan.version;
-  const interval = intervalLabel(v);
-  return {
-    amount: formatMoney(v.pricePaise, v.currency),
-    suffix: interval ? `per ${interval}` : null,
-  };
-}
-
-/** Display-only "was" price shown struck through: 30% above the real price, rounded up to a whole rupee. */
-const COMPARE_PRICE_MARKUP = 1.3;
-
-export function planComparePrice(plan: Plan): string | null {
-  const v = plan.version;
-  if (plan.customPricing || !v || v.pricePaise <= 0) return null;
-  const paise = Math.ceil((v.pricePaise * COMPARE_PRICE_MARKUP) / 100) * 100;
-  return formatMoney(paise, v.currency);
-}
-
-export function planCtaLabel(plan: Plan): string {
-  if (plan.ctaLabel) return plan.ctaLabel;
-  switch (plan.ctaAction) {
-    case 'SIGNUP':
-      return 'Get started';
-    case 'CONTACT_SALES':
-      return 'Talk to us';
-    default:
-      return `Choose ${plan.name}`;
-  }
+/** Live consumption rates and GST (GET /billing/credit-rates). */
+export function usePublicPricing(): PublicPricingState {
+  return useCached(loadPublicPricing, ratesCache.reset);
 }
 
 /**
- * Where a plan's CTA goes. Logged-out visitors go through sign-up, which
- * remembers the choice (/signup?plan=<slug> or /signup?intent=custom) and
- * routes them to the plan / custom-plan flow after authentication.
+ * The admin-published price per credit (GET /billing/credit-pricing/current).
+ * `data` is null while no price has been published yet.
  */
-export function planCtaHref(plan: Plan, loggedIn: boolean): string {
-  switch (plan.ctaAction) {
-    case 'SIGNUP':
-      return loggedIn ? '/dashboard/billing' : '/signup';
-    case 'CONTACT_SALES':
-      return loggedIn ? '/dashboard/billing/plans?custom=1' : '/signup?intent=custom';
-    case 'CHECKOUT':
-    default:
-      return loggedIn
-        ? `/dashboard/billing/plans?plan=${encodeURIComponent(plan.slug)}`
-        : `/signup?plan=${encodeURIComponent(plan.slug)}`;
-  }
+export function usePublishedCreditPricing(): LoadState<PublishedCreditPricing | null> {
+  return useCached(loadPublishedCreditPricing, creditPriceCache.reset);
 }
 
-/** How many months one plan period covers (for monthly-equivalent comparisons). */
-export function periodMonths(v: Pick<PlanVersion, 'billingInterval' | 'intervalCount'>): number {
-  const count = Math.max(1, v.intervalCount || 1);
-  if (v.billingInterval === 'YEAR') return 12 * count;
-  if (v.billingInterval === 'CUSTOM') return count / 30;
-  return count;
+// ── Prepaid purchases ────────────────────────────────────────────────────
+/** Whole credits a purchase amount buys at the published rate (rounded down, like the server). */
+export function creditsForAmount(amountPaise: number, pricing: Pick<PublishedCreditPricing, 'creditPricePaise'>): number {
+  if (!pricing.creditPricePaise || pricing.creditPricePaise <= 0 || !Number.isFinite(amountPaise)) return 0;
+  return Math.max(0, Math.floor(amountPaise / pricing.creditPricePaise));
 }
 
-export function monthlyCredits(plan: Plan): number | null {
-  if (!plan.version) return null;
-  return plan.version.includedCredits / periodMonths(plan.version);
+/** "12 months after purchase" for the default 365-day validity, otherwise "N days after purchase". */
+export function validityPhrase(days: number | null | undefined): string {
+  if (!days || days === 365 || days === 366) return '12 months after purchase';
+  return `${days.toLocaleString('en-IN')} days after purchase`;
 }
 
-/** Feature key → registry display name (unknown keys fall back to the key). */
-export function featureNames(features: Feature[]): Map<string, string> {
-  return new Map(features.map((f) => [f.key, f.name]));
+export function purchaseExpiryText(pricing: Pick<PublishedCreditPricing, 'purchasedValidityDays'> | null | undefined): string {
+  return `Purchased credits expire ${validityPhrase(pricing?.purchasedValidityDays)}, per purchase.`;
 }
 
-function humanize(key: string) {
-  const spaced = key
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[_-]+/g, ' ')
-    .trim()
-    .toLowerCase();
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+export function minimumPurchaseText(pricing: Pick<PublishedCreditPricing, 'minimumPurchasePaise' | 'currency'>): string {
+  return `Minimum purchase ${formatMoney(pricing.minimumPurchasePaise, pricing.currency)}`;
 }
 
+export const PRICE_NOT_PUBLISHED =
+  'Credit pricing will be published soon. Consumption rates below already apply to every credit you hold.';
 
 // ── Credits ──────────────────────────────────────────────────────────────
 export const formatRate = (n: number) => (n ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
@@ -217,35 +186,6 @@ export function estimateUsage(profile: UsageProfile, rates: Pick<CreditRates, 'a
     screenShareCredits,
     totalCredits: Math.ceil(audioCredits + videoCredits + screenShareCredits),
   };
-}
-
-/**
- * Smallest self-serve plan whose monthly-equivalent included credits cover
- * the estimate; otherwise the custom plan (if one is public); otherwise null.
- */
-export function recommendPlan(credits: number, plans: Plan[]): { plan: Plan | null; kind: 'fits' | 'custom' | 'none' } {
-  const selfServe = sortPlans(plans)
-    .filter((p) => !isContactPlan(p) && p.version)
-    .sort((a, b) => (monthlyCredits(a) ?? 0) - (monthlyCredits(b) ?? 0));
-  const fit = selfServe.find((p) => (monthlyCredits(p) ?? 0) >= credits);
-  if (fit) return { plan: fit, kind: 'fits' };
-  const custom = sortPlans(plans).find(isContactPlan) ?? null;
-  return custom ? { plan: custom, kind: 'custom' } : { plan: null, kind: 'none' };
-}
-
-export function topUpExpiryText(rates: Pick<CreditRates, 'topUpExpiryPolicy' | 'topUpExpiryDays'>): string {
-  switch (rates.topUpExpiryPolicy) {
-    case 'NEVER':
-      return 'Top-up credits currently do not expire.';
-    case 'DAYS':
-      return rates.topUpExpiryDays
-        ? `Top-up credits currently expire ${rates.topUpExpiryDays} days after purchase.`
-        : 'Top-up credits expire according to the policy shown at purchase.';
-    case 'SUBSCRIPTION_END':
-      return 'Top-up credits currently expire at the end of your plan period.';
-    default:
-      return 'Top-up credits expire according to the policy shown at purchase.';
-  }
 }
 
 export function gstNote(rates: Pick<CreditRates, 'taxPercent'>): string {

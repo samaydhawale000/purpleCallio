@@ -101,8 +101,8 @@ export default function TermsPage() {
 
       <LegalSection num="6" title="Plans, Credits and Usage">
         <p>
-          Paid use of the Service is provided through prepaid plans. You choose a plan, pay upfront, and
-          the plan's included usage credits are added to your account once PurpleCallio confirms your
+          Paid use of the Service is provided through a prepaid credit wallet. You choose a monetary purchase
+          amount, review the applicable credit estimate and taxes, and receive credits after PurpleCallio confirms
           payment. Usage of the Service consumes credits from your balance. Usage may include:
         </p>
         <LegalBullets items={[
@@ -118,23 +118,18 @@ export default function TermsPage() {
           published by PurpleCallio, subject to applicable rounding rules and usage events.
         </p>
         <p>
-          Paid plans run for the plan period shown at checkout and renew automatically at the start of each
-          period while auto-renew is on (you may turn it off at any time, or renew manually). Plan credits expire at the end of the plan period. Top-ups are one-time credit
-          purchases whose expiry is shown at the time of purchase. Upgrades start immediately at the new
-          plan's price, with remaining credits from the previous plan usable until they expire; downgrades
-          and cancellations take effect at the end of the current paid period. Custom plans are available
-          by agreement. When credits run out, new calls cannot be started until credits are added. Full
-          details are set out in the Billing &amp; Usage Terms, which form part of these Terms.
+          Purchased credits are one-time wallet purchases whose expiry is shown at checkout. Each purchase
+          is a separate lot and does not extend earlier lots. When credits run out, new calls cannot be
+          started until credits are added. Full details are set out in the Billing &amp; Usage Terms, which form
+          part of these Terms.
         </p>
       </LegalSection>
 
       <LegalSection num="7" title="Payment">
         <p>
-          Payments are processed through third-party payment providers such as Razorpay. Plan, custom
-          plan and top-up purchases are payments you authorise at checkout. If you keep auto-renew on, you
-          also authorise a recurring mandate for that plan only, and each renewal is charged at the start of
-          the period at the price you were notified of; you can turn it off at any time. PurpleCallio does
-          not otherwise charge your payment method.
+          Payments are processed through third-party payment providers such as Razorpay. Credit purchases
+          are one-time payments you authorise at checkout. PurpleCallio does not otherwise charge your
+          payment method.
         </p>
         <p>
           Payments are not refunded automatically. Refunds are issued where required by law, for
@@ -153,8 +148,8 @@ export default function TermsPage() {
 
       <LegalSection num="8" title="Failed Payments and Outstanding Amounts">
         <p>
-          If a payment fails or is not completed, the related plan, renewal or top-up is not activated and
-          no credits are added. If amounts remain unpaid (for example, under a legacy usage invoice),
+          If a payment fails or is not completed, no credits are added. If amounts remain unpaid (for
+          example, under a legacy usage invoice),
           PurpleCallio may:
         </p>
         <LegalBullets items={[

@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { formatCredits, intervalLabel } from "../../lib/billing";
-import { estimateUsage, gstNote, planCtaHref, planCtaLabel, planPrice, recommendPlan, usePublicPricing } from "../../lib/public-pricing";
+import { formatCredits, formatMoney } from "../../lib/billing";
+import { estimateUsage, gstNote, PRICE_NOT_PUBLISHED, usePublicPricing, usePublishedCreditPricing } from "../../lib/public-pricing";
 import { useAuthStore } from "../../store/auth.store";
 import { PURPLECALLIO_API_URL } from '../../lib/brand';
 
@@ -290,13 +290,15 @@ function NumberField({ label, value, onChange, min = 0, max }: { label: string; 
    );
 }
 
-/** "Which plan fits your usage?" — credits estimated from the API's credit rates. */
-export function PlanEstimator() {
+/** "How many credits will you need?" — credits estimated from the API's consumption rates. */
+export function CreditEstimator() {
    const state = usePublicPricing();
+   const priceState = usePublishedCreditPricing();
+   const credit = priceState.status === "ready" ? priceState.data : null;
    const token = useAuthStore((s) => s.token);
    const [calls, setCalls] = useState(100);
    // Calls are one-to-one (caller → receiver): always two participants.
-  const people = 2;
+   const people = 2;
    const [minutes, setMinutes] = useState(15);
    const [videoPct, setVideoPct] = useState(50);
    const [screenPct, setScreenPct] = useState(10);
@@ -304,14 +306,14 @@ export function PlanEstimator() {
    const estimate = state.status === "ready"
       ? estimateUsage({ callsPerMonth: calls, avgParticipants: people, avgMinutes: minutes, videoPercent: videoPct, screenSharePercent: screenPct }, state.data.creditRates)
       : null;
-   const rec = estimate && state.status === "ready" ? recommendPlan(estimate.totalCredits, state.data.plans) : null;
+   const valuePaise = estimate && credit ? estimate.totalCredits * credit.creditPricePaise : null;
 
    return (
-      <section className="rounded-2xl border border-[#E7DFF5] bg-white p-5 md:p-8" aria-label="Plan estimator">
-         <h2 className="text-2xl font-bold text-[#170B2E]">Which plan fits your usage?</h2>
+      <section className="rounded-2xl border border-[#E7DFF5] bg-white p-5 md:p-8" aria-label="Credit estimator">
+         <h2 className="text-2xl font-bold text-[#170B2E]">How many credits will you need?</h2>
          <p className="mt-2 text-sm text-[#3D3650]">
-            Describe a typical month. We convert it to participant-minutes and credits using the current credit rates and
-            suggest the smallest plan whose included credits cover it. This is an estimate, not a quote.
+            Describe a typical month. We convert it to participant-minutes and credits using the current consumption
+            rates. This is an estimate, not a quote — buy as many credits as you like, whenever you need them.
          </p>
          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             <NumberField label="Calls per month" value={calls} onChange={setCalls} max={1000000} />
@@ -347,27 +349,26 @@ export function PlanEstimator() {
                      <p className="mt-1 text-xl font-bold text-[#170B2E]" data-testid="estimated-credits">{formatCredits(estimate.totalCredits)}</p>
                   </div>
                </div>
-               <div className="mt-5 rounded-xl border border-[#D6C4EE] p-5" data-testid="plan-recommendation">
-                  {rec?.kind === "fits" && rec.plan ? (
+               <div className="mt-5 rounded-xl border border-[#D6C4EE] p-5" data-testid="credit-estimate-value">
+                  {valuePaise != null && credit ? (
                      <>
-                        <p className="text-sm text-[#3D3650]">Recommended plan</p>
+                        <p className="text-sm text-[#3D3650]">At the published price of {formatMoney(credit.creditPricePaise, credit.currency)} per credit</p>
                         <p className="mt-1 text-lg font-bold text-[#170B2E]">
-                           {rec.plan.name}{" "}
-                           <span className="text-sm font-normal text-[#3D3650]">
-                              — {planPrice(rec.plan).amount}{planPrice(rec.plan).suffix ? ` ${planPrice(rec.plan).suffix}` : ""}, {formatCredits(rec.plan.version?.includedCredits ?? 0)} credits per {intervalLabel(rec.plan.version)}
-                           </span>
+                           ≈ {formatMoney(valuePaise, credit.currency)} of credits a month{" "}
+                           <span className="text-sm font-normal text-[#3D3650]">before GST</span>
                         </p>
-                        <Link href={planCtaHref(rec.plan, Boolean(token))} className="mt-3 inline-block text-sm font-medium text-[#6425C4] hover:text-[#170B2E]">{planCtaLabel(rec.plan)} →</Link>
-                     </>
-                  ) : rec?.kind === "custom" && rec.plan ? (
-                     <>
-                        <p className="text-sm text-[#3D3650]">Your usage is above our standard plans.</p>
-                        <p className="mt-1 text-lg font-bold text-[#170B2E]">{rec.plan.name} — custom pricing</p>
-                        <Link href={planCtaHref(rec.plan, Boolean(token))} className="mt-3 inline-block text-sm font-medium text-[#6425C4] hover:text-[#170B2E]">{planCtaLabel(rec.plan)} →</Link>
+                        {valuePaise < credit.minimumPurchasePaise && (
+                           <p className="mt-1 text-xs text-[#3D3650]">
+                              The minimum purchase is {formatMoney(credit.minimumPurchasePaise, credit.currency)}; unused credits stay in your wallet until they expire.
+                           </p>
+                        )}
                      </>
                   ) : (
-                     <p className="text-sm text-[#3D3650]">Your usage is above our standard plans. Choose the largest plan and add top-ups, or contact us about a custom plan.</p>
+                     <p className="text-sm text-[#3D3650]">{priceState.status === "loading" ? "Loading published credit pricing…" : PRICE_NOT_PUBLISHED}</p>
                   )}
+                  <Link href={token ? "/dashboard/billing/credits#topups" : "/signup"} className="mt-3 inline-block text-sm font-medium text-[#6425C4] hover:text-[#170B2E]">
+                     {token ? "Buy credits" : "Create an account to buy credits"} →
+                  </Link>
                </div>
                <p className="mt-3 text-xs text-[#3D3650]">{gstNote(state.data!.creditRates)}</p>
             </>
@@ -386,7 +387,7 @@ const quickstartSteps = [
    ["Join the call", "const meeting = new PurpleCallioMeeting({ token, callId, signalUrl });\nawait meeting.join();", "The participant joins the call.", "Test microphone and camera."],
    ["Test audio and video", "await meeting.microphone.enable();\nawait meeting.camera.enable();", "The browser asks for media permission.", "Test screen sharing."],
    ["Test screen sharing", "await meeting.screenShare.start();", "The browser presents its display-selection picker.", "Inspect usage."],
-   ["Inspect usage", "Open Dashboard → Usage to review audio, video, and screen-sharing participant-minutes.", "Usage is shown by category.", "Review plans and credits."],
+   ["Inspect usage", "Open Dashboard → Usage to review audio, video, and screen-sharing participant-minutes.", "Usage is shown by category.", "Review your credit balance."],
 ] as const;
 
 export function QuickstartStepper() {

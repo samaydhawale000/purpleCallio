@@ -4,6 +4,8 @@ export type BillingTab =
   | 'topups'
   | 'features'
   | 'credit-rates'
+  | 'credit-pricing'
+  | 'translation'
   | 'subscriptions'
   | 'payments'
   | 'custom-plans'
@@ -11,23 +13,20 @@ export type BillingTab =
 
 export const BILLING_TABS: { key: BillingTab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
-  { key: 'plans', label: 'Plans' },
-  { key: 'topups', label: 'Top-ups' },
-  { key: 'features', label: 'Features' },
   { key: 'credit-rates', label: 'Credit Rates' },
-  { key: 'subscriptions', label: 'Subscriptions' },
+  { key: 'credit-pricing', label: 'Credit Pricing' },
+  { key: 'translation', label: 'Live Translate' },
+  { key: 'subscriptions', label: 'Legacy records' },
   { key: 'payments', label: 'Payments' },
-  { key: 'custom-plans', label: 'Custom Plans' },
   { key: 'settings', label: 'Settings' },
 ];
 
 /** Sidebar sub-navigation under Admin → Billing. */
 export const BILLING_NAV: { label: string; tab: BillingTab }[] = [
-  { label: 'Plans', tab: 'plans' },
-  { label: 'Top-ups', tab: 'topups' },
-  { label: 'Subscriptions', tab: 'subscriptions' },
+  { label: 'Credit Pricing', tab: 'credit-pricing' },
+  { label: 'Legacy billing records', tab: 'subscriptions' },
   { label: 'Payments', tab: 'payments' },
   { label: 'Credits', tab: 'credit-rates' },
-  { label: 'Custom Plans', tab: 'custom-plans' },
+  { label: 'Live Translate', tab: 'translation' },
   { label: 'Billing Settings', tab: 'settings' },
 ];

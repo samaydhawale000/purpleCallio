@@ -1,6 +1,17 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { BillingConfig, Prisma, TopUpExpiryPolicy } from '@prisma/client';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
+import {
+  BillingConfig,
+  NotificationType,
+  Prisma,
+  TopUpExpiryPolicy,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 import { BillingAuditService } from './billing-audit.service';
 
 export interface MediaMinutes {
@@ -22,6 +33,7 @@ export type BillingConfigUpdate = Partial<
     | 'audioCreditsPerMinute'
     | 'videoCreditsPerMinute'
     | 'screenShareCreditsPerMinute'
+    | 'aiCreditsPerMinute'
     | 'taxPercent'
     | 'lowCreditThresholds'
     | 'minimumCreditsToStartCall'
@@ -31,13 +43,55 @@ export type BillingConfigUpdate = Partial<
     | 'pendingCheckoutTtlHours'
     | 'autoRenewDefault'
     | 'autoRenewGraceHours'
+    | 'freeAccountsCanPurchaseCredits'
+    | 'freeAccountsCanUseAutoTopUp'
+    // Live Translate (translation/PROTOCOL.md §4)
+    | 'translationVoiceCreditsPerMinute'
+    | 'translationCaptionsCreditsPerMinute'
+    | 'translationIndicVoiceCreditsPerMinute'
+    | 'translationMinimumCredits'
+    | 'translationTrialMinutes'
+    | 'postCallReportCredits'
+    | 'translationProviderCostsPaise'
+    | 'translationMarginWarnPercent'
+    | 'translationDefaultMaxMinutes'
+    | 'translationMaxBudgetCredits'
   >
 >;
+
+/** Translation fields that are whole numbers with a lower bound (and optional upper bound). */
+const TRANSLATION_INT_FIELDS: {
+  field: keyof BillingConfigUpdate;
+  min: number;
+  max?: number;
+  nullable?: boolean;
+}[] = [
+  { field: 'translationVoiceCreditsPerMinute', min: 1 },
+  { field: 'translationCaptionsCreditsPerMinute', min: 1 },
+  { field: 'translationIndicVoiceCreditsPerMinute', min: 1, nullable: true },
+  { field: 'translationMinimumCredits', min: 0, nullable: true },
+  { field: 'translationTrialMinutes', min: 0 },
+  { field: 'postCallReportCredits', min: 0 },
+  { field: 'translationMarginWarnPercent', min: 0, max: 100 },
+  { field: 'translationDefaultMaxMinutes', min: 1, max: 600 },
+  { field: 'translationMaxBudgetCredits', min: 1 },
+];
+
+/** Customer-facing translation prices: a change notifies recent translation users. */
+export const TRANSLATION_RATE_FIELDS = [
+  'translationVoiceCreditsPerMinute',
+  'translationCaptionsCreditsPerMinute',
+  'translationIndicVoiceCreditsPerMinute',
+  'postCallReportCredits',
+] as const;
+
+const PROVIDER_COST_KEY = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
 const INT_FIELDS = [
   'audioCreditsPerMinute',
   'videoCreditsPerMinute',
   'screenShareCreditsPerMinute',
+  'aiCreditsPerMinute',
   'taxPercent',
   'minimumCreditsToStartCall',
   'renewalReminderDays',
@@ -59,9 +113,12 @@ export function toCredits(minutes: number, creditsPerMinute: number): number {
  */
 @Injectable()
 export class BillingConfigService {
+  private readonly logger = new Logger(BillingConfigService.name);
+
   constructor(
     private prisma: PrismaService,
     private audit: BillingAuditService,
+    @Optional() private notifications?: NotificationService,
   ) {}
 
   async get(
@@ -121,6 +178,14 @@ export class BillingConfigService {
     if (input.taxPercent !== undefined && input.taxPercent > 100) {
       throw new BadRequestException('taxPercent must be between 0 and 100.');
     }
+    // AI calls have a real provider cost, and the per-session balance cap
+    // divides by this rate.
+    if (
+      input.aiCreditsPerMinute !== undefined &&
+      input.aiCreditsPerMinute < 1
+    ) {
+      throw new BadRequestException('aiCreditsPerMinute must be at least 1.');
+    }
     if (
       input.pendingCheckoutTtlHours !== undefined &&
       input.pendingCheckoutTtlHours < 1
@@ -136,6 +201,21 @@ export class BillingConfigService {
         );
       }
       data.autoRenewDefault = input.autoRenewDefault;
+    }
+    if (input.freeAccountsCanPurchaseCredits !== undefined) {
+      if (typeof input.freeAccountsCanPurchaseCredits !== 'boolean')
+        throw new BadRequestException(
+          'freeAccountsCanPurchaseCredits must be true or false.',
+        );
+      data.freeAccountsCanPurchaseCredits =
+        input.freeAccountsCanPurchaseCredits;
+    }
+    if (input.freeAccountsCanUseAutoTopUp !== undefined) {
+      if (typeof input.freeAccountsCanUseAutoTopUp !== 'boolean')
+        throw new BadRequestException(
+          'freeAccountsCanUseAutoTopUp must be true or false.',
+        );
+      data.freeAccountsCanUseAutoTopUp = input.freeAccountsCanUseAutoTopUp;
     }
     if (input.lowCreditThresholds !== undefined) {
       const t = input.lowCreditThresholds;
@@ -166,6 +246,49 @@ export class BillingConfigService {
       }
       data.topUpExpiryDays = input.topUpExpiryDays;
     }
+    for (const { field, min, max, nullable } of TRANSLATION_INT_FIELDS) {
+      const value = input[field] as unknown;
+      if (value === undefined) continue;
+      if (value === null) {
+        if (!nullable)
+          throw new BadRequestException(`${field} cannot be empty.`);
+        (data as Record<string, unknown>)[field] = null;
+        continue;
+      }
+      if (
+        typeof value !== 'number' ||
+        !Number.isInteger(value) ||
+        value < min ||
+        (max !== undefined && value > max)
+      ) {
+        throw new BadRequestException(
+          max !== undefined
+            ? `${field} must be a whole number between ${min} and ${max}.`
+            : `${field} must be a whole number of at least ${min}.`,
+        );
+      }
+      (data as Record<string, unknown>)[field] = value;
+    }
+    if (input.translationProviderCostsPaise !== undefined) {
+      const costs = input.translationProviderCostsPaise as unknown;
+      if (
+        typeof costs !== 'object' ||
+        costs === null ||
+        Array.isArray(costs) ||
+        Object.entries(costs).some(
+          ([k, v]) =>
+            !PROVIDER_COST_KEY.test(k) ||
+            typeof v !== 'number' ||
+            !Number.isInteger(v) ||
+            v < 0,
+        )
+      ) {
+        throw new BadRequestException(
+          'translationProviderCostsPaise must map route ids to non-negative whole paise per minute.',
+        );
+      }
+      data.translationProviderCostsPaise = costs as Prisma.InputJsonValue;
+    }
     const policy = input.topUpExpiryPolicy ?? current.topUpExpiryPolicy;
     const days =
       input.topUpExpiryDays !== undefined
@@ -189,7 +312,81 @@ export class BillingConfigService {
       oldValue: pickChanged(current, input),
       newValue: pickChanged(updated, input),
     });
+    const ratesChanged = TRANSLATION_RATE_FIELDS.some(
+      (f) => input[f] !== undefined && current[f] !== updated[f],
+    );
+    if (ratesChanged) {
+      // Fire-and-forget: notifying customers must never fail the admin edit.
+      void this.notifyTranslationRateChange(current, updated).catch((err) =>
+        this.logger.warn(
+          `Translation rate change notification failed: ${String(err)}`,
+        ),
+      );
+    }
     return updated;
+  }
+
+  /**
+   * Tells every customer who used Live Translate in the last 30 days that
+   * the translation price changed. New rates apply to NEW translation
+   * sessions only: each TranslationSession locks voiceRate/captionsRate at
+   * its start, so a call in progress keeps the price it started with.
+   * Customers with a TranslationRateOverride for a changed field are still
+   * notified (their override keeps applying; the message says so).
+   */
+  async notifyTranslationRateChange(
+    before: BillingConfig,
+    after: BillingConfig,
+  ): Promise<number> {
+    if (!this.notifications) return 0;
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const owners = await this.prisma.translationSession.findMany({
+      where: { startedAt: { gte: since } },
+      distinct: ['ownerId'],
+      select: { ownerId: true },
+    });
+    if (!owners.length) return 0;
+    const parts: string[] = [];
+    const describe = (label: string, a: number | null, b: number | null) => {
+      if (a !== b)
+        parts.push(`${label}: ${a ?? 'standard'} → ${b ?? 'standard'} credits`);
+    };
+    describe(
+      'Voice translation per minute',
+      before.translationVoiceCreditsPerMinute,
+      after.translationVoiceCreditsPerMinute,
+    );
+    describe(
+      'Captions per minute',
+      before.translationCaptionsCreditsPerMinute,
+      after.translationCaptionsCreditsPerMinute,
+    );
+    describe(
+      'Indian-language voice per minute',
+      before.translationIndicVoiceCreditsPerMinute,
+      after.translationIndicVoiceCreditsPerMinute,
+    );
+    describe(
+      'Post-call report',
+      before.postCallReportCredits,
+      after.postCallReportCredits,
+    );
+    const message =
+      `${parts.join('; ')}. New prices apply to translation sessions started from now on; ` +
+      'sessions already in progress keep their price. Custom prices agreed with you are unchanged.';
+    const stamp = after.updatedAt?.getTime?.() ?? Date.now();
+    await Promise.all(
+      owners.map(({ ownerId }) =>
+        this.notifications!.createNotification({
+          userId: ownerId,
+          type: NotificationType.TRANSLATION_RATE_CHANGED,
+          title: 'Live Translate pricing updated',
+          message,
+          dedupeKey: `translation-rate:${stamp}`,
+        }),
+      ),
+    );
+    return owners.length;
   }
 }
 

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -16,6 +17,9 @@ import { CallService } from '../services/call.service';
 import { CreateCallDto } from '../dto/create-call.dto';
 import { WebrtcTransportDto } from '../dto/webrtc-transport.dto';
 import { WebrtcIceDto } from '../dto/webrtc-ice.dto';
+import { ApiKeyOrCallSessionGuard } from '../../translation/controllers/api-key-or-session.guard';
+import { UpdateCallTranslationDto } from '../../translation/dto/translation.dto';
+import { TranslationReportService } from '../../translation/report/translation-report.service';
 
 interface ApiKeyRequest {
   project: { id: string };
@@ -31,7 +35,10 @@ interface CallSessionRequest {
 
 @Controller('calls')
 export class CallController {
-  constructor(private callService: CallService) {}
+  constructor(
+    private callService: CallService,
+    private translationReports: TranslationReportService,
+  ) {}
 
   // Prevents an abused/leaked API key from mass-creating call sessions.
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
@@ -107,6 +114,31 @@ export class CallController {
     @Body() body: WebrtcIceDto,
   ) {
     return this.callService.recordWebrtcIceOutcome(id, req.callSession, body);
+  }
+
+  // Live Translate (translation/PROTOCOL.md §1): the developer backend
+  // (x-api-key) or a participant (bearer session token) changes the mode /
+  // languages mid-call.
+  @Patch(':id/translation')
+  @UseGuards(ApiKeyOrCallSessionGuard)
+  updateTranslation(
+    @Req() req: Partial<ApiKeyRequest> & Partial<CallSessionRequest>,
+    @Param('id') id: string,
+    @Body() body: UpdateCallTranslationDto,
+  ) {
+    return this.callService.updateTranslation(
+      id,
+      req.project
+        ? { projectId: req.project.id }
+        : { sessionCallId: req.callSession?.callId },
+      body,
+    );
+  }
+
+  @Get(':id/translation-report')
+  @UseGuards(ApiKeyGuard)
+  getTranslationReport(@Req() req: ApiKeyRequest, @Param('id') id: string) {
+    return this.translationReports.getReport(id, req.project.id);
   }
 
   @Get(':id/details')

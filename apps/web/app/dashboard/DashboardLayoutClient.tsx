@@ -7,9 +7,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   FolderKanban,
-  KeyRound,
   PhoneCall,
   Play,
+  Bot,
+  Languages,
   Gauge,
   CreditCard,
   BookOpen,
@@ -25,21 +26,27 @@ import { NotificationBell } from '../components/notifications/NotificationBell';
 import { notifyNotificationsChanged } from '../lib/notifications';
 import { useRealtimeEvent } from '../lib/realtime';
 import { useRequireAuth } from '../hooks/useRequireAuth';
+import { useAiStatus } from '../lib/ai';
 import logo from '../assets/images/logo.webp';
 
-const NAV_ITEMS = [
+type NavItem = { label: string; href: string; icon: typeof LayoutDashboard; badge?: string };
+
+const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Notifications', href: '/dashboard/notifications', icon: Bell },
-  { label: 'Projects', href: '/dashboard/projects', icon: FolderKanban },
-  { label: 'API Keys', href: '/dashboard/api-keys', icon: KeyRound },
+  { label: 'Projects & Keys', href: '/dashboard/projects', icon: FolderKanban },
   { label: 'Calls', href: '/dashboard/calls', icon: PhoneCall },
   { label: 'Playground', href: '/dashboard/playground', icon: Play },
+  { label: 'Live Translate', href: '/dashboard/translation', icon: Languages, badge: 'New' },
   { label: 'Usage', href: '/dashboard/usage', icon: Gauge },
   { label: 'Billing', href: '/dashboard/billing', icon: CreditCard },
   { label: 'Documentation', href: '/docs', icon: BookOpen },
   { label: 'Support', href: '/dashboard/support', icon: Headset },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
+
+// Shown after Playground, only while GET /ai/status says AI is enabled.
+const AI_NAV_ITEM: NavItem = { label: 'AI Agents', href: '/dashboard/ai', icon: Bot };
 
 export default function DashboardLayout({
   children,
@@ -51,6 +58,10 @@ const logout = useAuthStore((s) => s.logout);
   const router = useRouter();
   const pathname = usePathname();
   const { isReady } = useRequireAuth();
+  const { status: aiStatus } = useAiStatus();
+  const navItems = aiStatus?.enabled
+    ? NAV_ITEMS.flatMap((item) => (item.href === '/dashboard/playground' ? [item, AI_NAV_ITEM] : [item]))
+    : NAV_ITEMS;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // One subscription per layout; the bell(s) and notification page listen
@@ -140,7 +151,7 @@ const logout = useAuthStore((s) => s.logout);
             Workspace
           </p>
           <div className="flex flex-col gap-0.5">
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const Icon = item.icon;
               const active =
                 pathname === item.href ||
@@ -170,6 +181,11 @@ const logout = useAuthStore((s) => s.logout);
                 >
                   <Icon size={17} style={{ color: active ? '#7F40E8' : undefined }} />
                   {item.label}
+                  {item.badge && (
+                    <span className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#6425C4] bg-[#7F40E8]/10 border border-[#7F40E8]/20">
+                      {item.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}

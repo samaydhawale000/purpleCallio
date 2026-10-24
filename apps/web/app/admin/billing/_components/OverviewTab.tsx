@@ -15,6 +15,7 @@ import { formatCredits, formatDate, formatMoney, PURPOSE_LABEL } from '../../../
 import { formatMinutes as mins } from '../../../lib/duration';
 import { Button } from '../../../components/ui/Button';
 import { useCanWrite } from '../../../lib/admin-access';
+import { AiUsagePanel } from './AiUsagePanel';
 import { ErrorText, Field, inputCls, Panel, rowCls, Spinner, Stat, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
 
@@ -43,7 +44,7 @@ export function OverviewTab() {
         <Stat label="Last 30 days" value={formatMoney(revenue.last30DaysPaise)} />
         <Stat label="MRR" value={formatMoney(revenue.mrrPaise)} hint={`ARR ${formatMoney(revenue.arrPaise)}`} />
         <Stat label="Credits consumed this month" value={formatCredits(usage.creditsConsumed)} />
-        <Stat label="Active paid subscriptions" value={revenue.activePaidSubscriptions} />
+        <Stat label="Legacy paid records" value={revenue.activePaidSubscriptions} hint="Historical records only" />
         <Stat label="Paying customers" value={revenue.payingCustomers} />
         <Stat label="Refunded" value={formatMoney(revenue.refundedPaise)} />
         <Stat
@@ -88,7 +89,7 @@ export function OverviewTab() {
       )}
 
       {migration && (
-        <Panel title="Prepaid migration summary" subtitle="One-time move of existing accounts to prepaid plans.">
+        <Panel title="Prepaid migration summary" subtitle="One-time move of existing accounts to prepaid wallets.">
           <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
             {Object.entries(migration).map(([k, v]) => (
               <div key={k}>
@@ -101,6 +102,8 @@ export function OverviewTab() {
           </dl>
         </Panel>
       )}
+
+      <AiUsagePanel />
 
       <InternalRatesEditor />
     </div>

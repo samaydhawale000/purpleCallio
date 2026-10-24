@@ -15,6 +15,8 @@ import { TopUpService } from '../topups/topup.service';
 import { UsageBillingService } from '../usage-billing.service';
 import { AutoRenewService } from '../subscriptions/auto-renew.service';
 import { SupportService } from '../../support/support.service';
+import { CreditPricingService } from '../credit-pricing.service';
+import { AutoTopUpService } from '../auto-topup/auto-topup.service';
 import type {
   PaymentProvider,
   ProviderCheckout,
@@ -170,6 +172,19 @@ export class FakeProvider implements PaymentProvider {
     this.cancelledMandates.push({ id, atCycleEnd });
   }
 
+  async createChargeAtWillAuthorization(input: any) {
+    const providerOrderId = `order_auth_${++this.seq}`;
+    this.orders.set(providerOrderId, { amountPaise: 0, currency: input.currency, paymentId: input.authorizationId });
+    return { providerOrderId, providerCustomerId: `cust_${this.seq}`, publicKey: 'pk_test', currency: input.currency };
+  }
+
+  async createChargeAtWillPayment(input: any) {
+    const providerPaymentId = `pay_${++this.seq}`;
+    const payment: ProviderPayment = { providerPaymentId, providerOrderId: input.providerOrderId, status: 'pending', amountPaise: input.amountPaise, currency: input.currency, method: 'emandate' };
+    this.payments.set(providerPaymentId, payment);
+    return payment;
+  }
+
   /** Amount the mandate currently charges. */
   mandateAmount(id: string) {
     const m = this.mandates.get(id)!;
@@ -293,6 +308,7 @@ export function createHarness() {
     config,
   );
   const topUps = new TopUpService(prisma, audit);
+  const creditPricing = new CreditPricingService(prisma, audit);
   const fulfillment = new BillingFulfillmentService(
     prisma,
     provider,
@@ -311,16 +327,18 @@ export function createHarness() {
     discounts,
     plans,
     subscriptions,
-    topUps,
     fulfillment,
     autoRenew,
+    creditPricing,
   );
+  const autoTopUp = new AutoTopUpService(prisma, provider, credits, checkout, fulfillment, config);
   const webhooks = new BillingWebhookService(
     prisma,
     provider,
     fulfillment,
     notifications as any,
     autoRenew,
+    autoTopUp,
   );
   const support = new SupportService(
     prisma,
@@ -363,12 +381,15 @@ export function createHarness() {
     customPlans,
     usage,
     autoRenew,
+    autoTopUp,
   };
 }
 
 export type Harness = ReturnType<typeof createHarness>;
 
 const TABLES = [
+  'AutoTopUpAttempt',
+  'AutoTopUpSetting',
   'ProviderPlan',
   'CreditTransaction',
   'CreditBucket',

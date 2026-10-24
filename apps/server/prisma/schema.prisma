@@ -31,6 +31,7 @@ enum CallStatus {
 enum CallSource {
   CUSTOMER
   PLAYGROUND
+  AI_AGENT
 }
 
 enum PlaygroundAttemptType {
@@ -99,6 +100,8 @@ enum PaymentPurpose {
   TOPUP
   CUSTOM_PLAN
   LEGACY
+  // Threshold-triggered prepaid top-up charged against a customer mandate.
+  AUTO_TOPUP
 }
 
 enum PlanType {
@@ -156,6 +159,14 @@ enum TopUpExpiryPolicy {
   SUBSCRIPTION_END
 }
 
+enum CreditPricingStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  SUPERSEDED
+  CANCELLED
+}
+
 enum CustomPlanRequestStatus {
   NEW
   CONTACTED
@@ -209,6 +220,17 @@ enum AuditAction {
   CUSTOM_PLAN_OFFER_CREATED
   CUSTOM_PLAN_OFFER_WITHDRAWN
   LEGACY_BILLING_MIGRATED
+  CREDIT_PRICING_DRAFT_CREATED
+  CREDIT_PRICING_DRAFT_UPDATED
+  CREDIT_PRICING_PUBLISHED
+  CREDIT_PRICING_SCHEDULED
+  CREDIT_PRICING_CANCELLED
+  PROMOTIONAL_CREDITS_GRANTED
+  AUTO_TOPUP_ENABLED
+  AUTO_TOPUP_UPDATED
+  AUTO_TOPUP_DISABLED
+  PREPAID_ACCESS_CHANGED
+  CREDIT_PURCHASE_BLOCK_CHANGED
 }
 
 model User {
@@ -278,6 +300,15 @@ model User {
   assignedPlanRequests CustomPlanRequest[]   @relation("CustomPlanRequestAssignee")
   customPlanOffers     CustomPlanOffer[]
   privatePlans         Plan[]                @relation("PrivatePlanAssignee")
+
+  translationRateOverride TranslationRateOverride?
+
+  // Prepaid billing: first verified credit purchase (or admin approval).
+  // Unlocks BillingConfig.prepaidFeatures on top of plan features.
+  prepaidSince          DateTime?
+  // Admin block on paid credit purchases and Auto Top-Up.
+  creditPurchaseBlocked Boolean   @default(false)
+  autoTopUpSetting      AutoTopUpSetting?
 }
 
 // A customer's plan subscription. Prepaid: a paid row only becomes ACTIVE
@@ -394,6 +425,11 @@ model Payment {
   topUpPackageId String?
   customOfferId  String?
   credits        Int     @default(0)
+  // Immutable per-credit quote snapshot; null for legacy and package payments.
+  creditPricingVersionId String?
+  creditPricePaise       Int?
+  creditExpiryAt         DateTime?
+  quoteExpiresAt         DateTime?
   description    String?
   // [{ label, amountPaise, credits? }] as shown at checkout.
   lineItems      Json?
@@ -412,6 +448,36 @@ model Payment {
   @@index([userId, createdAt])
   @@index([paymentStatus, createdAt])
   @@index([providerSubscriptionId])
+}
+
+// Immutable after publication. Drafts are editable; a published version
+// supplies the authoritative rate and purchase policy for future quotes.
+model CreditPricingVersion {
+  id                        String              @id @default(uuid())
+  version                   Int
+  currency                  String              @default("INR")
+  creditPricePaise          Int
+  minimumPurchasePaise      Int                 @default(100000)
+  maximumPurchasePaise      Int?
+  minimumCredits            Int                 @default(1)
+  maximumCredits            Int?
+  purchasedValidityDays     Int                 @default(365)
+  autoTopUpEnabled          Boolean             @default(false)
+  autoTopUpMinimumPaise     Int                 @default(100000)
+  autoTopUpMaximumPaise     Int?
+  monthlyAutoTopUpLimitPaise Int?
+  promotionalPolicy         Json?
+  effectiveAt               DateTime            @default(now())
+  status                    CreditPricingStatus @default(DRAFT)
+  createdById               String
+  publishedById             String?
+  createdAt                 DateTime            @default(now())
+  publishedAt               DateTime?
+  updatedAt                 DateTime            @updatedAt
+
+  @@unique([currency, version])
+  @@index([currency, status, effectiveAt])
+  @@index([createdAt])
 }
 
 // Each provider payment attempt against a Payment's order (a customer can
@@ -696,6 +762,11 @@ model Project {
 
   calls Call[]
 
+  aiAgents AiAgent[]
+
+  translationSettings TranslationSettings?
+  translationLexicons TranslationLexicon[]
+
   webhookUrl    String?
   webhookSecret String?
 
@@ -763,6 +834,15 @@ model Call {
   creatorIdentity String?
   creatorIpKey    String?
 
+  // ── Live Translate ──────────────────────────────────
+  // BCP-47-ish language per participant ("auto" = detect). Null = not set.
+  callerLanguage    String?
+  receiverLanguage  String?
+  translationMode   TranslationMode @default(OFF)
+  // lexiconId, context, maxMinutes, guard, onLimit, postCallReport (see
+  // translation/translation-config.ts for the validated shape).
+  translationConfig Json?
+
   startedAt DateTime?
 
   endedAt DateTime?
@@ -771,9 +851,13 @@ model Call {
 
   updatedAt DateTime @updatedAt
 
-  events        CallEvent[]
-  usageSegments UsageSegment[]
-  session       CallSession?
+  events              CallEvent[]
+  usageSegments       UsageSegment[]
+  session             CallSession?
+  aiSession           AiCallSession?
+  translationSessions TranslationSession[]
+  translationPhrases  TranslationPhrase[]
+  translationReport   TranslationReport?
 
   @@index([source, status, expiresAt])
   @@index([source, status, createdAt])
@@ -944,6 +1028,13 @@ enum NotificationType {
   API_KEY_CREATED
   API_KEY_REVOKED
   PROJECT_CREATED
+  TRANSLATION_BUDGET_THRESHOLD
+  TRANSLATION_RATE_CHANGED
+  TRANSLATION_REPORT_READY
+  CREDITS_EXPIRING
+  AUTO_TOPUP_SCHEDULED
+  AUTO_TOPUP_SUCCEEDED
+  AUTO_TOPUP_FAILED
 }
 
 // Which area a notification belongs to: the customer dashboard or the admin
@@ -991,6 +1082,8 @@ model Plan {
   name             String
   description      String?
   badge            String?
+  // Retained for compatibility with existing databases; new plan pricing uses PlanVersion.
+  compareAtPricePaise Int?
   type             PlanType
   status           PlanStatus    @default(ACTIVE)
   displayOrder     Int           @default(0)
@@ -1067,6 +1160,27 @@ model BillingConfig {
   audioCreditsPerMinute       Int               @default(1)
   videoCreditsPerMinute       Int               @default(4)
   screenShareCreditsPerMinute Int               @default(1)
+  // Credits per minute of an AI voice agent call (whole call, not per participant).
+  aiCreditsPerMinute          Int               @default(15)
+  // ── Live Translate (admin-managed) ─────────────────
+  // Credits per translated participant-minute (per listener direction).
+  translationVoiceCreditsPerMinute      Int     @default(450)
+  translationCaptionsCreditsPerMinute   Int     @default(60)
+  // Optional separate voice rate for Indian-language routes (null = use the voice rate).
+  translationIndicVoiceCreditsPerMinute Int?
+  // Credits needed to start translation (null = one minute of the chosen mode).
+  translationMinimumCredits             Int?
+  // One-time free translated minutes for accounts whose plan lacks TRANSLATION.
+  translationTrialMinutes               Int     @default(0)
+  // Post-Call Suite report charge (per report).
+  postCallReportCredits                 Int     @default(100)
+  // Provider cost in paise per direction-minute, by route (margin reporting only).
+  translationProviderCostsPaise         Json    @default("{\"openai-translate\":300,\"sarvam-voice\":150,\"sarvam-captions\":50,\"mock\":0}")
+  // Admin warning when a route's gross margin drops below this %.
+  translationMarginWarnPercent          Int     @default(40)
+  // Default per-call limit and project budget bounds.
+  translationDefaultMaxMinutes          Int     @default(60)
+  translationMaxBudgetCredits           Int     @default(10000000)
   // GST applied on top of plan / top-up prices at checkout.
   taxPercent                  Int               @default(18)
   // % of period credits used that trigger a notification.
@@ -1077,6 +1191,16 @@ model BillingConfig {
   topUpExpiryDays             Int?
   // Days before expiry to remind the customer to renew.
   renewalReminderDays         Int               @default(7)
+  // ── Prepaid model ──────────────────────────────────
+  // Features unlocked for accounts with User.prepaidSince set.
+  prepaidFeatures             String[]          @default(["HOSTED_UI", "WEBRTC_SDK", "REST_API", "REACT_COMPONENTS", "SCREEN_SHARING", "WEBHOOKS", "ANALYTICS", "CUSTOM_BRANDING", "TRANSLATION"])
+  // Days before a credit lot expires to notify the customer.
+  creditExpiryReminderDays    Int[]             @default([30, 7, 1])
+  // Auto Top-Up: bounded retries for transient failures only.
+  autoTopUpMaxRetries         Int               @default(2)
+  autoTopUpRetryDelayHours    Int               @default(6)
+  // Minimum gap between two successful auto top-ups for one account.
+  autoTopUpCooldownMinutes    Int               @default(30)
   // Unpaid checkouts are abandoned after this many hours.
   pendingCheckoutTtlHours     Int               @default(24)
   // Auto-renew checkbox pre-ticked at checkout.
@@ -1084,6 +1208,9 @@ model BillingConfig {
   // How long an auto-renewing plan stays active past its period end while
   // the provider's renewal charge is pending/retrying.
   autoRenewGraceHours         Int               @default(72)
+  // Free accounts must be explicitly enabled for paid credit purchases.
+  freeAccountsCanPurchaseCredits Boolean        @default(false)
+  freeAccountsCanUseAutoTopUp Boolean           @default(false)
   updatedById                 String?
   createdAt                   DateTime          @default(now())
   updatedAt                   DateTime          @updatedAt
@@ -1225,4 +1352,504 @@ model ProviderPlan {
   createdAt       DateTime        @default(now())
 
   @@unique([provider, amountPaise, currency, billingInterval, intervalCount])
+}
+
+// ── AI Voice Agents ────────────────────────────────────
+
+enum AiAgentStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum AiToolMethod {
+  POST
+  GET
+}
+
+model AiAgent {
+  id String @id @default(uuid())
+
+  // Owner is project.ownerId — the same ownership model API keys use.
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  status      AiAgentStatus @default(ACTIVE)
+
+  // Plain id (no FK, to avoid a cyclic relation) of one of this agent's
+  // versions. Config edits create a new version and move this pointer.
+  currentVersionId String?
+
+  storeTranscript         Boolean @default(false)
+  // null | 7 | 30 | 90
+  transcriptRetentionDays Int?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  versions AiAgentVersion[]
+  tools    AiAgentTool[]
+  sessions AiCallSession[]
+
+  @@index([projectId, deletedAt])
+}
+
+/// Immutable snapshot of an agent's call configuration.
+model AiAgentVersion {
+  id String @id @default(uuid())
+
+  agentId String
+  agent   AiAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  version            Int
+  instructions       String
+  welcomeMessage     String?
+  language           String  @default("en")
+  voice              String?
+  provider           String  @default("gemini")
+  model              String?
+  maxDurationSeconds Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([agentId, version])
+}
+
+model AiAgentTool {
+  id String @id @default(uuid())
+
+  agentId String
+  agent   AiAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  name                 String
+  description          String
+  parametersSchema     Json
+  endpointUrl          String
+  method               AiToolMethod @default(POST)
+  enabled              Boolean      @default(true)
+  requiresConfirmation Boolean      @default(false)
+  timeoutMs            Int          @default(8000)
+
+  // Generated server-side; returned to the customer only once, on create.
+  signingSecret String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, name])
+}
+
+enum AiSessionStatus {
+  CREATED
+  CONNECTING
+  ACTIVE
+  ENDED
+  FAILED
+  EXPIRED
+}
+
+/// One AI voice call. Owns the browser token and, later, provider usage.
+/// Never has CallSession / CallUsage rows: AI calls stay out of the
+/// human-call billing path.
+model AiCallSession {
+  id String @id @default(uuid())
+
+  callId String @unique
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  agentId        String
+  agent          AiAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agentVersionId String
+  projectId      String
+  ownerId        String
+
+  // SHA-256 of the bj_ai_ token; the raw token is returned once.
+  tokenHash String @unique
+
+  provider          String
+  model             String?
+  providerSessionId String?
+
+  status             AiSessionStatus @default(CREATED)
+  terminationReason  String?
+  expiresAt          DateTime
+  connectedAt        DateTime?
+  endedAt            DateTime?
+  lastHeartbeatAt    DateTime?
+  durationSeconds    Int?
+  maxDurationSeconds Int
+
+  participantId   String
+  participantName String?
+  metadata        Json?
+  // Enabled tools at creation time (no signing secrets).
+  toolsSnapshot   Json
+
+  inputTokens       Int       @default(0)
+  outputTokens      Int       @default(0)
+  toolCallCount     Int       @default(0)
+  providerCostPaise Int?
+  creditsCharged    Int?
+  // Credits the balance couldn't cover when the call was billed.
+  creditsShortfall  Int?
+  usageRecordedAt   DateTime?
+
+  toolInvocations AiToolInvocation[]
+  messages        AiConversationMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId, status])
+  @@index([agentId, createdAt])
+  @@index([usageRecordedAt])
+}
+
+enum AiToolInvocationStatus {
+  SUCCESS
+  FAILED
+  TIMEOUT
+  REJECTED
+  UNCONFIRMED
+}
+
+/// One tool call in an AI session. Never stores arguments or responses.
+model AiToolInvocation {
+  id String @id @default(uuid())
+
+  sessionId String
+  session   AiCallSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // Plain id: the tool may be deleted later; the name keeps the row readable.
+  toolId    String?
+  toolName  String
+  status    AiToolInvocationStatus
+  latencyMs Int
+  errorCode String?
+
+  createdAt DateTime @default(now())
+
+  @@index([sessionId, createdAt])
+  @@index([toolId, createdAt])
+}
+
+enum AiMessageRole {
+  USER
+  ASSISTANT
+  TOOL
+}
+
+/// One final transcript segment, redacted before insert. Only written when
+/// the agent's storeTranscript is on; purged after transcriptRetentionDays.
+model AiConversationMessage {
+  id String @id @default(uuid())
+
+  sessionId String
+  session   AiCallSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  role    AiMessageRole
+  content String
+
+  createdAt DateTime @default(now())
+
+  @@index([sessionId, createdAt])
+  @@index([createdAt])
+}
+
+
+// ══════════════════════════════════════════════════════════
+// Live Translate (see apps/server/src/translation/README.md)
+// ══════════════════════════════════════════════════════════
+
+enum TranslationMode {
+  OFF
+  CAPTIONS
+  VOICE
+}
+
+enum TranslationSessionStatus {
+  ACTIVE
+  ENDED
+  FAILED
+}
+
+enum TranslationTermKind {
+  DO_NOT_TRANSLATE
+  TRANSLATE_AS
+  PRONOUNCE_AS
+}
+
+enum TranslationReportStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+// Per-project translation settings (1:1, created lazily with defaults).
+model TranslationSettings {
+  id                      String   @id @default(uuid())
+  projectId               String   @unique
+  project                 Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // MeaningGuard: original-audio replay is opt-in, off by default.
+  replayEnabled           Boolean  @default(false)
+  // Post-Call Suite: transcript + report storage is opt-in.
+  postCallReportEnabled   Boolean  @default(false)
+  sentimentEnabled        Boolean  @default(false)
+  transcriptRetentionDays Int      @default(30)
+  // PurpleLex call context default (healthcare, legal, saas, finance, ecommerce).
+  industry                String?
+  defaultLexiconId        String?
+  // CostGuard
+  defaultMaxMinutes       Int?
+  dailyBudgetCredits      Int?
+  monthlyBudgetCredits    Int?
+  alertThresholds         Int[]    @default([50, 80, 100])
+  // "captions_then_off" | "off"
+  onLimit                 String   @default("captions_then_off")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+// One provider session per direction of a translated call.
+model TranslationSession {
+  id                  String                   @id @default(uuid())
+  callId              String
+  call                Call                     @relation(fields: [callId], references: [id], onDelete: Cascade)
+  projectId           String
+  ownerId             String
+  // "caller_to_receiver" | "receiver_to_caller"
+  direction           String
+  sourceLanguage      String
+  targetLanguage      String
+  mode                TranslationMode
+  // Provider route, e.g. "openai-translate", "sarvam", "mock".
+  route               String
+  status              TranslationSessionStatus @default(ACTIVE)
+  // Rates locked at session start (admin changes apply to new sessions only).
+  voiceRate           Int
+  captionsRate        Int
+  startedAt           DateTime                 @default(now())
+  endedAt             DateTime?
+  endReason           String?
+  voiceSeconds        Int                      @default(0)
+  captionsSeconds     Int                      @default(0)
+  creditsCharged      Int                      @default(0)
+  providerCostPaise   Int                      @default(0)
+  trialSecondsUsed    Int                      @default(0)
+  usageRecordedAt     DateTime?
+  // Observability (per session)
+  phrases             Int                      @default(0)
+  firstAudioMsP50     Int?
+  firstAudioMsP95     Int?
+  captionDelayMsP50   Int?
+  captionDelayMsP95   Int?
+  droppedFrames       Int                      @default(0)
+  providerFailures    Int                      @default(0)
+  fallbacks           Int                      @default(0)
+  flags               Int                      @default(0)
+  flagReasons         Json?
+  replays             Int                      @default(0)
+  repeats             Int                      @default(0)
+  lexiconHits         Int                      @default(0)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  @@index([projectId, startedAt])
+  @@index([ownerId, startedAt])
+  @@index([callId])
+  @@index([status, usageRecordedAt])
+}
+
+// Phrase transcript, stored only when the project opted into the Post-Call Suite.
+model TranslationPhrase {
+  id                String    @id @default(uuid())
+  callId            String
+  call              Call      @relation(fields: [callId], references: [id], onDelete: Cascade)
+  phraseId          String
+  // "caller" | "receiver"
+  speaker           String
+  sourceLanguage    String
+  targetLanguage    String
+  original          String
+  translated        String
+  startedAt         DateTime
+  endedAt           DateTime?
+  translatedAudioAt DateTime?
+  guardStatus       String    @default("ok")
+  guardReasons      String[]  @default([])
+  expiresAt         DateTime
+  createdAt         DateTime  @default(now())
+
+  @@unique([callId, phraseId])
+  @@index([expiresAt])
+}
+
+model TranslationReport {
+  id             String                  @id @default(uuid())
+  callId         String                  @unique
+  call           Call                    @relation(fields: [callId], references: [id], onDelete: Cascade)
+  projectId      String
+  status         TranslationReportStatus @default(PENDING)
+  // { [lang]: { keyPoints[], decisions[], actionItems[{text, phraseId}] } }
+  summary        Json?
+  // talk ratio, topics, flagged moments, replays/repeats, optional tone
+  signals        Json?
+  creditsCharged Int                     @default(0)
+  error          String?
+  expiresAt      DateTime
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@index([expiresAt])
+}
+
+// PurpleLex
+model TranslationLexicon {
+  id        String                   @id @default(uuid())
+  projectId String
+  project   Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  industry  String?
+  terms     TranslationLexiconTerm[]
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+
+  @@index([projectId])
+}
+
+model TranslationLexiconTerm {
+  id            String              @id @default(uuid())
+  lexiconId     String
+  lexicon       TranslationLexicon  @relation(fields: [lexiconId], references: [id], onDelete: Cascade)
+  term          String
+  kind          TranslationTermKind @default(DO_NOT_TRANSLATE)
+  // TRANSLATE_AS: { "hi": "…", "ta": "…" }
+  translations  Json?
+  // PRONOUNCE_AS: spoken hint for TTS
+  pronunciation String?
+  caseSensitive Boolean             @default(false)
+  createdAt     DateTime            @default(now())
+
+  @@unique([lexiconId, term])
+}
+
+// CostGuard: one row per (project, period, threshold) so alerts fire once.
+model TranslationBudgetAlert {
+  id        String   @id @default(uuid())
+  projectId String
+  // "day:2026-10-22" | "month:2026-10"
+  period    String
+  threshold Int
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, period, threshold])
+}
+
+// Admin-managed per-customer translation price overrides.
+model TranslationRateOverride {
+  id                       String   @id @default(uuid())
+  userId                   String   @unique
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  voiceCreditsPerMinute    Int?
+  captionsCreditsPerMinute Int?
+  postCallReportCredits    Int?
+  note                     String?
+  updatedById              String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+
+// ══════════════════════════════════════════════════════════
+// Prepaid Auto Top-Up (see src/billing/auto-topup/AUTO_TOPUP.md)
+// ══════════════════════════════════════════════════════════
+
+enum AutoTopUpMandateStatus {
+  NONE
+  PENDING
+  ACTIVE
+  FAILED
+  REVOKED
+}
+
+enum AutoTopUpAttemptStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model AutoTopUpSetting {
+  id                    String                 @id @default(uuid())
+  userId                String                 @unique
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled               Boolean                @default(false)
+  currency              String                 @default("INR")
+  // Trigger when available credits are at or below this.
+  thresholdCredits      Int
+  // Monetary purchase amount per top-up (before tax), minor units.
+  amountPaise           Int
+  // Monthly cap on confirmed + in-flight auto top-up charges (incl. tax), minor units.
+  monthlyLimitPaise     Int
+  // Explicit consent for merchant-initiated charges.
+  consentAt             DateTime?
+  consentVersion        String?
+  // Provider recurring authorization (Razorpay customer + token).
+  providerCustomerId    String?
+  providerTokenId       String?
+  mandateStatus         AutoTopUpMandateStatus @default(NONE)
+  mandateMaxAmountPaise Int?
+  mandateExpiresAt      DateTime?
+  mandateMethod         String?
+  // Mandate registration order awaiting the customer's authorization.
+  mandateOrderId        String?
+  // Set when a charge failed / needs the customer; cleared on success or update.
+  attentionReason       String?
+  attentionAt           DateTime?
+  disabledReason        String?
+  lastTriggeredAt       DateTime?
+  lastSucceededAt       DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  attempts AutoTopUpAttempt[]
+
+  @@index([enabled, mandateStatus])
+}
+
+model AutoTopUpAttempt {
+  id                     String                 @id @default(uuid())
+  userId                 String
+  settingId              String
+  setting                AutoTopUpSetting       @relation(fields: [settingId], references: [id], onDelete: Cascade)
+  // Exactly one Payment per attempt (snapshot of price, tax, credits).
+  paymentId              String?                @unique
+  idempotencyKey         String                 @unique
+  status                 AutoTopUpAttemptStatus @default(PENDING)
+  amountPaise            Int
+  taxPaise               Int
+  totalPaise             Int
+  credits                Int
+  currency               String                 @default("INR")
+  creditPricingVersionId String
+  creditPricePaise       Int
+  triggerBalance         Int
+  // UTC "YYYY-MM" for monthly spending limits.
+  monthKey               String
+  retryOfId              String?
+  retryCount             Int                    @default(0)
+  nextRetryAt            DateTime?
+  providerPaymentId      String?
+  failureCode            String?
+  failureReason          String?
+  completedAt            DateTime?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, monthKey])
+  @@index([status, nextRetryAt])
 }

@@ -1,6 +1,6 @@
 {
   "name": "@purplecallio/react-native",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Official React Native components and hooks for PurpleCallio, a developer-first real-time communication platform for integrating voice, video and WebRTC communication into applications.",
   "homepage": "https://purplecallio.com",
   "main": "./dist/index.js",
@@ -49,7 +49,7 @@
     }
   },
   "dependencies": {
-    "@purplecallio/sdk": "^0.2.3"
+    "@purplecallio/sdk": "^0.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

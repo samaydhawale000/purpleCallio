@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import { CheckCircle2, XCircle } from 'lucide-react';
 
 export interface ToastState {
@@ -26,7 +26,7 @@ export function ToastHost({ toast, onDismiss }: Props) {
     <div className="fixed top-4 right-4 z-50 pointer-events-none">
       <AnimatePresence>
         {toast && (
-          <motion.div
+          <m.div
             key={toast.id}
             initial={{ opacity: 0, y: -12, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -44,7 +44,7 @@ export function ToastHost({ toast, onDismiss }: Props) {
               <XCircle size={16} style={{ color: '#DC2626' }} />
             )}
             <p className="text-sm font-medium text-[#170B2E]">{toast.message}</p>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

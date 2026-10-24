@@ -72,9 +72,8 @@ export function notificationHref(n: AppNotification, area: NotificationArea): st
       return id('offerId') ? `/dashboard/billing/offers/${id('offerId')}` : '/dashboard/billing';
     case 'API_KEY_CREATED':
     case 'API_KEY_REVOKED':
-      return '/dashboard/api-keys';
     case 'PROJECT_CREATED':
-      return '/dashboard/projects';
+      return id('projectId') ? `/dashboard/projects?project=${id('projectId')}` : '/dashboard/projects';
     default:
       return null;
   }

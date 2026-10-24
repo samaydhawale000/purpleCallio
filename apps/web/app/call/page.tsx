@@ -11,6 +11,14 @@ import {
    type ConnectivityFailureReason,
    type MediaPath,
 } from "../lib/webrtc-connectivity";
+import {
+   CaptionsOverlay,
+   TranslateIcon,
+   TranslationPanel,
+   translationDefaultsFromDetails,
+   useCallTranslation,
+   type CallTranslationDefaults,
+} from "./translation";
 
 /** TURN credentials must not hold up the call indefinitely. */
 const ICE_SERVERS_TIMEOUT_MS = 5000;
@@ -335,6 +343,12 @@ function CallPageContent() {
    const localVideoRef = useRef<HTMLVideoElement>(null);
    const remoteVideoRef = useRef<HTMLVideoElement>(null);
    const remoteAudioRef = useRef<HTMLAudioElement>(null);
+   // Live Translate (stays fully idle unless turned on, or the call was
+   // created with a translation mode).
+   const [translationDefaults, setTranslationDefaults] =
+      useState<CallTranslationDefaults | null>(null);
+   const [showTranslation, setShowTranslation] = useState(false);
+   const [translationSplitView, setTranslationSplitView] = useState(false);
    const pcRef = useRef<RTCPeerConnection | null>(null);
    // Resolves once the gateway has acked `join-call`. The gateway relays
    // offer/answer/ICE and media events only from sockets already in the call
@@ -412,6 +426,16 @@ function CallPageContent() {
    const isDark = branding.theme === "DARK";
    const primary = branding.primaryColor;
    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+   const translation = useCallTranslation({
+      token,
+      // Socket.IO origin: the API host without the /api prefix.
+      serverUrl: apiUrl.replace(/\/api\/?$/, ""),
+      active: state === "in-call",
+      defaults: translationDefaults,
+      // The remote video element also carries the remote audio track.
+      getRemoteElements: () => [remoteAudioRef.current, remoteVideoRef.current],
+      getLocalStream: () => localStreamRef.current,
+   });
 
    useEffect(() => {
       stateRef.current = state;
@@ -445,6 +469,7 @@ function CallPageContent() {
                   });
                }
                setSelfName(data.participantId ?? "You");
+               setTranslationDefaults(translationDefaultsFromDetails(data));
             }
          } catch {
             // Fall back to defaults.
@@ -1922,6 +1947,31 @@ function CallPageContent() {
                </div>
             )}
 
+            {/* Live Translate: DualView captions + settings panel */}
+            <CaptionsOverlay
+               translation={translation}
+               splitView={translationSplitView}
+               primary={primary}
+            />
+            {showTranslation && (
+               <TranslationPanel
+                  translation={translation}
+                  apiUrl={apiUrl}
+                  theme={{
+                     isDark,
+                     primary,
+                     textPrimary,
+                     textSecondary,
+                     borderColor,
+                     surfaceBg,
+                     shellBg,
+                  }}
+                  splitView={translationSplitView}
+                  onSplitViewChange={setTranslationSplitView}
+                  onClose={() => setShowTranslation(false)}
+               />
+            )}
+
             {/* Device selector overlay */}
             {showDevices && (
                <div
@@ -2059,6 +2109,19 @@ function CallPageContent() {
                   <ScreenShareIcon active={isScreenSharing} />
                </ControlButton>
             )}
+
+            <ControlButton
+               active={showTranslation || translation.enabled}
+               activeColor="#3B1E6E"
+               onClick={() => setShowTranslation((s) => !s)}
+               label={translation.enabled ? "Translating" : "Translate"}
+               dark={isDark}
+               borderColor={borderColor}
+            >
+               <span style={{ color: showTranslation || translation.enabled ? "#FFFFFF" : "#94A3B8", display: "flex" }}>
+                  <TranslateIcon />
+               </span>
+            </ControlButton>
 
             <ControlButton
                active={showDevices}

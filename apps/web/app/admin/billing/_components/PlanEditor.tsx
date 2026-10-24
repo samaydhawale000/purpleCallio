@@ -188,6 +188,9 @@ export function PlanEditor({ planId }: { planId: string | null }) {
         if (p) {
           setPlan(p);
           setForm(fromPlan(p));
+        } else {
+          // New plans start with every active feature ticked; untick what this plan excludes.
+          setForm((f) => ({ ...f, features: feats.filter((x) => x.isActive).map((x) => x.key) }));
         }
       } catch (e) {
         if (!cancelled) setLoadError(handle(e, 'Failed to load plan'));

@@ -14,6 +14,7 @@ import type {
 } from '../../payment/providers/payment-provider';
 import { BillingFulfillmentService } from './fulfillment.service';
 import { AutoRenewService } from '../subscriptions/auto-renew.service';
+import { AutoTopUpService } from '../auto-topup/auto-topup.service';
 
 /**
  * Provider webhooks (payment captured / failed, refunds, disputes).
@@ -33,6 +34,7 @@ export class BillingWebhookService {
     private fulfillment: BillingFulfillmentService,
     private notifications: NotificationService,
     private autoRenew: AutoRenewService,
+    private autoTopUp: AutoTopUpService,
   ) {}
 
   async handle(
@@ -97,6 +99,12 @@ export class BillingWebhookService {
 
   private async process(event: ProviderWebhookEvent) {
     switch (event.type) {
+      case 'token.confirmed':
+      case 'token.rejected':
+      case 'token.cancelled':
+      case 'token.paused':
+        await this.autoTopUp.onTokenEvent(event.rawType, event.raw);
+        return;
       // ── Auto-renew mandates ──
       case 'subscription.charged': {
         if (!event.payment || !event.subscription) return;
@@ -121,12 +129,20 @@ export class BillingWebhookService {
         const payment = await this.findPayment(event);
         if (!payment || !event.payment) return;
         if (event.payment.status !== 'captured') return;
+        if (payment.purpose === 'AUTO_TOPUP') {
+          await this.autoTopUp.onPaymentEvent(event.payment);
+          return;
+        }
         await this.fulfillment.fulfill(payment.id, event.payment, 'webhook');
         return;
       }
       case 'payment.failed': {
         const payment = await this.findPayment(event);
         if (!payment || !event.payment) return;
+        if (payment.purpose === 'AUTO_TOPUP') {
+          await this.autoTopUp.onPaymentEvent(event.payment);
+          return;
+        }
         await this.fulfillment.markFailed(
           payment.id,
           event.payment,

@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import { CalendarDays, Clock3, Hourglass, PhoneCall } from 'lucide-react';
+import { useAdminAccess } from '../../lib/admin-access';
+import { AiUsagePanel } from '../billing/_components/AiUsagePanel';
 
 type UsageData = {
   minutesToday: number;
@@ -16,6 +18,8 @@ export default function AdminUsagePage() {
   const [data, setData] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // The AI report is a billing endpoint; a 403 there would sign the admin out.
+  const canSeeBilling = useAdminAccess('billing').canRead;
 
   useEffect(() => {
     api
@@ -61,6 +65,8 @@ export default function AdminUsagePage() {
           </div>
         ))}
       </div>
+
+      {canSeeBilling && <AiUsagePanel />}
     </div>
   );
 }

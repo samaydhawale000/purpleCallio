@@ -13,6 +13,8 @@ import {
    ReactMeetingPreview,
 } from "../../components/marketing/InteractiveTools";
 import { PricingAuthority } from "../../components/PricingAuthority";
+import { AiAgentsDoc } from "../../components/marketing/AiAgentsDoc";
+import { LiveTranslateDoc } from "../../components/marketing/LiveTranslateDoc";
 import { PURPLECALLIO_API_URL } from "../../lib/brand";
 
 const docs = {
@@ -195,12 +197,10 @@ const docs = {
          "Preview the PurpleCallio Flutter SDK implementation, participant-token security, WebRTC call flow, platform permissions, and validation status.",
       lead: "The Flutter package contains a native Dart call engine for PurpleCallio's participant-token, REST, Socket.IO, and WebRTC protocol. It is not yet released for production: Android and iOS device calls and consumer installation still need validation.",
       sections: [
-         ["Release status", "The package source, fake-backed unit tests, Flutter example, and gated real-server signaling test are present. Flutter tooling and physical devices were unavailable for validation in this environment. Keep this SDK in Coming soon until package tests, example builds, consumer installation, and real-device calls pass."],
-         ["Install for local development", "The package is not published to pub.dev. In a local checkout, use the mobile/flutter package path. Do not treat the declared 0.1.0 manifest version as a published release."],
+         ["Availability", "The Flutter SDK is in preview and not yet published to pub.dev. It will be released once device testing on Android and iOS is complete. Contact purplecallio@gmail.com for early access."],
          ["Use participant tokens", "Create calls from your trusted backend with the project API key, then pass each participant only their own token. PurpleCallioClient joins with that token; never embed an API key or server secret in a Flutter application."],
          ["Media and platform support", "The engine implements audio/video, microphone and camera controls, camera switching, participant events, reconnection, cleanup, and rendering helpers. Screen sharing is implemented for Android only; iOS sharing is unsupported because the package has no ReplayKit Broadcast Upload Extension."],
          ["Permissions and lifecycle", "Add camera and microphone permissions to the host application. The SDK surfaces permission and media errors; the application owns its permission explanation and UI. Use PurpleCallioLifecycle to bind the meeting to Flutter app lifecycle changes."],
-         ["Validation required before release", "Run Flutter analyze and tests, build and install the example in a clean consumer app, then test real audio/video, remote rendering, mute, camera toggle/switch, reconnect, leave/rejoin, Android screen capture, and iOS limitations on physical devices against staging."],
       ],
    },
    ios: {
@@ -210,27 +210,23 @@ const docs = {
          "Preview the native PurpleCallio Swift SDK implementation, participant-token authentication, WebRTC call flow, permissions, and device validation status.",
       lead: "The Swift package contains a native call engine using PurpleCallio REST, Socket.IO, and WebRTC. It is not released for production: a full Xcode consumer build and physical iPhone or iPad validation remain outstanding.",
       sections: [
-         ["Release status", "The Swift package and 76 Swift Testing cases pass on the macOS target. That does not compile the iOS UIKit, AVFoundation, or device WebRTC path. This environment has no full Xcode installation or physical iOS device, so no iOS target build or device call is claimed."],
-         ["Add the package", "The PurpleCallio SPM package is not published yet. Add mobile/ios as a local Swift package while developing from this repository; use a versioned Git tag only after an official release exists."],
+         ["Availability", "The iOS SDK is in preview and the Swift Package is not yet published. It will be released once testing on iPhone and iPad is complete. Contact purplecallio@gmail.com for early access."],
          ["Use participant tokens", "Your backend creates the call with its project API key and returns a participant-specific token. Pass that token to PurpleCallioClient.joinMeeting(token:). Never include a project API key, API secret, or server credential in the iOS app."],
          ["Permissions and media", "Add NSCameraUsageDescription and NSMicrophoneUsageDescription to the host app Info.plist. The implementation includes native media capture, camera switching, audio-session handling, state, participant events, remote video rendering, reconnect, and cleanup."],
          ["Screen sharing is unsupported", "The iOS SDK startScreenShare() call returns screenShareUnavailable. ReplayKit screen broadcast would require a Broadcast Upload Extension and app-group communication, neither of which is included."],
-         ["Validation required before release", "Resolve and build the package from a clean Xcode app, run all XCTest cases, and validate microphone, camera, remote video, audio routes, interruptions, foreground/background, reconnect, cleanup, and leave/rejoin on physical iOS devices."],
       ],
    },
    android: {
       title: "PurpleCallio Android SDK Preview",
       meta: "PurpleCallio Android SDK | Native Kotlin WebRTC",
       description:
-         "Preview the native PurpleCallio Kotlin SDK implementation, participant-token authentication, WebRTC, MediaProjection, permissions, and Android validation status.",
+         "Preview of the native PurpleCallio Kotlin SDK: participant-token authentication, WebRTC calls, MediaProjection screen sharing and Android permissions.",
       lead: "The Android library contains a Kotlin call engine using PurpleCallio REST, Socket.IO, and WebRTC, plus a MediaProjection screen-share path. It is not released for production: builds, consumer installation, instrumentation, and physical-device validation remain outstanding.",
       sections: [
-         ["Release status", "The Android library, JVM test sources, Gradle publication configuration, and sample app are present. This environment has no usable Java runtime and Gradle could not initialize its native services, so no successful build or test result is claimed."],
-         ["Add the library", "No Maven artifact has been published. Use the local mobile/android/purplecallio project dependency while developing from this repository. The declared 0.1.0 coordinate is not yet a downloadable release."],
+         ["Availability", "The Android SDK is in preview and not yet published to Maven. It will be released once testing on physical Android devices is complete. Contact purplecallio@gmail.com for early access."],
          ["Use participant tokens", "Create calls from your trusted backend using the project API key, then give the app its participant-specific token. PurpleCallioClient.joinMeeting(token) authenticates the participant; never put API keys or server secrets in BuildConfig, resources, or app code."],
          ["Permissions and media", "Request RECORD_AUDIO and CAMERA at runtime before joining or accepting. The SDK implements native WebRTC audio/video, camera controls and switching, participant state, reconnect, cleanup, audio focus, and SurfaceViewRenderer video output."],
          ["Android screen sharing", "Screen capture uses MediaProjection. Start a fresh createScreenCaptureIntent consent flow and pass its result to startScreenShare(resultCode, data). The SDK starts its declared non-exported mediaProjection foreground service and restores the camera on stop."],
-         ["Validation required before release", "Run the Gradle JVM suite, instrumentation tests, build/install the sample from a clean consumer project, then test real camera, microphone, remote video, audio routing, permissions, lifecycle, reconnection, MediaProjection start/stop, and repeated join/leave on physical Android devices."],
       ],
    },
    "rest-api": {
@@ -390,23 +386,65 @@ const docs = {
       ],
    },
    "usage-billing": {
-      title: "Plans, Credits and Usage",
-      meta: "Video Calling API Plans, Credits & Usage",
+      title: "Prepaid Credits and Usage",
+      meta: "Video Calling API Prepaid Credits & Usage",
       description:
-         "Understand PurpleCallio prepaid plans, included usage credits, participant-minute measurement, credit rates, top-ups and the usage dashboard.",
-      lead: "PurpleCallio uses simple prepaid plans with included usage credits. Usage is measured in participant-minutes — each participant's time in a call — and consumes credits. For example, two participants in a ten-minute call use twenty participant-minutes.",
+         "Understand PurpleCallio's prepaid credit wallet, participant-minute measurement, credit rates, purchases and the usage dashboard.",
+      lead: "PurpleCallio uses a prepaid credit wallet. Usage is measured in participant-minutes — each participant's time in a call — and consumes credits. For example, two participants in a ten-minute call use twenty participant-minutes.",
       sections: [
          [
-            "Plans and credits",
-            "Choose a plan and pay upfront; the plan's included credits are added once payment is confirmed. Audio, video and screen sharing each consume credits at their own rate per participant-minute. Current plans, credits and rates are shown on the pricing page and in the product.",
+            "Buying and using credits",
+            "Choose a monetary purchase amount and review its estimated credits, taxes and total before paying. Credits are added once payment is confirmed. Audio, video and screen sharing each consume credits at their own rate per participant-minute; those rates are separate from the monetary price per credit.",
          ],
          [
-            "Renewals, top-ups and upgrades",
-            "Paid plans auto-renew at the start of each period while auto-renew is on (default at checkout; turn it off anytime in Billing), or renew manually from the Billing page. Plan credits expire at the end of the plan period. Buy one-time top-ups when you need more credits, or upgrade at any time. When credits run out, new calls cannot start; active calls are never interrupted.",
+            "Expiry and additional purchases",
+            "Each purchase is a separate credit lot with its own expiry date. Return to the wallet whenever you need more credits. When credits run out, new calls cannot start; active calls are never interrupted.",
          ],
          [
             "Track usage",
             "Use the dashboard to review participant-minutes, credits consumed, your credit balance, payments and receipts. Audio, video and screen sharing each appear as separate usage categories.",
+         ],
+      ],
+   },
+   "ai-agents": {
+      title: "AI Voice Agents",
+      meta: "AI Voice Agents API",
+      description:
+         "Add a real-time AI voice agent to your app: configure agents and tools, create sessions from your backend, and talk to the agent from the browser or React.",
+      lead: "AI voice agents answer your users by voice in real time. You configure the agent in the dashboard, your backend creates a short-lived session, and the browser streams audio through PurpleCallio to the voice model. They unlock after your first verified credit purchase.",
+      sections: [
+         [
+            "Create an agent",
+            "In Dashboard → AI Agents, create an agent in a project and set its instructions, optional welcome message, voice, language, model provider and maximum call duration (30 seconds to 30 minutes). Each change creates a new version; sessions use the version current when they were created. Try it in the Playground tab before going live.",
+         ],
+         [
+            "Add tools",
+            "Tools let the agent call your HTTPS endpoints mid-conversation, for example to look up an order. Each tool has a name, a description the model reads, a parameters schema, an endpoint, a method (POST or GET), a timeout and an optional confirmation step. Every request is signed with the tool's bj_tool_ secret.",
+         ],
+         [
+            "How a call flows",
+            "Your backend calls POST /ai/sessions with its API key and gets a single-use bj_ai_ token. The browser connects with that token, the agent greets the user, and audio, transcripts and tool activity stream live. The call ends when either side hangs up, the maximum duration is reached, or your backend ends the session.",
+         ],
+      ],
+   },
+   "live-translate": {
+      title: "Live Translate (Early Access)",
+      meta: "Real-Time Voice Translation API",
+      description:
+         "Add real-time voice translation and captions to 1:1 calls: the translation block on POST /calls, the TranslationClient SDK, React UI Kit, PurpleLex, MeaningGuard, CostGuard, metrics, reports and webhooks.",
+      lead: "Live Translate lets two people on a 1:1 call speak different languages: each hears and reads the other in their own language, a short moment behind the speaker. It's in early access, so endpoints and fields may change before general availability.",
+      sections: [
+         [
+            "How it works",
+            "You set each participant's language and a translation mode when you create the call. During the call, each browser streams speech to PurpleCallio, which runs speech recognition, translation and (in voice mode) synthesized speech on the server through OpenAI or Sarvam, depending on the language pair. Both participants receive DualView captions; only the listener receives translated audio, and the original voice is turned down rather than muted.",
+         ],
+         [
+            "Modes",
+            "off (default), captions (translated text only, lower rate) and voice (captions plus translated speech). Set the mode at call creation, change it with PATCH /calls/:id/translation, or let participants switch in the call. Voice is offered only for languages that pass our testing; others fall back to captions.",
+         ],
+         [
+            "Data handling",
+            "No audio or transcript is stored by default. Replay of the original audio is off by default and opt-in per project; when on, it uses a memory-only buffer of about 30 seconds that is cleared at the end of the call. Transcripts are stored only if you enable the Post-Call Suite, for the retention period you choose.",
          ],
       ],
    },
@@ -771,6 +809,8 @@ export default async function DocPage({
                <PricingAuthority />
             </ContentSection>
          )}
+         {slug === "ai-agents" && <AiAgentsDoc />}
+         {slug === "live-translate" && <LiveTranslateDoc />}
          {slug === "quickstart" && (
             <ContentSection title="First successful call in minutes">
                <QuickstartStepper />
@@ -867,6 +907,18 @@ export default async function DocPage({
                   className="text-[#6425C4] hover:text-[#170B2E]"
                >
                   Svelte SDK →
+               </Link>
+               <Link
+                  href="/docs/ai-agents"
+                  className="text-[#6425C4] hover:text-[#170B2E]"
+               >
+                  AI Voice Agents →
+               </Link>
+               <Link
+                  href="/docs/live-translate"
+                  className="text-[#6425C4] hover:text-[#170B2E]"
+               >
+                  Live Translate →
                </Link>
                <Link
                   href="/sdks"

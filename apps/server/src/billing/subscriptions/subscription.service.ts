@@ -118,6 +118,7 @@ export class SubscriptionService {
       sub.currentPeriodEnd &&
       sub.currentPeriodEnd > now
     ) {
+      if (sub.planType === PlanType.FREE) return sub;
       if (sub.includedCredits <= 0) return sub;
       const allocated = await this.prisma.creditTransaction.findUnique({
         where: { idempotencyKey: this.allocationKey(sub) },
@@ -306,6 +307,7 @@ export class SubscriptionService {
   /** Grant the current period's included credits (idempotent per period). */
   private async ensureAllocation(tx: Tx, sub: Subscription) {
     if (
+      sub.planType === PlanType.FREE ||
       sub.includedCredits <= 0 ||
       !sub.currentPeriodStart ||
       !sub.currentPeriodEnd

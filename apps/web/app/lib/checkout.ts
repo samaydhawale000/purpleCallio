@@ -7,6 +7,7 @@ import {
   startCheckout,
   verifyAutoRenew,
   verifyPayment,
+  startAutoTopUpMandate,
   type AutoRenewState,
   type CheckoutRequest,
   type CheckoutSession,
@@ -36,6 +37,27 @@ function loadRazorpay(): Promise<boolean> {
     script.onload = () => resolve(true);
     script.onerror = () => resolve(false);
     document.body.appendChild(script);
+  });
+}
+
+/** Opens Razorpay's eMandate authorization checkout.  The browser response
+ * is deliberately not treated as activation: only a signed token webhook can
+ * make the mandate active on the server. */
+export async function runAutoTopUpMandateSetup() {
+  const session = await startAutoTopUpMandate('auto-topup-emandate-v1');
+  if (!(await loadRazorpay())) throw new Error('Could not load the payment window. Check your connection and try again.');
+  return new Promise<void>((resolve, reject) => {
+    const rzp = new window.Razorpay({
+      key: session.publicKey,
+      order_id: session.providerOrderId,
+      name: 'PurpleCallio', description: 'Authorize Auto Top-Up eMandate',
+      recurring: true,
+      prefill: { email: undefined, contact: undefined },
+      handler: () => resolve(),
+      modal: { ondismiss: () => reject(new Error('Authorization window closed.')) },
+    });
+    rzp.on('payment.failed', (resp: any) => reject(new Error(resp?.error?.description ?? 'Authorization failed')));
+    rzp.open();
   });
 }
 

@@ -44,7 +44,10 @@ describe('notificationHref', () => {
       '/dashboard/billing',
     );
     expect(notificationHref(n({ type: 'USAGE_LIMIT_REACHED' }), 'CUSTOMER')).toBe('/dashboard/usage');
-    expect(notificationHref(n({ type: 'API_KEY_REVOKED' }), 'CUSTOMER')).toBe('/dashboard/api-keys');
+    expect(notificationHref(n({ type: 'API_KEY_REVOKED' }), 'CUSTOMER')).toBe('/dashboard/projects');
+    expect(
+      notificationHref(n({ type: 'API_KEY_CREATED', metadata: { projectId: 'p1' } }), 'CUSTOMER'),
+    ).toBe('/dashboard/projects?project=p1');
     expect(
       notificationHref(n({ type: 'INVOICE_PAYMENT_FAILED', metadata: { customerId: 'c1' } }), 'ADMIN'),
     ).toBe('/admin/customers/c1');

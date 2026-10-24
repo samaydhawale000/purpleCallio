@@ -4,6 +4,9 @@ import {
   PaymentProvider,
   ProviderCheckout,
   ProviderCheckoutInput,
+  ProviderChargeAtWillAuthorization,
+  ProviderChargeAtWillAuthorizationInput,
+  ProviderChargeAtWillChargeInput,
   ProviderEventType,
   ProviderPayment,
   ProviderPaymentState,
@@ -24,7 +27,6 @@ function safeEqual(a: string, b: string): boolean {
 export const MOCK_SIGNATURE = 'mock_signature';
 
 /**
- * Razorpay one-time payments (Orders + Checkout + signature verification).
  *
  * Without RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET (local/dev only — production
  * refuses to boot, see RazorpayPaymentService) it runs in mock mode: orders
@@ -209,6 +211,10 @@ export class RazorpayProvider implements PaymentProvider {
       'subscription.halted',
       'subscription.cancelled',
       'subscription.completed',
+      'token.confirmed',
+      'token.rejected',
+      'token.cancelled',
+      'token.paused',
     ];
     const paymentEntity = body.payload?.payment?.entity;
     const subscriptionEntity = body.payload?.subscription?.entity;
@@ -238,6 +244,49 @@ export class RazorpayProvider implements PaymentProvider {
         : null,
       raw: body,
     };
+  }
+
+  /**
+   * Creates the zero-value authorization order used by Razorpay eMandate.
+   * No mock path exists on purpose: an authorization must be exercised with
+   * real Razorpay test credentials before it can ever be enabled.
+   */
+  async createChargeAtWillAuthorization(input: ProviderChargeAtWillAuthorizationInput): Promise<ProviderChargeAtWillAuthorization> {
+    if (!this.razorpay) throw new Error('Razorpay test credentials are required for eMandate authorization.');
+    if (process.env.RAZORPAY_CHARGE_AT_WILL_ENABLED !== 'true')
+      throw new Error('Charge-at-Will is disabled. Set RAZORPAY_CHARGE_AT_WILL_ENABLED=true only for a verified test integration.');
+    if (process.env.NODE_ENV === 'production' && process.env.RAZORPAY_CHARGE_AT_WILL_LIVE_ENABLED !== 'true')
+      throw new Error('Live Charge-at-Will is disabled pending test-mode verification.');
+    const customer = await this.razorpay.customers.create({
+      name: input.customer.name || undefined, email: input.customer.email, contact: input.customer.contact,
+      fail_existing: '0',
+    });
+    const order = await this.razorpay.orders.create({
+      amount: 0, currency: input.currency, receipt: input.authorizationId.slice(0, 40),
+      payment_capture: 1, customer_id: customer.id, method: 'emandate',
+      token: { auth_type: input.authType, max_amount: input.maxAmountPaise, expire_at: Math.floor(input.expiresAt.getTime() / 1000) },
+      notes: input.notes,
+    });
+    return { providerOrderId: order.id, providerCustomerId: customer.id, publicKey: process.env.RAZORPAY_KEY_ID as string, currency: input.currency };
+  }
+
+  async createChargeAtWillPayment(input: ProviderChargeAtWillChargeInput): Promise<ProviderPayment> {
+    if (!this.razorpay) throw new Error('Razorpay is not configured.');
+    if (process.env.RAZORPAY_CHARGE_AT_WILL_ENABLED !== 'true') throw new Error('Charge-at-Will is disabled.');
+    if (process.env.NODE_ENV === 'production' && process.env.RAZORPAY_CHARGE_AT_WILL_LIVE_ENABLED !== 'true') throw new Error('Live Charge-at-Will is disabled.');
+    // Razorpay's supported SDK method maps to POST /v1/payments/create/recurring.
+    // Do not use a saved-card endpoint here: only the token produced by the
+    // eMandate authorization is eligible for this flow.
+    const response = await this.razorpay.payments.createRecurringPayment({
+      email: input.email, contact: input.contact, amount: input.amountPaise, currency: input.currency,
+      order_id: input.providerOrderId, customer_id: input.providerCustomerId, token: input.providerTokenId,
+      recurring: true, description: input.description, notes: input.notes,
+    });
+    // The recurring endpoint returns the payment id, not a full Payment
+    // entity. Fetch it so all callers get the authoritative state.
+    const paymentId = response.razorpay_payment_id;
+    if (!paymentId) throw new Error('Razorpay did not return a recurring payment id.');
+    return this.getPayment(paymentId);
   }
 
   // ── Recurring mandates (Razorpay Subscriptions) ─────────────────────

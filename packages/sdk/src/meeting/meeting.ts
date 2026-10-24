@@ -24,6 +24,7 @@ import {
    type ConnectivityFailureReason,
    type MediaPath,
 } from "../webrtc/connectivity";
+import { TranslationClient } from "../translation/translation-client";
 
 /** Poll interval for path classification and media-flow checks. */
 const STATS_POLL_MS = 1_000;
@@ -93,6 +94,7 @@ export class PurpleCallioMeeting {
    private restoringRoom = false;
    private callEnded = false;
    private cleanupFns: Array<() => void> = [];
+   private translationClient: TranslationClient | null = null;
 
    constructor(config: EngineConfig) {
       if (!config.token) throw new Error("PurpleCallio: token is required");
@@ -157,6 +159,7 @@ export class PurpleCallioMeeting {
          return Promise.resolve();
       }
       this.connection.set("leaving");
+      this.translationClient?.disable();
       this.screenShareCtrl.stop();
       this.cleanupMedia();
       this.transport?.emit("leave-call", { callId: this.config.callId });
@@ -168,6 +171,24 @@ export class PurpleCallioMeeting {
       this.connection.set("disconnected");
       this.emit("disconnected", { reason: "left" });
       return Promise.resolve();
+   }
+
+   /**
+    * Live Translate for this call: `meeting.translation.enable({ speak,
+    * hear, mode, originalVolume })`. Uses this call's session token, the
+    * call's own microphone and ducks every element registered with
+    * `registerAudioElement()`. Created on first access; disabled on leave().
+    */
+   get translation(): TranslationClient {
+      if (!this.translationClient) {
+         this.translationClient = new TranslationClient({
+            serverUrl: this.config.signalUrl,
+            token: this.config.token,
+            stream: () => this.localStream,
+            remoteAudio: () => this.audioElements,
+         });
+      }
+      return this.translationClient;
    }
 
    camera = {

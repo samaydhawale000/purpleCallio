@@ -1,33 +1,27 @@
 import LegalLayout, { LegalSection, LegalBullets } from "../components/LegalLayout";
 import { pageMetadata } from "../lib/seo";
 
-export const metadata = pageMetadata({ title: "Refund & Cancellation Policy", description: "PurpleCallio's policy for cancelling prepaid plans, refunds for plan and top-up payments, credits, and billing disputes.", path: "/refund" });
+export const metadata = pageMetadata({ title: "Refund Policy", description: "PurpleCallio's policy for prepaid credit purchases, refunds, credits, and billing disputes.", path: "/refund" });
 
 export default function RefundPage() {
   return (
     <LegalLayout
-      title="Refund & Cancellation Policy"
+      title="Refund Policy"
       lastUpdated="7 October 2026"
-      intro="This policy explains how cancellations and refunds work for PurpleCallio's prepaid plans, custom plans and credit top-ups."
+      intro="This policy explains how refunds work for PurpleCallio prepaid credit purchases."
     >
-      <LegalSection num="1" title="Cancellation">
-        <p>
-          You can cancel a paid plan at any time from the Billing page or by contacting support.
-          Cancellation takes effect at the end of your current paid period: your plan remains active, and
-          its credits remain usable, until that date. Cancelling also turns off auto-renew, so no further
-          payment is taken after cancellation.
-        </p>
+      <LegalSection num="1" title="Account closure">
         <p>
           You may also close your PurpleCallio account. Cancellation or account closure does not by itself
           entitle you to a refund of payments already made.
         </p>
       </LegalSection>
 
-      <LegalSection num="2" title="Prepaid Plans and Top-ups">
+      <LegalSection num="2" title="Prepaid credit purchases">
         <p>
-          Plans, renewals, custom plans and top-ups are paid upfront. Payments are not refunded
-          automatically, including for unused or expired credits, unless a refund is required by
-          applicable law or PurpleCallio decides, at its discretion, to issue one.
+          Credit purchases are paid upfront. Payments are not refunded automatically, including for unused
+          or expired credits, unless a refund is required by applicable law or PurpleCallio decides, at its
+          discretion, to issue one.
         </p>
         <p>
           Because credits are consumed in real time as calls happen, credits that have already been used
@@ -58,8 +52,8 @@ export default function RefundPage() {
 
       <LegalSection num="5" title="Failed or Incomplete Payments">
         <p>
-          If a payment fails or is not completed, the plan, renewal or top-up is not activated and no
-          credits are added. If money was debited for a payment that PurpleCallio did not confirm, it is
+          If a payment fails or is not completed, no credits are added. If money was debited for a payment
+          that PurpleCallio did not confirm, it is
           handled under the Duplicate Payments section above or returned by the payment provider
           according to its policies.
         </p>
@@ -67,8 +61,7 @@ export default function RefundPage() {
 
       <LegalSection num="6" title="Effect of a Refund">
         <p>
-          When a payment is refunded, the credits it added may be removed from your balance, and a
-          refunded plan may end, returning your account to the Free plan.
+          When a payment is refunded, the credits it added may be removed from your balance.
         </p>
       </LegalSection>
 

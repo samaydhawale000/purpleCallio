@@ -10,6 +10,7 @@ import { TurnModule } from '../turn/turn.module';
 import { BillingModule } from '../billing/billing.module';
 import { OciMonitoringModule } from '../oci/oci-monitoring.module';
 import { CallModule } from '../call/call.module';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { CallModule } from '../call/call.module';
     BillingModule,
     OciMonitoringModule,
     CallModule,
+    AiModule,
   ],
   controllers: [AdminController, AdminsController],
   providers: [AdminService, AdminGuard],
