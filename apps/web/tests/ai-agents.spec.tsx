@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PURPLECALLIO_SIGNAL_URL } from '../app/lib/brand';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
-const { router, api, sdk } = vi.hoisted(() => ({
+const { router, api } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn() },
   api: {
     get: vi.fn(),
@@ -12,7 +11,6 @@ const { router, api, sdk } = vi.hoisted(() => ({
     delete: vi.fn(),
     defaults: { baseURL: 'http://api.test' },
   },
-  sdk: { instances: [] as any[] },
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => router,
@@ -27,41 +25,11 @@ vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a>,
 }));
 vi.mock('../app/lib/api', () => ({ api }));
-vi.mock('@purplecallio/sdk', () => {
-  class PurpleCallioAgentCall {
-    config: any;
-    handlers: Record<string, ((p: any) => void)[]> = {};
-    isMuted = false;
-    start = vi.fn(async () => {
-      this.fire('connectionState', 'connected');
-      this.fire('connected', { inputSampleRate: 16000, outputSampleRate: 24000 });
-    });
-    end = vi.fn(() => {
-      this.fire('connectionState', 'ended');
-      this.fire('ended', { reason: 'participant' });
-    });
-    mute = vi.fn(() => { this.isMuted = true; });
-    unmute = vi.fn(() => { this.isMuted = false; });
-    constructor(config: any) {
-      this.config = config;
-      sdk.instances.push(this);
-    }
-    on(event: string, fn: (p: any) => void) {
-      (this.handlers[event] ??= []).push(fn);
-      return () => undefined;
-    }
-    fire(event: string, payload?: any) {
-      (this.handlers[event] ?? []).forEach((fn) => fn(payload));
-    }
-  }
-  return { PurpleCallioAgentCall };
-});
 
 import DashboardLayout from '../app/dashboard/DashboardLayoutClient';
 import AiAgentsPage from '../app/dashboard/ai/page';
 import AiAgentPage from '../app/dashboard/ai/[id]/page';
 import { AgentForm } from '../app/dashboard/ai/_components/AgentForm';
-import { AgentPlayground } from '../app/dashboard/ai/_components/AgentPlayground';
 import { useAuthStore } from '../app/store/auth.store';
 import {
   EMPTY_AGENT_FORM,
@@ -106,7 +74,6 @@ function routeGet(routes: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  sdk.instances.length = 0;
   localStorage.clear();
   useAuthStore.setState({ token: 'access', refreshToken: 'r', hasHydrated: true, user: { userId: 'u1', profileCompleted: true } });
 });
@@ -185,6 +152,24 @@ describe('agent page', () => {
 
     await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/ai/agents/agent-1', { name: 'Renamed' }));
   });
+
+  it('shows the agent id to copy and no playground tab', async () => {
+    routeGet({
+      '/ai/status': { enabled: true, paidPlan: true },
+      '/ai/agents/agent-1': AGENT,
+      '/ai/agents/agent-1/versions': [AGENT.currentVersion],
+    });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<AiAgentPage />);
+    expect((await screen.findByTestId('agent-id')).textContent).toBe('agent-1');
+    expect(screen.queryByRole('tab', { name: 'Playground' })).toBeNull();
+
+    fireEvent.click(screen.getByText('Copy'));
+    expect(writeText).toHaveBeenCalledWith('agent-1');
+    expect(await screen.findByText('Copied')).toBeTruthy();
+  });
 });
 
 describe('AI nav item', () => {
@@ -242,51 +227,5 @@ describe('Free plan', () => {
     render(<AiAgentsPage />);
     expect(await screen.findByText('New agent')).toBeTruthy();
     expect(screen.queryByText('AI voice agents are available on paid plans')).toBeNull();
-  });
-
-  it('hides the playground Start button', () => {
-    render(<AgentPlayground agentId="agent-1" agentActive canStart={false} />);
-    expect(screen.queryByText('Start')).toBeNull();
-  });
-});
-
-describe('playground', () => {
-  it('starts a playground session and shows state and transcript', async () => {
-    api.post.mockResolvedValue({ data: { token: 'bj_ai_x', sessionId: 's1' } });
-    render(<AgentPlayground agentId="agent-1" agentActive canStart />);
-
-    fireEvent.click(screen.getByText('Start'));
-    await waitFor(() => expect(sdk.instances).toHaveLength(1));
-    expect(api.post).toHaveBeenCalledWith('/ai/playground/sessions', { agentId: 'agent-1' });
-    // The relay origin, never the /api-prefixed REST base URL.
-    expect(sdk.instances[0].config).toEqual({ token: 'bj_ai_x', apiUrl: PURPLECALLIO_SIGNAL_URL });
-    await waitFor(() => expect(screen.getByTestId('ai-connection-state').textContent).toBe('Connected'));
-
-    const call = sdk.instances[0];
-    act(() => {
-      call.fire('agentState', 'speaking');
-      call.fire('transcript', { role: 'agent', text: 'Hel', final: false });
-      call.fire('transcript', { role: 'agent', text: 'Hello!', final: true });
-    });
-    expect(screen.getByTestId('ai-agent-state').textContent).toBe('Speaking');
-    expect(screen.getByText('Hello!')).toBeTruthy();
-    expect(screen.queryByText('Hel')).toBeNull();
-
-    fireEvent.click(screen.getByText('Mute'));
-    expect(call.mute).toHaveBeenCalled();
-
-    fireEvent.click(screen.getByText('End'));
-    expect(call.end).toHaveBeenCalled();
-    expect(screen.getByText('You ended the call.')).toBeTruthy();
-  });
-
-  it('shows friendly text for an error code', async () => {
-    api.post.mockRejectedValue({ response: { status: 429, data: { code: 'AI_CONCURRENCY_LIMIT', message: 'x' } } });
-    render(<AgentPlayground agentId="agent-1" agentActive canStart />);
-    fireEvent.click(screen.getByText('Start'));
-    expect((await screen.findByRole('alert')).textContent).toBe(
-      'Too many AI calls are running at once. End one and try again.',
-    );
-    expect(sdk.instances).toHaveLength(0);
   });
 });

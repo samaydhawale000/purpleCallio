@@ -540,37 +540,6 @@ describe('AiSessionService', () => {
     });
   });
 
-  describe('playground', () => {
-    it('uses the dashboard user as the participant', async () => {
-      const result = await service.createPlaygroundSession(OWNER, {
-        agentId: AGENT,
-      });
-      expect(result.token).toMatch(/^bj_ai_/);
-      expect(fake.sessions[0]).toMatchObject({
-        participantId: OWNER,
-        participantName: 'Asha',
-        ownerId: OWNER,
-      });
-    });
-
-    it("hides another account's agent", async () => {
-      expect(
-        await errorCode(
-          service.createPlaygroundSession(STRANGER, { agentId: AGENT }),
-        ),
-      ).toBe('AI_AGENT_NOT_FOUND');
-    });
-
-    it('requires a paid plan', async () => {
-      paid = false;
-      expect(
-        await errorCode(
-          service.createPlaygroundSession(OWNER, { agentId: AGENT }),
-        ),
-      ).toBe('AI_PAID_PLAN_REQUIRED');
-    });
-  });
-
   describe('a plan that lapses mid-call', () => {
     it('blocks new sessions but never ends the running one', async () => {
       const { sessionId, token } = await create();

@@ -43,14 +43,3 @@ export class CreateAiSessionDto {
   @MaxJsonBytes(SESSION_METADATA_MAX_BYTES)
   metadata?: Record<string, unknown>;
 }
-
-/** POST /ai/playground/sessions: the participant is the dashboard user. */
-export class CreatePlaygroundSessionDto {
-  @IsUUID()
-  agentId: string;
-
-  @IsOptional()
-  @IsObject()
-  @MaxJsonBytes(SESSION_METADATA_MAX_BYTES)
-  metadata?: Record<string, unknown>;
-}

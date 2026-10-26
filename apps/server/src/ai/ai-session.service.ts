@@ -25,10 +25,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { aiConfig } from './ai.config';
 import { AiAccessService } from './ai-access.service';
 import { AiBillingService } from './ai-billing.service';
-import {
-  CreateAiSessionDto,
-  CreatePlaygroundSessionDto,
-} from './dto/create-session.dto';
+import { CreateAiSessionDto } from './dto/create-session.dto';
 
 /** A session in one of these states can never be connected or ended again. */
 const TERMINAL_STATUSES: AiSessionStatus[] = [
@@ -120,27 +117,6 @@ export class AiSessionService {
         id: dto.participant.id.trim(),
         name: dto.participant.name?.trim() || null,
       },
-      metadata: dto.metadata,
-    });
-  }
-
-  /** POST /ai/playground/sessions: the dashboard user calls their own agent. */
-  async createPlaygroundSession(
-    userId: string,
-    dto: CreatePlaygroundSessionDto,
-  ) {
-    const agent = await this.prisma.aiAgent.findFirst({
-      where: { id: dto.agentId, deletedAt: null, project: { ownerId: userId } },
-    });
-    if (!agent) throw this.agentNotFound();
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { name: true },
-    });
-    return this.start({
-      agent,
-      ownerId: userId,
-      participant: { id: userId, name: user?.name ?? null },
       metadata: dto.metadata,
     });
   }

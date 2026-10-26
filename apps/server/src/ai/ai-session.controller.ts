@@ -10,13 +10,9 @@ import {
 import { Throttle } from '@nestjs/throttler';
 
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
-import { JwtGuard } from '../auth/guards/jwt.guard';
 import { AiEnabledGuard } from './guards/ai-enabled.guard';
 import { AiSessionService } from './ai-session.service';
-import {
-  CreateAiSessionDto,
-  CreatePlaygroundSessionDto,
-} from './dto/create-session.dto';
+import { CreateAiSessionDto } from './dto/create-session.dto';
 
 interface ApiKeyRequest {
   project: { id: string; ownerId: string };
@@ -48,12 +44,5 @@ export class AiSessionController {
   @Post('sessions/:id/end')
   end(@Req() req: ApiKeyRequest, @Param('id') id: string) {
     return this.sessions.endForProject(req.project.id, id);
-  }
-
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @UseGuards(AiEnabledGuard, JwtGuard)
-  @Post('playground/sessions')
-  createPlayground(@Req() req: any, @Body() body: CreatePlaygroundSessionDto) {
-    return this.sessions.createPlaygroundSession(req.user.userId, body);
   }
 }

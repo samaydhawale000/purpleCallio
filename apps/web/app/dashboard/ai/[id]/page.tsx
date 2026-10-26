@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Power, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Power, Trash2 } from 'lucide-react';
 import { api } from '../../../lib/api';
 import {
   AgentFormValues,
@@ -18,19 +18,52 @@ import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { ToastHost, ToastState } from '../../billing/Toast';
 import { AgentForm } from '../_components/AgentForm';
-import { AgentPlayground } from '../_components/AgentPlayground';
 import { AiDisabledNotice, AiLoading, AiUpgradeCard } from '../_components/AiNotices';
 import { ToolsPanel } from '../_components/ToolsPanel';
 import { TranscriptSettings } from '../_components/TranscriptSettings';
 import { VersionHistory } from '../_components/VersionHistory';
 
-type Tab = 'configuration' | 'tools' | 'playground';
+type Tab = 'configuration' | 'tools';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'configuration', label: 'Configuration' },
   { id: 'tools', label: 'Tools' },
-  { id: 'playground', label: 'Playground' },
 ];
+
+/** The id integrators pass as `agentId` to POST /ai/sessions. */
+function AgentIdField({ agentId }: { agentId: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    await navigator.clipboard.writeText(agentId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="rounded-2xl border border-[#E7DFF5] p-4 flex flex-col gap-2" style={{ background: '#FFFFFF' }}>
+      <span className="text-sm font-medium text-[#170B2E]">Agent ID</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <code
+          data-testid="agent-id"
+          className="flex-1 min-w-0 break-all rounded-lg bg-[#F7F4FC] px-3 py-2 font-mono text-sm text-[#170B2E]"
+        >
+          {agentId}
+        </code>
+        <Button variant="secondary" size="sm" onClick={copy}>
+          {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
+      <p className="text-xs text-[#3D3650]">
+        Pass this as <code className="font-mono">agentId</code> when your server creates a session with{' '}
+        <code className="font-mono">POST /ai/sessions</code>.{' '}
+        <Link href="/docs/ai-agents#server-session" className="text-[#7F40E8] hover:underline">
+          Integration guide
+        </Link>
+      </p>
+    </div>
+  );
+}
 
 export default function AiAgentPage() {
   const { id } = useParams<{ id: string }>();
@@ -158,6 +191,8 @@ export default function AiAgentPage() {
         {agent.description && <p className="text-sm text-[#3D3650]">{agent.description}</p>}
       </div>
 
+      <AgentIdField agentId={agent.id} />
+
       {!paidPlan && <AiUpgradeCard />}
 
       <div role="tablist" className="flex gap-1 border-b border-[#E7DFF5]">
@@ -210,10 +245,6 @@ export default function AiAgentPage() {
           tools={agent.tools ?? []}
           onChange={(tools: AiAgentTool[]) => setAgent((a) => (a ? { ...a, tools } : a))}
         />
-      )}
-
-      {tab === 'playground' && (
-        <AgentPlayground agentId={agent.id} agentActive={agent.status === 'ACTIVE'} canStart={paidPlan} />
       )}
     </div>
   );

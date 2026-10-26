@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-const { api, sdk } = vi.hoisted(() => ({
+const { api } = vi.hoisted(() => ({
   api: {
     get: vi.fn(),
     post: vi.fn(),
@@ -9,42 +9,10 @@ const { api, sdk } = vi.hoisted(() => ({
     delete: vi.fn(),
     defaults: { baseURL: 'http://api.test' },
   },
-  sdk: { instances: [] as any[] },
 }));
 vi.mock('../app/lib/api', () => ({ api }));
-vi.mock('@purplecallio/sdk', () => {
-  class PurpleCallioAgentCall {
-    config: any;
-    handlers: Record<string, ((p: any) => void)[]> = {};
-    isMuted = false;
-    confirmTool = vi.fn();
-    start = vi.fn(async () => {
-      this.fire('connectionState', 'connected');
-      this.fire('connected', { inputSampleRate: 16000, outputSampleRate: 24000 });
-    });
-    end = vi.fn(() => {
-      this.fire('connectionState', 'ended');
-      this.fire('ended', { reason: 'participant' });
-    });
-    mute = vi.fn();
-    unmute = vi.fn();
-    constructor(config: any) {
-      this.config = config;
-      sdk.instances.push(this);
-    }
-    on(event: string, fn: (p: any) => void) {
-      (this.handlers[event] ??= []).push(fn);
-      return () => undefined;
-    }
-    fire(event: string, payload?: any) {
-      (this.handlers[event] ?? []).forEach((fn) => fn(payload));
-    }
-  }
-  return { PurpleCallioAgentCall };
-});
 
 import { ToolsPanel } from '../app/dashboard/ai/_components/ToolsPanel';
-import { AgentPlayground } from '../app/dashboard/ai/_components/AgentPlayground';
 import {
   isToolEndpointUrl,
   sampleToolArguments,
@@ -78,7 +46,6 @@ const TOOL: AiAgentTool = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  sdk.instances.length = 0;
 });
 
 describe('tool helpers', () => {
@@ -158,48 +125,5 @@ describe('ToolsPanel test call', () => {
 
     expect(await screen.findByText('Arguments must be a JSON object.')).toBeTruthy();
     expect(api.post).not.toHaveBeenCalled();
-  });
-});
-
-describe('playground tool events', () => {
-  async function startCall() {
-    api.post.mockResolvedValueOnce({ data: { token: 'bj_ai_x' } });
-    render(<AgentPlayground agentId="agent-1" agentActive canStart />);
-    fireEvent.click(screen.getByRole('button', { name: /Start/ }));
-    await waitFor(() => expect(sdk.instances).toHaveLength(1));
-    return sdk.instances[0];
-  }
-
-  it('shows tool calls with their status', async () => {
-    const call = await startCall();
-    act(() => call.fire('tool_call', { id: 'fc_1', name: 'getCustomerName', status: 'running' }));
-    expect(screen.getByTestId('ai-tool-activity').textContent).toContain('Running…');
-
-    act(() => call.fire('tool_call', { id: 'fc_1', name: 'getCustomerName', status: 'success' }));
-    const list = screen.getByTestId('ai-tool-activity');
-    expect(list.querySelectorAll('li')).toHaveLength(1);
-    expect(list.textContent).toContain('Done');
-  });
-
-  it('asks the user and sends the answer through confirmTool', async () => {
-    const call = await startCall();
-    act(() => call.fire('tool.confirmation_required', { id: 'fc_2', name: 'cancelOrder' }));
-
-    expect(screen.getByRole('alertdialog', { name: 'Confirm cancelOrder' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Allow' }));
-    expect(call.confirmTool).toHaveBeenCalledWith('fc_2', true);
-    expect(screen.queryByRole('alertdialog')).toBeNull();
-
-    act(() => call.fire('tool.confirmation_required', { id: 'fc_3', name: 'cancelOrder' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
-    expect(call.confirmTool).toHaveBeenCalledWith('fc_3', false);
-  });
-
-  it('drops the prompt when the server settles the call first', async () => {
-    const call = await startCall();
-    act(() => call.fire('tool.confirmation_required', { id: 'fc_4', name: 'cancelOrder' }));
-    act(() => call.fire('tool_call', { id: 'fc_4', name: 'cancelOrder', status: 'unconfirmed' }));
-    expect(screen.queryByRole('alertdialog')).toBeNull();
-    expect(screen.getByTestId('ai-tool-activity').textContent).toContain('Not confirmed');
   });
 });
