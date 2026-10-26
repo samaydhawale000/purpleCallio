@@ -10,7 +10,7 @@ export const PURPLECALLIO_URL = (
 /** PURPLECALLIO_URL without the scheme, for prose ("see <host>/docs"). */
 export const PURPLECALLIO_HOST = new URL(PURPLECALLIO_URL).host;
 export const PURPLECALLIO_DESCRIPTION =
-   "PurpleCallio is developer infrastructure for adding video calls, audio calls, screen sharing and AI voice agents to web and mobile applications.";
+   "PurpleCallio is developer infrastructure for adding video and audio calls, screen sharing, live speech translation and AI voice agents to web and mobile apps.";
 export const PURPLECALLIO_CATEGORY =
    "Developer-focused real-time communication infrastructure";
 export const PURPLECALLIO_LOGO = "/icon.png";

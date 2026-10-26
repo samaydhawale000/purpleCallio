@@ -16,6 +16,7 @@ import { BillingConfigService } from './billing-config.service';
 import { BillingNotificationService } from './billing-notification.service';
 import { PlanService } from './plans/plan.service';
 import { CreditService } from './credits/credit.service';
+import { SignupCreditsService } from './credits/signup-credits.service';
 import { SubscriptionService } from './subscriptions/subscription.service';
 import { EntitlementService } from './subscriptions/entitlement.service';
 import { AutoRenewService } from './subscriptions/auto-renew.service';
@@ -51,6 +52,7 @@ import { SupportModule } from '../support/support.module';
     // Domain
     PlanService,
     CreditService,
+    SignupCreditsService,
     SubscriptionService,
     EntitlementService,
     AutoRenewService,
@@ -90,6 +92,7 @@ import { SupportModule } from '../support/support.module';
     EntitlementService,
     AutoRenewService,
     CreditService,
+    SignupCreditsService,
     BillingConfigService,
     BillingGuard,
   ],

@@ -10,6 +10,7 @@ import { OAuth2Client } from 'google-auth-library';
 
 import { BillingService } from '../billing/billing.service';
 import { SubscriptionService } from '../billing/subscriptions/subscription.service';
+import { SignupCreditsService } from '../billing/credits/signup-credits.service';
 
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { toUserProfile, PROFILE_SELECT } from './user-profile';
@@ -23,6 +24,7 @@ export class AuthService {
     private jwtService: JwtService,
     private billingService: BillingService,
     private subscriptions: SubscriptionService,
+    private signupCredits: SignupCreditsService,
   ) {
     this.googleClient = new OAuth2Client(
       process.env.GOOGLE_CLIENT_ID,
@@ -72,6 +74,8 @@ export class AuthService {
             avatarUrl,
           },
         });
+        // Non-fatal: welcome credits must never block signup.
+        this.signupCredits.grant(user.id).catch(() => undefined);
       } else {
         // Existing email user — link the Google account.
         user = await this.prisma.user.update({
@@ -86,7 +90,7 @@ export class AuthService {
     }
 
     // Ensure the user has an active subscription + credit wallet (Free plan
-    // with its monthly credits by default).
+    // by default; it grants no recurring credits).
     this.subscriptions.getActiveSubscription(user.id).catch(() => {
       // Non-fatal: subscription assignment should not block login.
     });

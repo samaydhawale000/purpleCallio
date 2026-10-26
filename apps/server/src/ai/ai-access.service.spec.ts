@@ -6,6 +6,7 @@ describe('AiAccessService', () => {
     available = 100,
     minimumCreditsToStartCall = 1,
     prepaidSince: Date | null = null,
+    freeCredits = 0,
   ) {
     const subscriptions = {
       getActiveSubscription: jest.fn().mockResolvedValue({
@@ -13,7 +14,12 @@ describe('AiAccessService', () => {
         currentPeriodStart: new Date('2026-10-01T00:00:00Z'),
       }),
     };
-    const credits = { getSummary: jest.fn().mockResolvedValue({ available }) };
+    const credits = {
+      getSummary: jest.fn().mockResolvedValue({
+        available: available + freeCredits,
+        paidAvailable: available,
+      }),
+    };
     const config = {
       get: jest.fn().mockResolvedValue({ minimumCreditsToStartCall }),
     };
@@ -52,5 +58,11 @@ describe('AiAccessService', () => {
     await expect(build('PAID', 5, 5).hasCreditsToStart('u')).resolves.toBe(
       true,
     );
+  });
+
+  it('free credits never pay for AI', async () => {
+    await expect(
+      build('FREE', 0, 1, new Date(), 5000).hasCreditsToStart('u'),
+    ).resolves.toBe(false);
   });
 });

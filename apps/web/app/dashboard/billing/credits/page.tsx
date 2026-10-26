@@ -23,11 +23,13 @@ import {
   enableAutoTopUp,
   disableAutoTopUp,
   type AutoTopUpState,
+  AUTO_TOPUP_ATTENTION_TEXT,
   type CreditTransactionRow,
   type CreditTransactionType,
   type Paginated,
   type WalletSummary,
   type PublishedCreditPricing,
+  walletSplit,
 } from '../../../lib/billing';
 import { runAutoTopUpMandateSetup } from '../../../lib/checkout';
 import {
@@ -72,6 +74,9 @@ export default function CreditsPage() {
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloadingReceiptId, setDownloadingReceiptId] = useState<string | null>(null);
+
+  const topUpSetting = autoTopUp?.setting ?? null;
+  const topUpStage = autoTopUpStage(topUpSetting);
 
   const loadSummary = useCallback(async () => {
     try {
@@ -184,6 +189,11 @@ export default function CreditsPage() {
             <p className="mt-1 text-3xl font-semibold tracking-tight text-[#170B2E]" data-testid="wallet-summary">
               {wallet ? formatCredits(wallet.available) : '—'}
             </p>
+            {wallet && walletSplit(wallet).free > 0 && (
+              <p className="mt-1 text-sm text-[#3D3650]" data-testid="wallet-split">
+                {formatCredits(walletSplit(wallet).paid)} paid · {formatCredits(walletSplit(wallet).free)} free (audio, video and screen share only)
+              </p>
+            )}
             {creditPricing ? (
               <p className="mt-3 text-sm text-[#3D3650]">
                 {formatMoney(creditPricing.creditPricePaise, creditPricing.currency)} per credit · Purchased credits expire after {creditPricing.purchasedValidityDays} days.
@@ -220,14 +230,20 @@ export default function CreditsPage() {
                   <h3 className="text-base font-semibold text-[#170B2E]">Auto Top-Up</h3>
                   <p className="mt-1 text-sm text-[#3D3650]">Keep your wallet ready for calls when your balance gets low.</p>
                 </div>
-                <Badge variant={autoTopUp?.setting?.enabled ? 'purple' : 'default'}>{autoTopUp?.setting?.enabled ? 'Enabled' : 'Off'}</Badge>
+                <Badge variant={topUpStage.badge}>{topUpStage.label}</Badge>
               </div>
-              <p className="mt-3 text-sm text-[#3D3650]">Authorize a Razorpay eMandate to add credits when your balance reaches your chosen threshold. Charges remain off until you explicitly enable them after Razorpay confirms the mandate.</p>
-              {autoTopUp?.setting?.attentionReason && <p role="alert" className="mt-2 text-sm text-red-700">{autoTopUp.setting.attentionReason}</p>}
+              <p className="mt-3 text-sm text-[#3D3650]" data-testid="auto-topup-status">{topUpStage.text}</p>
+              {topUpSetting && topUpSetting.mandateStatus && topUpSetting.mandateStatus !== 'NONE' && (
+                <p className="mt-2 text-sm text-[#3D3650]" data-testid="auto-topup-summary">
+                  When your balance falls below {formatCredits(topUpSetting.thresholdCredits)} credits, add {formatMoney(topUpSetting.amountPaise, topUpSetting.currency)} of credits (up to {formatMoney(topUpSetting.monthlyLimitPaise, topUpSetting.currency)} a month, plus GST).
+                </p>
+              )}
+              {topUpSetting?.attentionReason && <p role="alert" className="mt-2 text-sm text-red-700">{AUTO_TOPUP_ATTENTION_TEXT[topUpSetting.attentionReason] ?? topUpSetting.attentionReason}</p>}
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button type="button" variant="secondary" disabled={autoTopUpBusy} onClick={() => setShowAutoTopUpSetup(true)}>Configure</Button>
-                {autoTopUp?.setting?.mandateStatus === 'ACTIVE' && !autoTopUp.setting.enabled && <Button type="button" disabled={autoTopUpBusy} onClick={async () => { setAutoTopUpBusy(true); try { await enableAutoTopUp(); await loadSummary(); } finally { setAutoTopUpBusy(false); } }}>Enable</Button>}
-                {autoTopUp?.setting?.enabled && <Button type="button" variant="secondary" disabled={autoTopUpBusy} onClick={async () => { setAutoTopUpBusy(true); try { await disableAutoTopUp(); await loadSummary(); } finally { setAutoTopUpBusy(false); } }}>Disable</Button>}
+                {topUpStage.key === 'ready' && <Button type="button" disabled={autoTopUpBusy} onClick={async () => { setAutoTopUpBusy(true); try { await enableAutoTopUp(); await loadSummary(); } finally { setAutoTopUpBusy(false); } }}>Turn on Auto Top-Up</Button>}
+                {topUpStage.key === 'pending' && <Button type="button" variant="secondary" disabled={autoTopUpBusy} onClick={async () => { setAutoTopUpBusy(true); try { await loadSummary(); } finally { setAutoTopUpBusy(false); } }}>Check status</Button>}
+                <Button type="button" variant="secondary" disabled={autoTopUpBusy} onClick={() => setShowAutoTopUpSetup(true)}>{topUpStage.key === 'off' ? 'Set up' : topUpStage.key === 'attention' ? 'Authorize again' : 'Change settings'}</Button>
+                {topUpSetting?.enabled && <Button type="button" variant="secondary" disabled={autoTopUpBusy} onClick={async () => { setAutoTopUpBusy(true); try { await disableAutoTopUp(); await loadSummary(); } finally { setAutoTopUpBusy(false); } }}>Turn off</Button>}
               </div>
             </div>
           </div>
@@ -235,9 +251,20 @@ export default function CreditsPage() {
       </SectionCard>
 
       {showAutoTopUpSetup && creditPricing && (
-        <AutoTopUpDialog pricing={creditPricing} busy={autoTopUpBusy} onClose={() => setShowAutoTopUpSetup(false)} onSave={async (thresholdCredits, amountPaise, monthlyLimitPaise) => {
+        <AutoTopUpDialog pricing={creditPricing} existing={topUpSetting} busy={autoTopUpBusy} onClose={() => setShowAutoTopUpSetup(false)} onSave={async (thresholdCredits, amountPaise, monthlyLimitPaise) => {
           setAutoTopUpBusy(true);
-          try { await saveAutoTopUp({ thresholdCredits, amountPaise, monthlyLimitPaise, currency: creditPricing.currency }); await runAutoTopUpMandateSetup(); await loadSummary(); setShowAutoTopUpSetup(false); }
+          try {
+            await saveAutoTopUp({ thresholdCredits, amountPaise, monthlyLimitPaise, currency: creditPricing.currency });
+            await runAutoTopUpMandateSetup();
+            setShowAutoTopUpSetup(false);
+            // Razorpay confirms the mandate a moment after the window closes: check for a few seconds.
+            for (let i = 0; i < 5; i++) {
+              const state = await getAutoTopUp().catch(() => null);
+              if (state?.setting?.mandateStatus !== 'PENDING') break;
+              await new Promise((r) => setTimeout(r, 2000));
+            }
+            await loadSummary();
+          }
           catch (e) { setError(billingErrorMessage(e, 'Could not start eMandate authorization.')); }
           finally { setAutoTopUpBusy(false); }
         }} />
@@ -520,11 +547,41 @@ function PurchaseEstimate({ label, value }: { label: string; value: string }) {
   return <div className="rounded-lg bg-white p-3"><p className="text-xs text-[#5D536E]">{label}</p><p className="mt-1 text-base font-semibold text-[#170B2E]">{value}</p></div>;
 }
 
-function AutoTopUpDialog({ pricing, busy, onClose, onSave }: { pricing: PublishedCreditPricing; busy: boolean; onClose: () => void; onSave: (threshold: number, amount: number, cap: number) => Promise<void> }) {
-  const [threshold, setThreshold] = useState('10');
-  const [amount, setAmount] = useState((pricing.minimumPurchasePaise / 100).toFixed(2));
-  const [cap, setCap] = useState(((pricing.minimumPurchasePaise * 3) / 100).toFixed(2));
-  return <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-[#170B2E]/45 p-4"><form className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onSubmit={(e) => { e.preventDefault(); const a = amountToMinor(amount); const c = amountToMinor(cap); const t = Number(threshold); if (a && c && Number.isSafeInteger(t) && t >= 0 && c >= a) void onSave(t, a, c); }}><h2 className="text-lg font-semibold text-[#170B2E]">Configure Auto Top-Up</h2><p className="mt-2 text-sm text-[#3D3650]">You will authorize an eMandate in Razorpay. No automatic charge is enabled until Razorpay confirms it and you turn Auto Top-Up on.</p><label className="mt-4 block text-sm">Credit threshold<input required min="0" type="number" value={threshold} onChange={(e) => setThreshold(e.target.value)} className="mt-1 w-full rounded border p-2" /></label><label className="mt-3 block text-sm">Top-up amount ({pricing.currency})<input required inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 w-full rounded border p-2" /></label><label className="mt-3 block text-sm">Monthly maximum ({pricing.currency})<input required inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} className="mt-1 w-full rounded border p-2" /></label><div className="mt-5 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? 'Starting…' : 'Authorize eMandate'}</Button></div></form></div>;
+type TopUpStage = { key: 'off' | 'pending' | 'ready' | 'on' | 'attention'; label: string; badge: 'default' | 'warning' | 'info' | 'purple' | 'error'; text: string };
+
+/** Where the customer is in setup: authorize → Razorpay confirms → turn on. */
+function autoTopUpStage(s: AutoTopUpState['setting']): TopUpStage {
+  const status = s?.mandateStatus ?? 'NONE';
+  if (s?.enabled) return { key: 'on', label: 'On', badge: 'purple', text: 'Auto Top-Up is on. Credits are added automatically using your confirmed Razorpay eMandate.' };
+  if (status === 'ACTIVE') return { key: 'ready', label: 'Ready to turn on', badge: 'info', text: 'Razorpay has confirmed your eMandate. Turn on Auto Top-Up to start. Nothing is charged until you do.' };
+  if (status === 'PENDING') return { key: 'pending', label: 'Awaiting confirmation', badge: 'warning', text: 'Your eMandate is waiting for Razorpay to confirm it. This usually takes a few seconds; some banks take up to a few days. Once confirmed, you can turn Auto Top-Up on here.' };
+  if (status === 'FAILED' || status === 'REVOKED' || status === 'EXPIRED') return { key: 'attention', label: 'Needs attention', badge: 'error', text: 'Your eMandate is no longer active. Authorize it again to use Auto Top-Up.' };
+  return { key: 'off', label: 'Off', badge: 'default', text: 'Authorize a Razorpay eMandate to add credits when your balance reaches your chosen threshold. Charges stay off until you turn Auto Top-Up on after Razorpay confirms the mandate.' };
+}
+
+function AutoTopUpDialog({ pricing, existing, busy, onClose, onSave }: { pricing: PublishedCreditPricing; existing: AutoTopUpState['setting']; busy: boolean; onClose: () => void; onSave: (threshold: number, amount: number, cap: number) => Promise<void> }) {
+  // A first setup starts empty (the customer chooses every value); a change starts from the saved values.
+  const rupees = (paise: number) => (paise / 100).toFixed(2).replace(/\.00$/, '');
+  const [threshold, setThreshold] = useState(existing ? String(existing.thresholdCredits) : '');
+  const [amount, setAmount] = useState(existing ? rupees(existing.amountPaise) : '');
+  const [cap, setCap] = useState(existing ? rupees(existing.monthlyLimitPaise) : '');
+  const [error, setError] = useState<string | null>(null);
+  const minimum = formatMoney(pricing.minimumPurchasePaise, pricing.currency);
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const t = Number(threshold);
+    const a = amountToMinor(amount);
+    const c = amountToMinor(cap);
+    if (!threshold.trim() || !Number.isSafeInteger(t) || t < 0) return setError('Enter the credit balance that should trigger a top-up (a whole number).');
+    if (!a) return setError('Enter a top-up amount with up to 2 decimal places.');
+    const amountError = getPurchaseAmountError(amount, a, pricing);
+    if (amountError) return setError(amountError.replace('purchase', 'top-up'));
+    if (!c) return setError('Enter a monthly maximum with up to 2 decimal places.');
+    if (c < a) return setError('The monthly maximum must be at least the top-up amount.');
+    setError(null);
+    void onSave(t, a, c);
+  };
+  return <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-[#170B2E]/45 p-4"><form noValidate className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onSubmit={submit}><h2 className="text-lg font-semibold text-[#170B2E]">{existing ? 'Update Auto Top-Up' : 'Configure Auto Top-Up'}</h2><p className="mt-2 text-sm text-[#3D3650]">You will authorize an eMandate in Razorpay. No automatic charge is enabled until Razorpay confirms it and you turn Auto Top-Up on.</p><label className="mt-4 block text-sm">Credit threshold<input required min="0" type="number" placeholder="Top up when credits fall below…" value={threshold} onChange={(e) => setThreshold(e.target.value)} className="mt-1 w-full rounded border p-2" /></label><label className="mt-3 block text-sm">Top-up amount ({pricing.currency})<input required inputMode="decimal" placeholder={`Minimum ${minimum}`} value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 w-full rounded border p-2" /></label><label className="mt-3 block text-sm">Monthly maximum ({pricing.currency})<input required inputMode="decimal" placeholder="At least the top-up amount" value={cap} onChange={(e) => setCap(e.target.value)} className="mt-1 w-full rounded border p-2" /></label>{error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}<div className="mt-5 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? 'Starting…' : 'Authorize eMandate'}</Button></div></form></div>;
 }
 
 function getPurchaseAmountError(amount: string, paise: number | null, pricing: PublishedCreditPricing) {

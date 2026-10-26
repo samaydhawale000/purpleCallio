@@ -45,10 +45,10 @@ import {
 
 const TITLE = "Live Translate: Real-Time Voice Translation for Calls";
 const DESCRIPTION =
-   "Real-time voice translation API for 1:1 calls, in early access: two-way voice and captions, side-by-side original text, misunderstanding flags, budgets and metrics. 60 languages worldwide, any to any.";
+   "Real-time voice translation API for calls: two-way voice and captions with the original text, misunderstanding flags and budgets. 60 languages, any to any.";
 
 export const metadata = pageMetadata({
-   title: "Live Translate: Real-Time Voice Translation API & Speech Translation SDK",
+   title: "Live Translate: Real-Time Voice Translation API",
    description: DESCRIPTION,
    path: LIVE_TRANSLATE_PATH,
 });

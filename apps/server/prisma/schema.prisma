@@ -139,12 +139,15 @@ enum CreditTransactionType {
   MIGRATION
 }
 
+// PROMOTION and SIGNUP are free credits: they pay for audio, video and
+// screen share only, never for AI features (see CreditService).
 enum CreditBucketSource {
   SUBSCRIPTION
   TOPUP
   PROMOTION
   ADMIN
   MIGRATION
+  SIGNUP
 }
 
 enum TopUpStatus {
@@ -1170,8 +1173,6 @@ model BillingConfig {
   translationIndicVoiceCreditsPerMinute Int?
   // Credits needed to start translation (null = one minute of the chosen mode).
   translationMinimumCredits             Int?
-  // One-time free translated minutes for accounts whose plan lacks TRANSLATION.
-  translationTrialMinutes               Int     @default(0)
   // Post-Call Suite report charge (per report).
   postCallReportCredits                 Int     @default(100)
   // Provider cost in paise per direction-minute, by route (margin reporting only).
@@ -1187,6 +1188,11 @@ model BillingConfig {
   lowCreditThresholds         Int[]             @default([80, 90, 100])
   // New calls need at least this many available credits.
   minimumCreditsToStartCall   Int               @default(1)
+  // Free credits granted once to each new account (0 = none). Like
+  // promotional credits they pay for audio, video and screen share only.
+  signupFreeCredits           Int               @default(0)
+  // Days the signup credits stay valid (null = never expire).
+  signupFreeCreditsValidityDays Int?            @default(30)
   topUpExpiryPolicy           TopUpExpiryPolicy @default(NEVER)
   topUpExpiryDays             Int?
   // Days before expiry to remind the customer to renew.

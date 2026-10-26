@@ -15,8 +15,8 @@ export const FeatureKey = {
   ANALYTICS: 'ANALYTICS',
   CUSTOM_BRANDING: 'CUSTOM_BRANDING',
   // Live Translate (voice + caption translation). Not in CORE_FEATURES:
-  // admins add it to plans explicitly; accounts without it can use the
-  // one-time trial (BillingConfig.translationTrialMinutes).
+  // admins add it to plans explicitly (or it comes with prepaid access).
+  // Always paid: free credits never cover it.
   TRANSLATION: 'TRANSLATION',
 } as const;
 

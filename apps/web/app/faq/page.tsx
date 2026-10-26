@@ -133,7 +133,7 @@ export default function FaqPage() {
   const pricing = usePublicPricing();
   const gst = pricing.status === 'ready' ? `${formatRate(pricing.data.creditRates.taxPercent)}%` : 'the applicable rate';
   return (
-    <div style={{ background: '#FFFFFF', color: '#170B2E', minHeight: '100vh' }}>
+    <main style={{ background: '#FFFFFF', color: '#170B2E', minHeight: '100vh' }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_SCHEMA).replace(/</g, '\\u003c') }} />
 
       {/* Hero */}
@@ -198,6 +198,6 @@ export default function FaqPage() {
         </div>
         </Reveal>
       </div>
-    </div>
+    </main>
   );
 }

@@ -33,8 +33,9 @@ const config = {
   translationVoiceCreditsPerMinute: 450,
   translationCaptionsCreditsPerMinute: 60,
   translationMinimumCredits: null,
-  translationTrialMinutes: 30,
   postCallReportCredits: 100,
+  signupFreeCredits: 500,
+  signupFreeCreditsValidityDays: 30,
   translationProviderCostsPaise: { 'openai-translate': 300, 'soniox-voice': 150 },
   translationMarginWarnPercent: 40,
   translationDefaultMaxMinutes: 60,
@@ -91,10 +92,26 @@ describe('Credit rates — Live Translate group', () => {
       translationVoiceCreditsPerMinute: 500,
       translationCaptionsCreditsPerMinute: 60,
       translationMinimumCredits: null,
-      translationTrialMinutes: 30,
       postCallReportCredits: 100,
       aiCreditsPerMinute: 15,
+      signupFreeCredits: 500,
+      signupFreeCreditsValidityDays: 30,
     });
+    expect(api.patch.mock.calls[0][1]).not.toHaveProperty('translationTrialMinutes');
+    expect(screen.queryByLabelText(/Free trial minutes/)).toBeNull();
+  });
+
+  it('free credits for new accounts: calls only, blank validity = never expire', async () => {
+    api.patch.mockResolvedValue({ data: config });
+    render(<CreditRatesTab />);
+    const panel = await screen.findByTestId('signup-credits');
+    expect(screen.getByText(/pay for audio, video and screen share only/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/^Free credits for new accounts/), { target: { value: '1000' } });
+    fireEvent.change(screen.getByLabelText(/^Valid for \(days\)/), { target: { value: '' } });
+    expect(panel).toBeTruthy();
+    fireEvent.click(screen.getByText('Save credit rates'));
+    await waitFor(() => expect(api.patch).toHaveBeenCalled());
+    expect(api.patch.mock.calls[0][1]).toMatchObject({ signupFreeCredits: 1000, signupFreeCreditsValidityDays: null });
   });
 
   it('rejects a zero voice rate', async () => {

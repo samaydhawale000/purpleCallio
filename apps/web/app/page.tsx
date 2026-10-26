@@ -265,7 +265,16 @@ export default function LandingPage() {
                   operatingSystem: "Web",
                   url: siteUrl.toString(),
                   description: PURPLECALLIO_DESCRIPTION,
-                  offers: { "@type": "Offer", description: "Prepaid credits for eligible PurpleCallio features; current pricing is published on the pricing page." },
+                  featureList: [
+                     "Video calling API",
+                     "Audio calling API",
+                     "Screen sharing",
+                     "Live Translate: real-time speech translation with voice and captions",
+                     "AI voice agents",
+                     "Hosted UI, React components and a headless JavaScript SDK",
+                     "REST API and webhooks",
+                  ],
+                  offers: { "@type": "Offer", url: new URL("/pricing", siteUrl).toString(), description: "Prepaid credits used across PurpleCallio features at per-minute rates; current pricing is published on the pricing page." },
                },
             ]}
          />

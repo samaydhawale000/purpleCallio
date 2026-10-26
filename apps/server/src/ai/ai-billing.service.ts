@@ -65,14 +65,14 @@ export class AiBillingService {
     private pricing: AiPricingService,
   ) {}
 
-  /** Session length cap from the balance (whole minutes at the AI rate). */
+  /** Session length cap from paid credits (whole minutes at the AI rate). */
   async maxSecondsByBalance(ownerId: string): Promise<number> {
     const sub = await this.subscriptions.getActiveSubscription(ownerId);
     const [config, wallet] = await Promise.all([
       this.config.get(),
       this.credits.getSummary(ownerId, sub.currentPeriodStart),
     ]);
-    return maxSecondsForBalance(wallet.available, config.aiCreditsPerMinute);
+    return maxSecondsForBalance(wallet.paidAvailable, config.aiCreditsPerMinute);
   }
 
   /**
@@ -121,6 +121,7 @@ export class AiBillingService {
                   referenceId: session.id,
                   idempotencyKey: `ai-session:${session.id}`,
                   allowPartial: true,
+                  paidOnly: true,
                   metadata: {
                     sessionId: session.id,
                     callId: session.callId,

@@ -191,7 +191,7 @@ export class AiSessionService {
       throw aiError(
         HttpStatus.FORBIDDEN,
         'AI_INSUFFICIENT_CREDITS',
-        'Your PurpleCallio credits are used up. Add credits in Billing.',
+        'AI voice agents use purchased credits only, and yours are used up. Free credits cover calls only. Add credits in Billing.',
       );
     }
 

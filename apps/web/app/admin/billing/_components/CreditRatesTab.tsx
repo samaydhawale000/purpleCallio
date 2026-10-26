@@ -22,7 +22,6 @@ const T_FIELDS = [
   { key: 'translationVoiceCreditsPerMinute', label: 'Voice translation (credits / min)', optional: false, min: 1 },
   { key: 'translationCaptionsCreditsPerMinute', label: 'Captions (credits / min)', optional: false, min: 1 },
   { key: 'translationMinimumCredits', label: 'Minimum credits to start translation (optional)', optional: true, min: 0 },
-  { key: 'translationTrialMinutes', label: 'Free trial minutes', optional: false, min: 0 },
   { key: 'postCallReportCredits', label: 'Post-call report (credits / report)', optional: false, min: 0 },
 ] as const;
 type TKey = (typeof T_FIELDS)[number]['key'];
@@ -38,6 +37,7 @@ export function CreditRatesTab() {
   const { data, loading, error } = useResource(getCreditRates, []);
   const [form, setForm] = useState<Record<Key, string> | null>(null);
   const [tForm, setTForm] = useState<Record<TKey, string> | null>(null);
+  const [free, setFree] = useState<{ credits: string; days: string } | null>(null);
   const [participants, setParticipants] = useState('2');
   const [minutes, setMinutes] = useState('10');
   const [saveError, setSaveError] = useState('');
@@ -53,6 +53,13 @@ export function CreditRatesTab() {
     // Only servers with AI billing send the AI rate.
     if (data.aiCreditsPerMinute !== undefined) f.aiCreditsPerMinute = String(data.aiCreditsPerMinute);
     setForm(f);
+    // Only servers with signup credits send them.
+    if (data.signupFreeCredits !== undefined) {
+      setFree({
+        credits: String(data.signupFreeCredits),
+        days: data.signupFreeCreditsValidityDays == null ? '' : String(data.signupFreeCreditsValidityDays),
+      });
+    }
     // Only servers with Live Translate send the translation rates.
     const t = data as typeof data & TranslationBillingConfig;
     if (t.translationVoiceCreditsPerMinute !== undefined) {
@@ -79,6 +86,13 @@ export function CreditRatesTab() {
     }
     if (body.aiCreditsPerMinute !== undefined && body.aiCreditsPerMinute < 1) {
       return setSaveError('AI voice must be at least 1 credit per minute.');
+    }
+    if (free) {
+      if (!/^\d+$/.test(free.credits.trim())) return setSaveError('Free credits for new accounts must be a whole number (0 = none).');
+      const days = free.days.trim();
+      if (days && (!/^\d+$/.test(days) || Number(days) < 1)) return setSaveError('Free credit validity must be at least 1 day, or empty for no expiry.');
+      body.signupFreeCredits = Number(free.credits);
+      body.signupFreeCreditsValidityDays = days ? Number(days) : null;
     }
     if (tForm) {
       const tBody = body as BillingConfigUpdate & TranslationBillingConfig;
@@ -134,6 +148,40 @@ export function CreditRatesTab() {
           </Field>
         </div>
       </Panel>
+
+      {free && (
+        <Panel
+          title="Free credits"
+          subtitle="Granted once when an account signs up. Free credits pay for audio, video and screen share only. AI features (Live Translate, AI voice agents, post-call reports) always need paid credits."
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" data-testid="signup-credits">
+            <Field label="Free credits for new accounts" hint="0 = none. Applies to accounts created from now on.">
+              <input
+                type="number"
+                min={0}
+                disabled={!canWrite}
+                className={inputCls}
+                value={free.credits}
+                onChange={(e) => setFree({ ...free, credits: e.target.value })}
+              />
+            </Field>
+            <Field label="Valid for (days)" hint="Empty = never expire.">
+              <input
+                type="number"
+                min={1}
+                disabled={!canWrite}
+                placeholder="Never expire"
+                className={inputCls}
+                value={free.days}
+                onChange={(e) => setFree({ ...free, days: e.target.value })}
+              />
+            </Field>
+          </div>
+          <p className="text-xs text-[#3D3650] mt-4">
+            To give one customer extra free credits, use “Grant promotional credits” on the Credit Pricing tab. Those are calls-only too.
+          </p>
+        </Panel>
+      )}
 
       {form.aiCreditsPerMinute !== undefined && (
         <Panel
@@ -223,8 +271,6 @@ function translationHint(key: TKey, f: Record<TKey, string>, minutes: number): s
       return `Per person translating. A ${minutes}-min call ≈ ${formatCredits(translatedCallCredits(minutes, n(key), 1))} credits one side, ${formatCredits(translatedCallCredits(minutes, n(key), 2))} both sides.`;
     case 'translationMinimumCredits':
       return 'Blank = one minute of the chosen mode. Calls themselves are never blocked by this.';
-    case 'translationTrialMinutes':
-      return 'One-time free minutes for accounts whose plan lacks Live Translate. 0 = no trial.';
     case 'postCallReportCredits':
       return 'Charged once per Post-Call Suite report.';
   }

@@ -96,12 +96,6 @@ export default function PaymentsPage() {
     if (isReady && isAuthed) loadLegacy();
   }, [isReady, isAuthed, loadLegacy]);
 
-  useEffect(() => {
-    if (!loading && typeof window !== 'undefined' && window.location.hash === '#payment-methods') {
-      document.getElementById('payment-methods')?.scrollIntoView?.({ behavior: 'smooth' });
-    }
-  }, [loading]);
-
   const download = async (p: PaymentRow) => {
     setDownloading(p.id);
     try {
@@ -195,7 +189,8 @@ export default function PaymentsPage() {
         )}
       </SectionCard>
 
-      <PaymentMethodCard paymentMethods={methods} onChanged={loadMethods} showToast={showToast} />
+      {/* Only legacy saved cards live here (payment is chosen at checkout); hidden when there are none. */}
+      {methods.length > 0 && <PaymentMethodCard paymentMethods={methods} onChanged={loadMethods} showToast={showToast} />}
 
       {legacy && legacy.total > 0 && (
         <SectionCard title="Legacy usage invoices" subtitle="Invoices from the previous billing model. Kept for your records.">

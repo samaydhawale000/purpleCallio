@@ -44,8 +44,8 @@ Response `participants[]` gains `language`; top level gains
 `translation: { mode, config }`.
 Validation errors → 400 with `code` (`TRANSLATION_INVALID_LANGUAGE`,
 `TRANSLATION_INVALID_CONFIG`, `TRANSLATION_LEXICON_NOT_FOUND`). If mode≠off and the
-account is not entitled (no `TRANSLATION` feature and no trial minutes left) →
-403 `TRANSLATION_NOT_IN_PLAN`. If credits < start minimum → 402
+account is not entitled (no `TRANSLATION` feature) →
+403 `TRANSLATION_NOT_IN_PLAN`. If paid credits < start minimum → 402
 `TRANSLATION_INSUFFICIENT_CREDITS`. (The call itself is never refused because
 of translation when mode is off.)
 
@@ -97,14 +97,14 @@ Response shapes used by the dashboard:
 - `GET /dashboard/translation/usage?from&to&projectId?` (CostGuard breakdown, owner-wide
   unless `projectId`) →
   `{ callMinutes:{minutes,credits}, captions:{minutes,credits}, voice:{minutes,credits},
-     aiAgent:{minutes,credits}, reports:{count,credits}, trialMinutes, totalCredits,
+     aiAgent:{minutes,credits}, reports:{count,credits}, trialMinutes (historical; always 0 now), totalCredits,
      approxInrTotal, period:{from,to} }`. Session credits are split between voice and
   captions by seconds × the session's locked rate (display only).
 
 ### Admin (AdminGuard + Billing tab permission)
 - BillingConfig fields are edited through the existing billing-config admin
   endpoint `GET|PATCH /admin/billing/credit-rates` (fields listed in schema.prisma
-  under "Live Translate"; validated: rates ≥ 1, minimum credits nullable, trial ≥ 0, provider costs = `{ routeId: non-negative paise }`, margin
+  under "Live Translate"; validated: rates ≥ 1, minimum credits nullable, provider costs = `{ routeId: non-negative paise }`, margin
   warn % 0..100, default max minutes 1..600, max budget ≥ 1; audited). Changing a
   customer rate (voice, captions, report) notifies every account that
   used translation in the last 30 days (`TRANSLATION_RATE_CHANGED`). New rates
@@ -164,7 +164,7 @@ grace).
 ### Server → client
 | event | payload |
 |---|---|
-| `ready` | `{ role, inputSampleRate: 16000, outputSampleRate: 24000, mode, you: { speak, hear }, peer: { speak, hear } \| null, replayEnabled, guard: { enabled, sensitivity }, limits: { maxMinutes, usedSeconds } , trial: boolean }` |
+| `ready` | `{ role, inputSampleRate: 16000, outputSampleRate: 24000, mode, you: { speak, hear }, peer: { speak, hear } \| null, replayEnabled, guard: { enabled, sensitivity }, limits: { maxMinutes, usedSeconds } , trial: false }` (`trial` is deprecated and always false) |
 | `peer` | `{ connected: boolean, speak?, hear? }` |
 | `mode` | `{ mode, reason?: 'participant'\|'api'\|'limit' }` |
 | `caption` | `Caption` (below). Repeated with the same `phraseId` as text grows; `final:true` once. |
@@ -270,11 +270,12 @@ that need other rates resample internally (shared `translation/audio/pcm.ts`).
   1× the rate and both cost 2×. `translationIndicVoiceCreditsPerMinute` is
   retired (column kept, no longer read).
 - Debit via `CreditService.debit` with idempotency key `translation:<sessionId>`,
-  reference `TRANSLATION_SESSION`, `allowPartial: true`, after the session ends;
+  reference `TRANSLATION_SESSION`, `allowPartial: true`, `paidOnly: true`, after the session ends;
   a 5-minute cron bills unrecorded ended sessions (copy of the AI pattern).
-- Trial: if the owner's plan lacks `TRANSLATION`, they may use
-  `BillingConfig.translationTrialMinutes` total (sum of `trialSecondsUsed`);
-  trial seconds are not charged.
+- Always paid: there is no free trial, and free credits (signup and
+  promotional buckets) never pay for translation or reports. The start check,
+  CostGuard wallet limit and debits all use paid credits only
+  (`CreditService` `paidOnly` / `paidAvailable`).
 - CostGuard checks every 5 s in the relay: per-call `maxMinutes` (wall-clock of
   translation active in the call), project daily/monthly budget (credits charged
   today/this month + live accrual), and wallet balance. The call is never ended.
@@ -292,8 +293,8 @@ that need other rates resample internally (shared `translation/audio/pcm.ts`).
   Budget thresholds (`alertThresholds`)
   crossing → one `TranslationBudgetAlert` row + notification
   `TRANSLATION_BUDGET_THRESHOLD` + webhook `translation.budget.threshold`.
-- Post-Call Suite report: charged `postCallReportCredits` once per report,
-  idempotency key `translation-report:<callId>`, reference `TRANSLATION_REPORT`.
+- Post-Call Suite report: charged `postCallReportCredits` once per report
+  from paid credits, idempotency key `translation-report:<callId>`, reference `TRANSLATION_REPORT`.
 
 ## 5. Observability metrics
 

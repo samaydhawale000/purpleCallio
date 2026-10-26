@@ -32,12 +32,10 @@ export interface CostGuardState {
   maxMinutes: number;
   /** Wall-clock seconds translation has been active in this call. */
   usedSeconds: number;
-  /** Credits accrued by this relay's sessions and not yet debited (after trial). */
+  /** Credits accrued by this relay's sessions and not yet debited. */
   liveCredits: number;
   /** Current accrual rate, credits per minute (the projection horizon). */
   creditsPerMinute: number;
-  /** Free trial: the wallet is not consulted. */
-  trial: boolean;
   /** Warnings already sent: `call`, `<scope>:<mode>` (mutated by evaluate). */
   warned: Set<string>;
   budgets: CostGuardBudgets | null;
@@ -140,10 +138,11 @@ export class CostGuardService {
         await this.budgetAlerts(state, p.key, used, p.budget, b.alertThresholds ?? []);
       }
     }
-    if (!state.trial && (state.liveCredits > 0 || horizon > 0)) {
+    if (state.liveCredits > 0 || horizon > 0) {
       const wallet = await this.credits.getSummary(state.ownerId);
-      // Live accrual is not debited yet: the wallet still holds it.
-      money.push({ scope: 'credits', used: state.liveCredits, limit: Math.max(0, wallet.available) });
+      // Live accrual is not debited yet: the wallet still holds it. Free
+      // credits never pay for translation.
+      money.push({ scope: 'credits', used: state.liveCredits, limit: Math.max(0, wallet.paidAvailable) });
     }
 
     for (const m of money) {

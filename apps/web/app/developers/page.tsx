@@ -67,9 +67,9 @@ const AI_STEPS = [
 ] as const;
 
 export const metadata: Metadata = pageMetadata({
-   title: "Developer Platform: Video, Audio, Live Translation & AI Voice",
+   title: "Developer Platform: Calls, Translation & AI Voice",
    description:
-      "Choose PurpleCallio hosted UI, React components or a headless SDK to add video, audio, screen sharing, real-time speech translation and AI voice agents to your application.",
+      "Add video, audio, screen sharing, real-time speech translation and AI voice agents to your app with hosted UI, React components or a headless SDK.",
    path: "/developers",
 });
 

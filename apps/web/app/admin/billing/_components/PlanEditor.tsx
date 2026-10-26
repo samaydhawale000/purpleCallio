@@ -349,7 +349,7 @@ export function PlanEditor({ planId }: { planId: string | null }) {
         </div>
       </Panel>
 
-      <Panel title="Credits" subtitle="Credits granted each paid period (each month for the Free plan).">
+      <Panel title="Credits" subtitle="Credits granted each paid period. The Free plan grants none: set welcome credits for new accounts under Credit Rates → Free credits.">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Field label="Total included credits" className="sm:col-span-3 sm:max-w-xs">
             <input type="number" min={0} className={inputCls} value={form.includedCredits} onChange={(e) => set('includedCredits', e.target.value)} />

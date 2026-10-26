@@ -179,6 +179,10 @@ export interface BillingConfig {
   autoRenewGraceHours: number;
   freeAccountsCanPurchaseCredits: boolean;
   freeAccountsCanUseAutoTopUp: boolean;
+  /** Free credits granted once to each new account (calls only, never AI). */
+  signupFreeCredits?: number;
+  /** Days the signup credits stay valid; null = never expire. */
+  signupFreeCreditsValidityDays?: number | null;
   updatedAt?: string;
 }
 

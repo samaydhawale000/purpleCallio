@@ -17,13 +17,15 @@ const faqs = [
    ["What is PurpleCallio?", PURPLECALLIO_DESCRIPTION],
    ["How do I integrate video calling using PurpleCallio?", `Use the PurpleCallio REST API or @purplecallio/sdk from your backend to create a call and generate participant session information. Your frontend can then join with @purplecallio/react components, the headless SDK, or hosted UI. See the quickstart at ${PURPLECALLIO_HOST}/docs/quickstart and the video guide at ${PURPLECALLIO_HOST}/docs/video.`],
    ["How do I integrate audio calling using PurpleCallio?", `Create a call from your backend with the REST API or @purplecallio/sdk, then join from the browser with @purplecallio/react, the headless JavaScript SDK, or hosted UI. See ${PURPLECALLIO_HOST}/docs/audio for a full walkthrough.`],
-   ["What can I build with PurpleCallio?", "Developers can build 1:1 audio calls, 1:1 video calls, screen sharing, custom communication interfaces, and embedded calling experiences."],
+   ["What can I build with PurpleCallio?", "Developers can build 1:1 audio and video calls, screen sharing, calls where each person speaks their own language with real-time translation, AI voice agents, custom communication interfaces, and embedded calling experiences."],
+   ["Does PurpleCallio support real-time speech translation?", `Yes. Live Translate lets two people on a call each speak their own language: each hears a translated voice and sees captions with the original text, in 60 languages, any to any. Enable it per call with callerLanguage and receiverLanguage. See ${PURPLECALLIO_HOST}/features/live-translation.`],
+   ["Does PurpleCallio support AI voice agents?", `Yes. AI voice agents can answer and hold voice conversations inside PurpleCallio calls. See ${PURPLECALLIO_HOST}/features/ai-voice-agents.`],
    ["Does PurpleCallio support video calls?", "Yes. PurpleCallio supports video calling."],
    ["Does PurpleCallio support audio calls?", "Yes. PurpleCallio supports audio calling and audio participant usage tracking."],
    ["Does PurpleCallio support screen sharing?", "Yes. Screen sharing is supported and tracked as a separate usage category that consumes credits at its own rate."],
    ["Does PurpleCallio have a JavaScript SDK?", "Yes. @purplecallio/sdk is the official JavaScript and TypeScript SDK."],
    ["Does PurpleCallio have React components?", "Yes. @purplecallio/react provides official React components and hooks."],
-   ["How does PurpleCallio pricing work?", "PurpleCallio uses participant-minute usage pricing. Audio, video, and screen sharing are tracked as separate usage categories."],
+   ["How does PurpleCallio pricing work?", `PurpleCallio uses prepaid credits, with no subscriptions. Audio, video and screen sharing are charged per participant-minute at separate rates; Live Translate is charged per minute for each person translating; AI voice agents per call-minute. AI features always use purchased credits. See ${PURPLECALLIO_HOST}/pricing.`],
    ["Where is the PurpleCallio API documentation?", `The official API documentation is available at ${PURPLECALLIO_HOST}/docs/rest-api.`],
 ] as const;
 

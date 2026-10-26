@@ -52,6 +52,14 @@ const publicPaths = [
   "/acceptable-use",
 ];
 
+// The sitemap is static, so this is the deploy time: content only changes on deploy.
+const deployedAt = new Date();
+
 export default function sitemap(): MetadataRoute.Sitemap {
-  return publicPaths.map((path) => ({ url: `${PURPLECALLIO_URL}${path}`, changeFrequency: path.startsWith("/docs") ? "monthly" : "weekly", priority: path === "" ? 1 : 0.7 }));
+  return publicPaths.map((path) => ({
+    url: `${PURPLECALLIO_URL}${path}`,
+    lastModified: deployedAt,
+    changeFrequency: path.startsWith("/docs") ? "monthly" : "weekly",
+    priority: path === "" ? 1 : path === "/pricing" || path.startsWith("/features") ? 0.8 : 0.7,
+  }));
 }

@@ -443,7 +443,6 @@ export interface TranslationBillingConfig {
   translationVoiceCreditsPerMinute?: number;
   translationCaptionsCreditsPerMinute?: number;
   translationMinimumCredits?: number | null;
-  translationTrialMinutes?: number;
   postCallReportCredits?: number;
   /** Paise per direction-minute, by route id. Admin-only (margin reporting). */
   translationProviderCostsPaise?: Record<string, number>;

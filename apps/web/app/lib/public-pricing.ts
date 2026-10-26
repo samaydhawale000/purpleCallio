@@ -10,6 +10,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
+import { formatRate, validityPhrase } from './pricing-format';
 import { formatMoney, getPublishedCreditPricing, type CreditRates, type PublishedCreditPricing } from './billing';
 
 export interface PublicPricing {
@@ -66,8 +67,9 @@ export type LoadState<T> =
 
 export type PublicPricingState = LoadState<PublicPricing>;
 
-function useCached<T>(load: () => Promise<T>, reset: () => void): LoadState<T> {
-  const [result, setResult] = useState<{ data: T } | null>(null);
+/** `initial` (server-rendered data) starts the state as ready; the client still refreshes it. */
+function useCached<T>(load: () => Promise<T>, reset: () => void, initial?: { data: T }): LoadState<T> {
+  const [result, setResult] = useState<{ data: T } | null>(initial ?? null);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -101,16 +103,22 @@ function useCached<T>(load: () => Promise<T>, reset: () => void): LoadState<T> {
 }
 
 /** Live consumption rates and GST (GET /billing/credit-rates). */
-export function usePublicPricing(): PublicPricingState {
-  return useCached(loadPublicPricing, ratesCache.reset);
+export function usePublicPricing(initial?: PublicPricing): PublicPricingState {
+  return useCached(loadPublicPricing, ratesCache.reset, initial ? { data: initial } : undefined);
 }
 
 /**
  * The admin-published price per credit (GET /billing/credit-pricing/current).
  * `data` is null while no price has been published yet.
  */
-export function usePublishedCreditPricing(): LoadState<PublishedCreditPricing | null> {
-  return useCached(loadPublishedCreditPricing, creditPriceCache.reset);
+export function usePublishedCreditPricing(
+  initial?: PublishedCreditPricing | null,
+): LoadState<PublishedCreditPricing | null> {
+  return useCached(
+    loadPublishedCreditPricing,
+    creditPriceCache.reset,
+    initial === undefined ? undefined : { data: initial },
+  );
 }
 
 // ── Prepaid purchases ────────────────────────────────────────────────────
@@ -118,12 +126,6 @@ export function usePublishedCreditPricing(): LoadState<PublishedCreditPricing | 
 export function creditsForAmount(amountPaise: number, pricing: Pick<PublishedCreditPricing, 'creditPricePaise'>): number {
   if (!pricing.creditPricePaise || pricing.creditPricePaise <= 0 || !Number.isFinite(amountPaise)) return 0;
   return Math.max(0, Math.floor(amountPaise / pricing.creditPricePaise));
-}
-
-/** "12 months after purchase" for the default 365-day validity, otherwise "N days after purchase". */
-export function validityPhrase(days: number | null | undefined): string {
-  if (!days || days === 365 || days === 366) return '12 months after purchase';
-  return `${days.toLocaleString('en-IN')} days after purchase`;
 }
 
 export function purchaseExpiryText(pricing: Pick<PublishedCreditPricing, 'purchasedValidityDays'> | null | undefined): string {
@@ -138,7 +140,6 @@ export const PRICE_NOT_PUBLISHED =
   'Credit pricing will be published soon. Consumption rates below already apply to every credit you hold.';
 
 // ── Credits ──────────────────────────────────────────────────────────────
-export const formatRate = (n: number) => (n ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
 export interface UsageProfile {
   callsPerMonth: number;
@@ -191,3 +192,5 @@ export function estimateUsage(profile: UsageProfile, rates: Pick<CreditRates, 'a
 export function gstNote(rates: Pick<CreditRates, 'taxPercent'>): string {
   return `Prices exclude GST (${formatRate(rates.taxPercent)}%), added at checkout.`;
 }
+
+export { formatRate, validityPhrase };

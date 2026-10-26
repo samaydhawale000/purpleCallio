@@ -431,7 +431,7 @@ const docs = {
       title: "Live Translate (Early Access)",
       meta: "Real-Time Voice Translation API",
       description:
-         "Add real-time voice translation and captions to 1:1 calls: the translation block on POST /calls, the TranslationClient SDK, React UI Kit, PurpleLex, MeaningGuard, CostGuard, metrics, reports and webhooks.",
+         "Add real-time voice translation and captions to 1:1 calls: the translation block on POST /calls, the TranslationClient SDK, React UI Kit, reports and webhooks.",
       lead: "Live Translate lets two people on a 1:1 call speak different languages: each hears and reads the other in their own language, a short moment behind the speaker. It's in early access, so endpoints and fields may change before general availability.",
       sections: [
          [
