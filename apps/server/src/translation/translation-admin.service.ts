@@ -16,6 +16,8 @@ import {
 } from '../billing/plans/feature-registry';
 import { creditValuePaise } from '../billing/credit-value';
 import { round2 } from './translation-estimate.service';
+import { usdInrRate } from '../exchange-rate/exchange-rate';
+import { DEFAULT_PROVIDER_COSTS_USD, providerCostPaiseFor } from './translation-billing.service';
 
 const badRequest = (message: string) =>
   new BadRequestException({ statusCode: 400, code: 'TRANSLATION_INVALID_REQUEST', message });
@@ -237,6 +239,14 @@ export class TranslationAdminService implements OnModuleInit {
       creditValueSource: value.source,
       warnPercent: warnBelow,
       providerCostsPaisePerMinute: config.translationProviderCostsPaise,
+      usdInrRate: usdInrRate(),
+      /** What a route with no admin entry costs now (Soniox list price at today's rate). */
+      defaultProviderCostsPaisePerMinute: Object.fromEntries(
+        Object.keys(DEFAULT_PROVIDER_COSTS_USD).map((key) => {
+          const [route, mode] = [key.slice(0, key.lastIndexOf('-')), key.slice(key.lastIndexOf('-') + 1)];
+          return [key, round2(providerCostPaiseFor({}, route, mode, 60))];
+        }),
+      ),
       total: present(total),
       byRoute: [...byRoute.entries()]
         .map(([route, b]) => ({ route, ...present(b) }))

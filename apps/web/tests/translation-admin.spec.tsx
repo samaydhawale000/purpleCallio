@@ -48,6 +48,8 @@ const margin = {
   ],
   byPair: [],
   warnPercent: 40,
+  usdInrRate: 95.16,
+  defaultProviderCostsPaisePerMinute: { 'soniox-captions': 20, 'soniox-voice': 76 },
 };
 
 const overrides = [
@@ -115,13 +117,15 @@ describe('Admin Live Translate tab', () => {
     expect(await screen.findByText('ops@acme.com')).toBeTruthy();
 
     expect(((await screen.findByLabelText('Cost for soniox-voice (paise)')) as HTMLInputElement).value).toBe('150');
-    expect((screen.getByLabelText('Cost for soniox-captions (paise)') as HTMLInputElement).value).toBe('17');
+    expect(screen.queryByLabelText('Cost for soniox-captions (paise)')).toBeNull(); // automatic, not frozen
+    await waitFor(() => expect(screen.getByTestId('live-soniox-costs').textContent).toContain('₹95.16/$ today'));
+    expect(screen.getByTestId('live-soniox-costs').textContent).toContain('voice 76 paise/min');
     expect(screen.queryByLabelText('Cost for openai-translate (paise)')).toBeNull();
     fireEvent.change(screen.getByLabelText(/^Margin warning below \(\%\)/), { target: { value: '35' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Live Translate settings' }));
     await waitFor(() => expect(api.patch).toHaveBeenCalled());
     expect(api.patch.mock.calls[0][1]).toEqual({
-      translationProviderCostsPaise: { 'soniox-captions': 17, 'soniox-voice': 150 },
+      translationProviderCostsPaise: { 'soniox-voice': 150 },
       translationMarginWarnPercent: 35,
       translationDefaultMaxMinutes: 60,
       translationMaxBudgetCredits: 10000000,

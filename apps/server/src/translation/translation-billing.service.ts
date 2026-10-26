@@ -11,6 +11,7 @@ import { BillingConfigService } from '../billing/billing-config.service';
 import { CreditService, DebitResult } from '../billing/credits/credit.service';
 import { SubscriptionService } from '../billing/subscriptions/subscription.service';
 import { UsageBillingService } from '../billing/usage-billing.service';
+import { usdInrRate } from '../exchange-rate/exchange-rate';
 import { PrismaService } from '../prisma/prisma.service';
 import { TranslationAccessService } from './translation-access.service';
 import { translationConfig } from './translation.config';
@@ -54,14 +55,15 @@ export function translationCreditsFor(input: {
 }
 
 /**
- * Soniox list prices per direction-minute when Admin → Live Translate has no
- * entry: STT+translation $0.12/h (≈ 17 paise/min at ₹85/$), billed for the
- * whole open stream; voice adds TTS ≈ $0.70/h of speech (≈ 50 paise/min at
- * ~half the minute spoken).
+ * Soniox list prices in USD per direction-minute, used when Admin → Live
+ * Translate has no entry for the route. Converted at the live USD → INR rate,
+ * so they follow the dollar. STT+translation $0.12/h is billed for the whole
+ * open stream (plus ~$0.0001/min of translation tokens); voice adds TTS
+ * ≈ $0.70/h of speech at ~half the minute spoken.
  */
-export const DEFAULT_PROVIDER_COSTS_PAISE: Readonly<Record<string, number>> = {
-  'soniox-captions': 17,
-  'soniox-voice': 67,
+export const DEFAULT_PROVIDER_COSTS_USD: Readonly<Record<string, number>> = {
+  'soniox-captions': 0.0021,
+  'soniox-voice': 0.008,
 };
 
 /** Provider cost per direction-minute by route (for example `soniox-voice`). */
@@ -73,8 +75,14 @@ export function providerCostPaiseFor(
 ): number {
   const table = (costs && typeof costs === 'object' ? costs : {}) as Record<string, unknown>;
   const modeKey = `${route}-${String(mode).toLowerCase() === 'voice' ? 'voice' : 'captions'}`;
-  const raw = table[modeKey] ?? table[route] ?? DEFAULT_PROVIDER_COSTS_PAISE[modeKey];
-  const perMinute = typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+  const raw = table[modeKey] ?? table[route];
+  const defaultUsd = DEFAULT_PROVIDER_COSTS_USD[modeKey];
+  const perMinute =
+    typeof raw === 'number' && Number.isFinite(raw)
+      ? raw
+      : defaultUsd !== undefined
+        ? defaultUsd * usdInrRate() * 100
+        : 0;
   return Math.round((Math.max(0, seconds) / 60) * perMinute);
 }
 

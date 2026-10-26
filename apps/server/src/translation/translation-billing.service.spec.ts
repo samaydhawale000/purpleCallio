@@ -1,3 +1,4 @@
+import { resetLiveUsdInrRate, setLiveUsdInrRate } from '../exchange-rate/exchange-rate';
 import { Logger } from '@nestjs/common';
 
 import {
@@ -28,9 +29,13 @@ describe('translationCreditsFor', () => {
     expect(providerCostPaiseFor(costs, 'mock', 'VOICE', 60)).toBe(0);
   });
 
-  it('falls back to Soniox list prices when admin has no entry', () => {
-    expect(providerCostPaiseFor({}, 'soniox', 'CAPTIONS', 60)).toBe(17);
-    expect(providerCostPaiseFor({}, 'soniox', 'VOICE', 60)).toBe(67);
+  it('falls back to Soniox USD list prices at the live exchange rate when admin has no entry', () => {
+    setLiveUsdInrRate(100, 'test');
+    expect(providerCostPaiseFor({}, 'soniox', 'CAPTIONS', 60)).toBe(21); // $0.0021 × ₹100
+    expect(providerCostPaiseFor({}, 'soniox', 'VOICE', 60)).toBe(80); // $0.008 × ₹100
+    setLiveUsdInrRate(80, 'test');
+    expect(providerCostPaiseFor({}, 'soniox', 'VOICE', 60)).toBe(64); // follows the dollar
+    resetLiveUsdInrRate();
   });
 });
 

@@ -361,6 +361,10 @@ export interface MarginReport {
   byRoute: MarginRow[];
   byPair: MarginRow[];
   warnPercent?: number;
+  /** Live USD → INR used for provider costs. */
+  usdInrRate?: number;
+  /** Paise per direction-minute for routes with no admin entry, at today's rate. */
+  defaultProviderCostsPaisePerMinute?: Record<string, number>;
 }
 
 export const listRateOverrides = () =>
@@ -377,6 +381,11 @@ export async function getMarginReport(params: { from: string; to: string }): Pro
     byRoute: rows(raw.byRoute ?? raw.routes),
     byPair: rows(raw.byPair ?? raw.pairs),
     warnPercent: typeof raw.warnPercent === 'number' ? raw.warnPercent : undefined,
+    usdInrRate: typeof raw.usdInrRate === 'number' ? raw.usdInrRate : undefined,
+    defaultProviderCostsPaisePerMinute:
+      raw.defaultProviderCostsPaisePerMinute && typeof raw.defaultProviderCostsPaisePerMinute === 'object'
+        ? (raw.defaultProviderCostsPaisePerMinute as Record<string, number>)
+        : undefined,
   };
 }
 

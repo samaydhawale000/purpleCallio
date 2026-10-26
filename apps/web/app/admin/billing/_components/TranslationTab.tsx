@@ -21,11 +21,24 @@ import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
 import { useCanWrite } from '../../../lib/admin-access';
 import { ErrorText, Field, inputCls, linkBtn, Modal, Panel, rowCls, Spinner, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
-/** Soniox list prices (server falls back to the same values). */
-const SONIOX_DEFAULT_COSTS: Record<string, number> = { 'soniox-voice': 67, 'soniox-captions': 17 };
 const RETIRED_ROUTE = /^(sarvam|openai)/;
+const today = () => new Date().toISOString().slice(0, 10);
 
 const whole = (s: string) => /^\d+$/.test(s.trim());
+
+/** Today's automatic Soniox costs: list prices in USD at the live exchange rate. */
+function LiveSonioxCosts() {
+  const { data } = useResource(() => getMarginReport({ from: today(), to: today() }), []);
+  const live = data?.defaultProviderCostsPaisePerMinute;
+  const paise = (key: string) => (live?.[key] != null ? `${fmtNumber(live[key], 0)} paise/min` : '…');
+  return (
+    <p className="text-xs text-[#3D3650] mb-2" data-testid="live-soniox-costs">
+      Leave Soniox routes empty to use its list prices at the live dollar rate
+      {data?.usdInrRate ? ` (₹${fmtNumber(data.usdInrRate, 2)}/$ today)` : ''}: captions {paise('soniox-captions')}, voice{' '}
+      {paise('soniox-voice')}. These update automatically; add a route only to override them.
+    </p>
+  );
+}
 
 /** Admin → Billing → Live Translate: provider costs, guardrails, margin report and per-customer overrides. */
 export function TranslationTab() {
@@ -64,9 +77,9 @@ function CostsPanel({ notify }: { notify: (m: string) => void }) {
   useEffect(() => {
     if (!cfg || !supported) return;
     // Soniox is the only route: retired OpenAI/Sarvam entries drop out on the next save.
+    // Routes left out use Soniox list prices at the live USD → INR rate.
     const saved = Object.entries(cfg.translationProviderCostsPaise ?? {}).filter(([route]) => !RETIRED_ROUTE.test(route));
-    const defaults = Object.entries(SONIOX_DEFAULT_COSTS).filter(([route]) => !saved.some(([r]) => r === route));
-    setCosts([...defaults, ...saved].map(([route, paise]) => ({ route, paise: String(paise) })));
+    setCosts(saved.map(([route, paise]) => ({ route, paise: String(paise) })));
     setWarn(String(cfg.translationMarginWarnPercent ?? 40));
     setMaxMinutes(String(cfg.translationDefaultMaxMinutes ?? 60));
     setMaxBudget(String(cfg.translationMaxBudgetCredits ?? ''));
@@ -125,10 +138,7 @@ function CostsPanel({ notify }: { notify: (m: string) => void }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <p className="text-xs font-medium text-[#3D3650] mb-2">Provider cost (paise per direction-minute)</p>
-            <p className="text-xs text-[#3D3650] mb-2">
-              Soniox bills the whole open stream: about 17 paise/min for captions; voice adds speech synthesis (about 67 paise/min).
-              These list prices are used when a route has no entry.
-            </p>
+            <LiveSonioxCosts />
             <div className="flex flex-col gap-2" data-testid="provider-costs">
               {costs.map((c, i) => (
                 <div key={i} className="flex items-center gap-2">
