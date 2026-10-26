@@ -1,3 +1,4 @@
+import { resetLiveUsdInrRate, setLiveUsdInrRate } from '../exchange-rate/exchange-rate';
 import { Logger } from '@nestjs/common';
 
 import {
@@ -21,11 +22,20 @@ describe('translationCreditsFor', () => {
   });
 
   it('provider cost uses route-mode keys first', () => {
-    const costs = { 'openai-translate': 300, 'sarvam-voice': 150, 'sarvam-captions': 50 };
-    expect(providerCostPaiseFor(costs, 'sarvam', 'VOICE', 120)).toBe(300);
-    expect(providerCostPaiseFor(costs, 'sarvam', 'CAPTIONS', 60)).toBe(50);
-    expect(providerCostPaiseFor(costs, 'openai-translate', 'VOICE', 60)).toBe(300);
+    const costs = { 'soniox-voice': 150, 'soniox-captions': 50, other: 300 };
+    expect(providerCostPaiseFor(costs, 'soniox', 'VOICE', 120)).toBe(300);
+    expect(providerCostPaiseFor(costs, 'soniox', 'CAPTIONS', 60)).toBe(50);
+    expect(providerCostPaiseFor(costs, 'other', 'VOICE', 60)).toBe(300);
     expect(providerCostPaiseFor(costs, 'mock', 'VOICE', 60)).toBe(0);
+  });
+
+  it('falls back to Soniox USD list prices at the live exchange rate when admin has no entry', () => {
+    setLiveUsdInrRate(100, 'test');
+    expect(providerCostPaiseFor({}, 'soniox', 'CAPTIONS', 60)).toBe(21); // $0.0021 × ₹100
+    expect(providerCostPaiseFor({}, 'soniox', 'VOICE', 60)).toBe(80); // $0.008 × ₹100
+    setLiveUsdInrRate(80, 'test');
+    expect(providerCostPaiseFor({}, 'soniox', 'VOICE', 60)).toBe(64); // follows the dollar
+    resetLiveUsdInrRate();
   });
 });
 
@@ -49,14 +59,14 @@ describe('TranslationBillingService', () => {
     trialUsedTotal = 0;
     config = {
       translationTrialMinutes: 0,
-      translationProviderCostsPaise: { sarvam: 100 },
+      translationProviderCostsPaise: { soniox: 100 },
     };
     session = {
       id: 'ts_1',
       callId: 'call_1',
       ownerId: 'owner',
       direction: 'caller_to_receiver',
-      route: 'sarvam',
+      route: 'soniox',
       mode: 'VOICE',
       status: 'ENDED',
       voiceSeconds: 120,

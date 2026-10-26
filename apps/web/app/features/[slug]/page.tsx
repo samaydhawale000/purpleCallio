@@ -11,6 +11,7 @@ import {
    FeatureFlow,
    IntegrationSelector,
 } from "../../components/marketing/InteractiveTools";
+import { FaqList } from "../../components/marketing/FaqItem";
 import { Reveal, RevealGroup, RevealItem } from "../../components/motion/Reveal";
 
 const features = {
@@ -287,12 +288,7 @@ export default async function FeaturePage({
          </Reveal>
          <Reveal>
             <ContentSection title="Frequently asked questions">
-               {item.faq.map(([question, answer]) => (
-                  <article key={question}>
-                     <h3 className="font-semibold text-[#3D3650]">{question}</h3>
-                     <p>{answer}</p>
-                  </article>
-               ))}
+               <FaqList items={item.faq} />
             </ContentSection>
          </Reveal>
          <Reveal variant="fade">

@@ -589,7 +589,7 @@ export interface AdminAiUsageSummary {
   outputTokens: number;
   providerCostPaise: number;
   creditValuePaise: number | null;
-  creditValueSource: 'env' | 'topup' | 'none';
+  creditValueSource: 'published' | 'env' | 'none';
   revenuePaise: number | null;
   marginPaise: number | null;
   marginPercent: number | null;

@@ -9,7 +9,6 @@ import {
 
 import { BillingConfigService } from '../billing/billing-config.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { isIndic } from './languages';
 import { translationConfig } from './translation.config';
 
 /** An ACTIVE session whose relay hasn't checkpointed for this long is dead. */
@@ -69,10 +68,6 @@ export interface LockedRates {
   captionsRate: number;
 }
 
-function primary(lang: string): string {
-  return lang.toLowerCase().split('-')[0];
-}
-
 /**
  * TranslationSession rows: one per direction of a translated call
  * (PROTOCOL.md §4). Rates are locked at start; concurrency is counted per
@@ -88,31 +83,16 @@ export class TranslationSessionService {
     private readonly billingConfig: BillingConfigService,
   ) {}
 
-  /**
-   * Voice rate = Indic voice rate when source and target are both Indian
-   * languages and that rate is set; a TranslationRateOverride wins.
-   */
-  async rates(
-    ownerId: string,
-    sourceLanguage: string,
-    targetLanguage: string,
-  ): Promise<LockedRates> {
+  /** One rate per mode for every language pair; a TranslationRateOverride wins. */
+  async rates(ownerId: string): Promise<LockedRates> {
     const [config, override] = await Promise.all([
       this.billingConfig.get(),
       this.prisma.translationRateOverride.findUnique({
         where: { userId: ownerId },
       }),
     ]);
-    const indic =
-      sourceLanguage !== 'auto' &&
-      isIndic(primary(sourceLanguage)) &&
-      isIndic(primary(targetLanguage));
-    const baseVoice =
-      indic && config.translationIndicVoiceCreditsPerMinute != null
-        ? config.translationIndicVoiceCreditsPerMinute
-        : config.translationVoiceCreditsPerMinute;
     return {
-      voiceRate: override?.voiceCreditsPerMinute ?? baseVoice,
+      voiceRate: override?.voiceCreditsPerMinute ?? config.translationVoiceCreditsPerMinute,
       captionsRate:
         override?.captionsCreditsPerMinute ??
         config.translationCaptionsCreditsPerMinute,
@@ -121,11 +101,7 @@ export class TranslationSessionService {
 
   /** Throws TranslationLimitError when the account or the platform is full. */
   async start(input: StartTranslationSession): Promise<TranslationSession> {
-    const rates = await this.rates(
-      input.ownerId,
-      input.sourceLanguage,
-      input.targetLanguage,
-    );
+    const rates = await this.rates(input.ownerId);
     const config = translationConfig();
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${`purplecallio:translation:owner:${input.ownerId}`}))`;

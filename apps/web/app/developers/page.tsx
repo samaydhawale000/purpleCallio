@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Bot, Sparkles, Wrench, Server, Mic } from "lucide-react";
+import { ArrowRight, Bot, Captions, Languages, ShieldAlert, Sparkles, Wallet, Wrench, Server, Mic } from "lucide-react";
 import {
    ArchitectureExplorer,
    IntegrationSelector,
@@ -10,6 +10,34 @@ import { JsonLd } from "../components/seo/JsonLd";
 import { Reveal, RevealGroup, RevealItem } from "../components/motion/Reveal";
 import { pageMetadata, siteUrl } from "../lib/seo";
 import { sdks } from "../lib/sdks";
+import { LIVE_TRANSLATE_DOCS_PATH, LIVE_TRANSLATE_PATH, LIVE_TRANSLATE_STATUS } from "../lib/live-translate";
+
+const TRANSLATE_STEPS = [
+   {
+      icon: Languages,
+      title: "Turn it on per call",
+      body: "Add callerLanguage, receiverLanguage and a translation block to POST /calls.",
+      href: `${LIVE_TRANSLATE_DOCS_PATH}#enable`,
+   },
+   {
+      icon: Captions,
+      title: "Show captions and play voice",
+      body: "TranslationClient or the React UI Kit streams DualView captions and translated audio.",
+      href: `${LIVE_TRANSLATE_DOCS_PATH}#sdk`,
+   },
+   {
+      icon: ShieldAlert,
+      title: "Catch misunderstandings",
+      body: "MeaningGuard flags changed amounts, dates and names; listeners can ask to repeat.",
+      href: `${LIVE_TRANSLATE_DOCS_PATH}#meaningguard`,
+   },
+   {
+      icon: Wallet,
+      title: "Keep costs in limits",
+      body: "Per-call minutes, project budgets and a public estimate endpoint, enforced on the server.",
+      href: `${LIVE_TRANSLATE_DOCS_PATH}#costguard`,
+   },
+] as const;
 
 const AI_STEPS = [
    {
@@ -39,9 +67,9 @@ const AI_STEPS = [
 ] as const;
 
 export const metadata: Metadata = pageMetadata({
-   title: "Developer Platform: Video, Audio & AI Voice",
+   title: "Developer Platform: Video, Audio, Live Translation & AI Voice",
    description:
-      "Choose PurpleCallio hosted UI, React components or a headless SDK to add video, audio, screen sharing and AI voice agents to your application.",
+      "Choose PurpleCallio hosted UI, React components or a headless SDK to add video, audio, screen sharing, real-time speech translation and AI voice agents to your application.",
    path: "/developers",
 });
 
@@ -77,6 +105,11 @@ const tools = [
       "/docs/screen-sharing",
    ],
    [
+      "Live Translate",
+      "Real-time voice translation and captions for 1:1 calls in 60 languages.",
+      LIVE_TRANSLATE_DOCS_PATH,
+   ],
+   [
       "AI voice agents",
       "Real-time voice agents that talk to users and call your APIs.",
       "/docs/ai-agents",
@@ -88,7 +121,7 @@ export default function DevelopersPage() {
       <PublicPage
          eyebrow="For developers"
          title="Build real-time communication into your application."
-         intro="Add audio, video, screen sharing and AI voice agents using PurpleCallio's hosted UI, React components, headless SDK or REST APIs."
+         intro="Add audio, video, screen sharing, real-time speech translation and AI voice agents using PurpleCallio's hosted UI, React components, headless SDK or REST APIs."
          crumbs={[
             { label: "Home", href: "/" },
             { label: "Developers", href: "/developers" },
@@ -103,7 +136,7 @@ export default function DevelopersPage() {
                operatingSystem: "Web",
                url: new URL("/developers", siteUrl).toString(),
                description:
-                  "Developer tools for integrating real-time audio, video, screen sharing and AI voice agents.",
+                  "Developer tools for integrating real-time audio, video, screen sharing, speech translation and AI voice agents.",
             }}
          />
          <section aria-label="Integration paths">
@@ -147,6 +180,88 @@ export default function DevelopersPage() {
             ))}
          </RevealGroup>
          </section>
+         <Reveal variant="scale" duration={0.8} amount={0.15}>
+         <section
+            id="live-translate"
+            aria-labelledby="live-translate-title"
+            className="relative overflow-hidden rounded-3xl p-6 text-white sm:p-10"
+            style={{ background: "radial-gradient(120% 90% at 100% 0%, #6366F1 0%, #4C1DB0 45%, #1E0B45 100%)" }}
+         >
+            <div className="flex flex-wrap items-start justify-between gap-6">
+               <div className="max-w-2xl">
+                  <p className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">
+                     <Languages size={14} aria-hidden="true" /> {LIVE_TRANSLATE_STATUS} · Live Translate
+                  </p>
+                  <h2 id="live-translate-title" className="mt-4 text-2xl font-bold sm:text-3xl">
+                     Let two people talk, each in their own language.
+                  </h2>
+                  <p className="mt-3 leading-7 text-white/80">
+                     Add real-time voice translation and captions to any 1:1 call with one flag. PurpleCallio runs
+                     speech recognition, translation and synthesized voice on the server for 60 languages, any to
+                     any, with misunderstanding flags, budgets and metrics built in. Billed per minute for each
+                     person translating, from the same credit balance.
+                  </p>
+               </div>
+               <div className="flex shrink-0 flex-wrap gap-3">
+                  <Link
+                     href={LIVE_TRANSLATE_DOCS_PATH}
+                     className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-[#4C1DB0] transition-all hover:-translate-y-0.5"
+                  >
+                     Read the Live Translate docs <ArrowRight size={16} aria-hidden="true" />
+                  </Link>
+               </div>
+            </div>
+
+            <RevealGroup as="ol" delay={0.2} stagger={0.1} className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+               {TRANSLATE_STEPS.map((step, i) => (
+                  <RevealItem as="li" key={step.title} variant="left">
+                     <Link
+                        href={step.href}
+                        className="group flex h-full flex-col rounded-2xl bg-white/10 p-5 ring-1 ring-white/20 transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                     >
+                        <span className="flex items-center justify-between">
+                           <step.icon size={20} aria-hidden="true" />
+                           <span className="font-mono text-xs text-white/60">0{i + 1}</span>
+                        </span>
+                        <span className="mt-4 font-semibold">{step.title}</span>
+                        <span className="mt-1 flex-1 text-sm leading-6 text-white/75">{step.body}</span>
+                        <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-white/90">
+                           Read this step
+                           <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                        </span>
+                     </Link>
+                  </RevealItem>
+               ))}
+            </RevealGroup>
+
+            <pre className="mt-6 overflow-x-auto rounded-2xl bg-[#140733]/70 p-5 font-mono text-[13px] leading-6 text-white/90 ring-1 ring-white/10">
+               <code>{`// Server: create a translated call with your API key
+await fetch(\`\${API_URL}/calls\`, {
+  method: "POST",
+  headers: { "x-api-key": API_KEY, "Content-Type": "application/json" },
+  body: JSON.stringify({
+    callerId: "agent_7", receiverId: "cust_42",
+    callerLanguage: "en", receiverLanguage: "es",
+    translation: { mode: "voice", maxMinutes: 30, onLimit: "captions_then_off" },
+  }),
+});
+
+// Browser: each participant enables translation for themselves
+const translation = new TranslationClient({ serverUrl, token, speak: "es", hear: "es", mode: "voice" });
+await translation.enable();
+translation.on("caption", (c) => render(c.original, c.translated));
+translation.on("flagged", (c) => showCheck(c.phraseId));`}</code>
+            </pre>
+
+            <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+               <Link href={`${LIVE_TRANSLATE_DOCS_PATH}#react`} className="text-white/85 hover:text-white">React UI Kit →</Link>
+               <Link href={`${LIVE_TRANSLATE_DOCS_PATH}#purplelex`} className="text-white/85 hover:text-white">PurpleLex vocabulary →</Link>
+               <Link href={`${LIVE_TRANSLATE_DOCS_PATH}#webhooks`} className="text-white/85 hover:text-white">Webhooks →</Link>
+               <Link href={`${LIVE_TRANSLATE_DOCS_PATH}#errors`} className="text-white/85 hover:text-white">Error codes →</Link>
+               <Link href={LIVE_TRANSLATE_PATH} className="text-white/85 hover:text-white">Languages, pricing &amp; overview →</Link>
+            </div>
+         </section>
+         </Reveal>
          <Reveal variant="scale" duration={0.8} amount={0.15}>
          <section
             id="ai-voice-agents"

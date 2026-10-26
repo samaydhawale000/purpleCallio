@@ -84,7 +84,7 @@ describe('TranslationController', () => {
     const s = services();
     const c = new TranslationController(s.settings as never, s.lexicons as never, s.metrics as never, s.estimates as never);
     const out = c.languages();
-    expect(out.pairs).toMatch(/all-to-all/);
+    expect(out.pairs).toMatch(/Soniox/);
     expect(out.languages.length).toBeGreaterThan(0);
     expect(out.languages[0]).toEqual(expect.objectContaining({ code: expect.any(String), voice: expect.any(Boolean), routes: expect.any(Array) }));
   });

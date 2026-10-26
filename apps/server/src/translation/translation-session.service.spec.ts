@@ -68,7 +68,7 @@ describe('TranslationSessionService', () => {
     sourceLanguage: source,
     targetLanguage: target,
     mode: 'voice' as const,
-    route: 'sarvam',
+    route: 'soniox',
   });
 
   it('locks the rates at start (admin changes apply to new sessions only)', async () => {
@@ -81,12 +81,10 @@ describe('TranslationSessionService', () => {
     expect(rows[0].status).toBe('ACTIVE');
   });
 
-  it('Indic voice rate only when both languages are Indian; override wins', async () => {
-    config.translationIndicVoiceCreditsPerMinute = 200;
-    expect((await service.rates('o', 'hi', 'mr')).voiceRate).toBe(200);
-    expect((await service.rates('o', 'hi', 'en')).voiceRate).toBe(450);
+  it('one rate for every language pair; a customer override wins', async () => {
+    expect(await service.rates('o')).toEqual({ voiceRate: 450, captionsRate: 60 });
     override = { voiceCreditsPerMinute: 100, captionsCreditsPerMinute: 10 };
-    expect(await service.rates('o', 'hi', 'mr')).toEqual({ voiceRate: 100, captionsRate: 10 });
+    expect(await service.rates('o')).toEqual({ voiceRate: 100, captionsRate: 10 });
   });
 
   it('counts concurrency per call, excluding the same call', async () => {

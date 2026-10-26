@@ -21,6 +21,7 @@ import { NotificationModule } from './notification/notification.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { AiModule } from './ai/ai.module';
 import { TranslationModule } from './translation/translation.module';
+import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { TranslationModule } from './translation/translation.module';
       },
     ]),
     PrismaModule,
+    ExchangeRateModule,
     RealtimeModule,
     NotificationModule,
     AuthModule,

@@ -63,8 +63,11 @@ Live relays apply it immediately (server emits `mode` / `ready` again).
   "pairs": "all-to-all; voice availability is per target language" }
 ```
 
-### GET /translation/estimate?mode=voice&minutes=10&calls=100  (public; JWT optional → applies the user's override)
-`{ mode, ratePerMinute, creditsPerCall, totalCredits, approxInrPerCall, note }`.
+### GET /translation/estimate?mode=voice&minutes=10&calls=100&listeners=2  (public; JWT optional → applies the user's override)
+`listeners` = people with translation on (1 = one side, 2 = both; default 2).
+`{ mode, ratePerMinute, approxInrPerMinute, listeners, creditsPerCall, totalCredits,
+approxInrPerCall, approxInrTotal, creditValuePaise, personalized, note }`. ₹ uses the
+published INR credit price (`billing/credit-value.ts`), else `AI_CREDIT_VALUE_PAISE`.
 
 ### Project settings, lexicons, metrics (ApiKeyGuard → key's project)
 - `GET|PATCH /translation/settings` → `TranslationSettings` fields (see schema).
@@ -101,10 +104,9 @@ Response shapes used by the dashboard:
 ### Admin (AdminGuard + Billing tab permission)
 - BillingConfig fields are edited through the existing billing-config admin
   endpoint `GET|PATCH /admin/billing/credit-rates` (fields listed in schema.prisma
-  under "Live Translate"; validated: rates ≥ 1, Indic voice rate / minimum credits
-  nullable, trial ≥ 0, provider costs = `{ routeId: non-negative paise }`, margin
+  under "Live Translate"; validated: rates ≥ 1, minimum credits nullable, trial ≥ 0, provider costs = `{ routeId: non-negative paise }`, margin
   warn % 0..100, default max minutes 1..600, max budget ≥ 1; audited). Changing a
-  customer rate (voice, captions, Indic voice, report) notifies every account that
+  customer rate (voice, captions, report) notifies every account that
   used translation in the last 30 days (`TRANSLATION_RATE_CHANGED`). New rates
   apply to **new sessions only** — each session locks its rates at start.
 - `GET /admin/translation/overrides` → `[{ userId, voiceCreditsPerMinute,
@@ -262,9 +264,11 @@ that need other rates resample internally (shared `translation/audio/pcm.ts`).
   captionsSeconds × captionsRate/60`, rounded **up once** per session. Seconds
   count wall-clock while both participants are connected and the direction is
   active in that mode. Rates are locked on the session row at start
-  (`voiceRate`, `captionsRate`; voice rate = Indic voice rate when both the
-  source and target are Indian languages and that override is set; customer
-  override from `TranslationRateOverride` wins).
+  (`voiceRate`, `captionsRate`; one rate per mode for every language pair;
+  customer override from `TranslationRateOverride` wins). A direction exists
+  only while its listener has translation on, so one person translating costs
+  1× the rate and both cost 2×. `translationIndicVoiceCreditsPerMinute` is
+  retired (column kept, no longer read).
 - Debit via `CreditService.debit` with idempotency key `translation:<sessionId>`,
   reference `TRANSLATION_SESSION`, `allowPartial: true`, after the session ends;
   a 5-minute cron bills unrecorded ended sessions (copy of the AI pattern).
@@ -330,8 +334,8 @@ call ends, a report job builds: transcript, summary per participant language
 (`talkRatio`, `topics[]`, `flaggedMoments[]`, `replays`, `repeats`, and `tone[]`
 only if `sentimentEnabled` and project industry ≠ healthcare; each tone item
 `{ speaker, topic, tone, quotes[] }`, worded as "possible tone"). Summaries use a
-`ReportSummarizer` interface with an OpenAI implementation (chat completions,
-JSON output) and a deterministic mock (extractive) when no key is configured.
+`ReportSummarizer` interface; the only implementation is the deterministic
+extractive summarizer.
 Daily purge of expired phrases/reports.
 
 ## 8. Defaults & environment

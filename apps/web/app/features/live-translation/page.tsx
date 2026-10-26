@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
    ArrowRight,
    Check,
+   CircleMinus,
    Ear,
    EyeOff,
    GraduationCap,
@@ -16,6 +17,7 @@ import {
 import { Breadcrumbs } from "../../components/seo/Breadcrumbs";
 import { JsonLd } from "../../components/seo/JsonLd";
 import { CodeBlock } from "../../components/marketing/InteractiveTools";
+import { FaqList } from "../../components/marketing/FaqItem";
 import { Reveal, RevealGroup, RevealItem } from "../../components/motion/Reveal";
 import { DualViewDemo } from "../../components/marketing/live-translate/DualViewDemo";
 import { LanguageGrid } from "../../components/marketing/live-translate/LanguageGrid";
@@ -23,8 +25,6 @@ import { TranslationRateList } from "../../components/marketing/live-translate/T
 import { FEATURE_MOCKS } from "./_components/FeatureMocks";
 import { pageMetadata, siteUrl } from "../../lib/seo";
 import {
-   COMPARISON_COLUMNS,
-   COMPARISON_FOOTNOTE,
    COMPARISON_ROWS,
    LIVE_TRANSLATE_DOCS_PATH,
    LIVE_TRANSLATE_FAQ,
@@ -45,7 +45,7 @@ import {
 
 const TITLE = "Live Translate: Real-Time Voice Translation for Calls";
 const DESCRIPTION =
-   "Real-time voice translation API for 1:1 calls, in early access: two-way voice and captions, side-by-side original text, misunderstanding flags, budgets and metrics. India-first, including Hindi-English call translation.";
+   "Real-time voice translation API for 1:1 calls, in early access: two-way voice and captions, side-by-side original text, misunderstanding flags, budgets and metrics. 60 languages worldwide, any to any.";
 
 export const metadata = pageMetadata({
    title: "Live Translate: Real-Time Voice Translation API & Speech Translation SDK",
@@ -61,7 +61,7 @@ const PROBLEMS = [
 
 const STEPS = [
    { title: "Set each person's language", body: "Pass callerLanguage and receiverLanguage when you create the call, or let each person pick “I speak” in the call. Use auto to detect it." },
-   { title: "Talk normally", body: "Each person speaks in their own language, including code-mixed speech like Hinglish. PurpleCallio runs speech recognition, translation and voice on the server." },
+   { title: "Talk normally", body: "Each person speaks in their own language, including code-mixed speech like Spanglish or Hinglish. PurpleCallio runs speech recognition, translation and voice on the server." },
    { title: "Each hears and reads the other", body: "The listener hears a translated voice a short moment behind the speaker, with the original voice turned down, and both see DualView captions." },
 ];
 
@@ -84,7 +84,7 @@ const PRIVACY = [
    { icon: EyeOff, text: "No audio or transcript storage by default. Audio is streamed to the translation provider for the call and not stored by PurpleCallio." },
    { icon: ShieldCheck, text: "Replay of the original audio is off by default. A project can opt in; the buffer then lives in memory only (about 30 seconds), is cleared at the end of the call, and both people see a “Replay enabled” indicator." },
    { icon: Lock, text: "Transcripts are kept only if you turn on the Post-Call Suite, with redaction and the retention period you choose." },
-   { icon: Languages, text: "Translation is processed by OpenAI and Sarvam as sub-processors. Provider keys stay on our servers and never reach the browser." },
+   { icon: Languages, text: "Translation is processed by Soniox as a sub-processor. Provider keys stay on our servers and never reach the browser." },
    { icon: MessageSquareWarning, text: "An honest statement on accuracy: AI translation can be wrong. MeaningGuard flags phrases that may be misunderstood, but a phrase that isn't flagged can still be wrong, so confirm anything important." },
 ];
 
@@ -138,7 +138,7 @@ export default function LiveTranslationPage() {
                         </h1>
                         <p className="mt-6 text-lg leading-8 text-white/80">
                            Two-way voice translation and captions for 1:1 calls, built so possible misunderstandings get
-                           flagged, costs stay predictable and quality is measurable. One flag on your call, India-first.
+                           flagged, costs stay predictable and quality is measurable. One flag on your call, 60 languages.
                         </p>
                         <div className="mt-8 flex flex-wrap gap-3">
                            <Link
@@ -242,14 +242,15 @@ export default function LiveTranslationPage() {
                </div>
             </section>
 
-            {/* 5. India-first */}
+            {/* 5. Global languages */}
             <section className="mt-24" id="languages">
                <Reveal>
-                  <p className="font-mono text-xs uppercase tracking-widest text-[#6425C4]">India-first</p>
-                  <h2 className="mt-3 text-3xl font-bold text-[#170B2E]">Built for how India actually talks</h2>
+                  <p className="font-mono text-xs uppercase tracking-widest text-[#6425C4]">60 languages</p>
+                  <h2 className="mt-3 text-3xl font-bold text-[#170B2E]">Built for how the world actually talks</h2>
                   <p className="mt-4 max-w-3xl">
-                     Regional accents, code-mixed speech (Hinglish, Marathi-English and so on) and everyday colloquial
-                     speech, not just formal text. Each language shows voice and captions separately.
+                     Regional accents, code-mixed speech (Spanglish, Hinglish, Taglish and more) and everyday colloquial
+                     speech, not just formal text. Every language supports voice and captions, and any one can be
+                     translated into any other.
                   </p>
                   <p className="mt-2 text-sm font-semibold text-[#170B2E]">{PROVIDERS_TEXT}.</p>
                </Reveal>
@@ -283,34 +284,45 @@ export default function LiveTranslationPage() {
             <section className="mt-24" id="compare">
                <Reveal>
                   <p className="font-mono text-xs uppercase tracking-widest text-[#6425C4]">Compare</p>
-                  <h2 className="mt-3 text-3xl font-bold text-[#170B2E]">How it compares</h2>
+                  <h2 className="mt-3 text-3xl font-bold text-[#170B2E]">Build it yourself, or have it built in</h2>
+                  <p className="mt-4 max-w-3xl">
+                     Most calling SDKs give you audio and video. Translation is usually left for you to assemble from
+                     separate providers. Here&apos;s what that means, next to what comes with Live Translate.
+                  </p>
                </Reveal>
-               <Reveal amount={0.05} className="mt-8 overflow-x-auto rounded-2xl border border-[#E7DFF5]">
-                  <table className="w-full min-w-[760px] text-left text-sm" data-testid="lt-comparison">
-                     <thead className="bg-[#F8F4FD] text-xs uppercase tracking-wider">
-                        <tr>
-                           <th scope="col" className="px-4 py-3">Capability</th>
-                           {COMPARISON_COLUMNS.map((c) => (
-                              <th key={c} scope="col" className={`px-4 py-3 ${c === "PurpleCallio" ? "text-[#6425C4]" : ""}`}>{c}</th>
-                           ))}
-                        </tr>
-                     </thead>
-                     <tbody>
-                        {COMPARISON_ROWS.map((r) => (
-                           <tr key={r.label} className="border-t border-[#E7DFF5]">
-                              <th scope="row" className="px-4 py-3 font-medium text-[#170B2E]">{r.label}</th>
-                              {r.cells.map((c, i) => (
-                                 <td key={i} className={`px-4 py-3 ${i === 4 ? "bg-[#7F40E8]/5 font-semibold text-[#170B2E]" : ""}`}>{c}</td>
-                              ))}
-                           </tr>
-                        ))}
-                     </tbody>
-                  </table>
-               </Reveal>
-               <p className="mt-3 text-xs">
-                  * {COMPARISON_FOOTNOTE} “Not documented” means we couldn&apos;t find it in public docs, not that it
-                  can&apos;t be built. PurpleCallio features are in early access.
-               </p>
+               <div className="mt-8 overflow-hidden rounded-2xl border border-[#E7DFF5]" data-testid="lt-comparison">
+                  <div className="hidden grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,1.2fr)] bg-[#F8F4FD] text-xs font-semibold uppercase tracking-wider md:grid">
+                     <p className="px-5 py-3">Capability</p>
+                     <p className="px-5 py-3">Building it yourself</p>
+                     <p className="px-5 py-3 text-[#6425C4]">With PurpleCallio</p>
+                  </div>
+                  <ul>
+                     {COMPARISON_ROWS.map((r) => (
+                        <li
+                           key={r.label}
+                           className="grid grid-cols-1 border-t border-[#E7DFF5] first:border-t-0 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,1.2fr)] md:first:border-t"
+                        >
+                           <p className="px-5 pt-4 font-semibold text-[#170B2E] md:py-4">{r.label}</p>
+                           <p className="flex gap-2 px-5 pt-2 text-sm md:py-4">
+                              <CircleMinus size={16} className="mt-0.5 shrink-0 text-[#9A93A8]" aria-hidden="true" />
+                              <span>
+                                 <span className="sr-only">Building it yourself: </span>
+                                 {r.diy}
+                              </span>
+                           </p>
+                           <div className="flex gap-2 bg-[#7F40E8]/5 px-5 py-4 text-sm">
+                              <Check size={16} className="mt-0.5 shrink-0 text-[#7F40E8]" aria-hidden="true" />
+                              <p>
+                                 <span className="sr-only">With PurpleCallio: </span>
+                                 <strong className="text-[#170B2E]">{r.feature}</strong>
+                                 <span className="block">{r.detail}</span>
+                              </p>
+                           </div>
+                        </li>
+                     ))}
+                  </ul>
+               </div>
+               <p className="mt-3 text-xs">Live Translate features are in early access.</p>
             </section>
 
             {/* 8. Pricing + 9. Developers */}
@@ -318,7 +330,7 @@ export default function LiveTranslationPage() {
                <Reveal variant="left" className="min-w-0 rounded-2xl border border-[#E7DFF5] p-7">
                   <h2 className="text-2xl font-bold text-[#170B2E]">Pricing</h2>
                   <p className="mt-3 text-sm">
-                     One rate per translated participant-minute (per listener), in credits from your prepaid balance.
+                     One rate per minute for each person who has translation on (one side 1×, both sides 2×), in credits from your prepaid balance.
                      Same-language calls aren&apos;t charged for translation. Rates are set by PurpleCallio and shown here
                      and in your dashboard.
                   </p>
@@ -373,16 +385,8 @@ export default function LiveTranslationPage() {
             {/* 11. FAQ */}
             <Reveal as="section" amount={0.1} className="mt-24">
                <h2 className="text-3xl font-bold text-[#170B2E]">Frequently asked questions</h2>
-               <div className="mt-8 divide-y divide-[#E7DFF5] rounded-2xl border border-[#E7DFF5]">
-                  {LIVE_TRANSLATE_FAQ.map(([q, a]) => (
-                     <details key={q} className="group p-6">
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold text-[#170B2E]">
-                           {q}
-                           <ArrowRight size={16} className="shrink-0 text-[#6425C4] transition-transform group-open:rotate-90" aria-hidden="true" />
-                        </summary>
-                        <p className="mt-3 text-sm leading-relaxed">{a}</p>
-                     </details>
-                  ))}
+               <div className="mt-8">
+                  <FaqList items={LIVE_TRANSLATE_FAQ} />
                </div>
             </Reveal>
 

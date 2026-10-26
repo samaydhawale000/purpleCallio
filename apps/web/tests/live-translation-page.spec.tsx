@@ -75,19 +75,22 @@ describe('Live Translate feature page', () => {
     expect(screen.getByTestId('lt-privacy').textContent).toMatch(/Replay of the original audio is off by default/);
   });
 
-  it('falls back to "Pricing set at launch" and the validating language list when the API is unavailable', async () => {
+  it('falls back to "Pricing set at launch" and the Soniox language list when the API is unavailable', async () => {
     api.get.mockRejectedValue(new Error('offline'));
     render(<LiveTranslationPage />);
     await waitFor(() => expect(within(screen.getByTestId('translation-rates')).getAllByText('Pricing set at launch')).toHaveLength(2));
-    expect(screen.getByTestId('language-grid').textContent).toMatch(/Voice availability is being validated/);
-    expect(screen.getByText(/Based on public documentation as of Oct 2026; verify before relying on it\./)).toBeTruthy();
+    expect(screen.getByTestId('language-grid').textContent).toMatch(/Every language supports captions and voice/);
+    expect(within(screen.getByTestId('language-grid')).getByText('Afrikaans', { selector: 'p.text-xs' })).toBeTruthy();
+    const comparison = screen.getByTestId('lt-comparison').textContent ?? '';
+    expect(comparison).toContain('MeaningGuard');
+    expect(comparison).not.toMatch(/Agora|Twilio|LiveKit|Zoom/);
   });
 
   it('shows live rates and languages from the public endpoints', async () => {
     api.get.mockImplementation((url: string, opts?: { params?: { mode?: string } }) => {
       if (url === '/translation/estimate') {
         const mode = opts?.params?.mode;
-        return Promise.resolve({ data: { mode, ratePerMinute: mode === 'voice' ? 437 : 53, creditsPerCall: 0, totalCredits: 0, approxInrPerCall: null, note: null } });
+        return Promise.resolve({ data: { mode, ratePerMinute: mode === 'voice' ? 437 : 53, approxInrPerMinute: mode === 'voice' ? 87.4 : null, creditsPerCall: 0, totalCredits: 0, approxInrPerCall: 999, note: null } });
       }
       if (url === '/translation/languages') {
         return Promise.resolve({ data: { languages: [{ code: 'mr', name: 'Marathi', nativeName: 'मराठी', voice: false, captions: true }] } });
@@ -98,8 +101,10 @@ describe('Live Translate feature page', () => {
     const rates = screen.getByTestId('translation-rates');
     await waitFor(() => expect(within(rates).getByText('437 credits')).toBeTruthy());
     expect(within(rates).getByText('53 credits')).toBeTruthy();
-    await waitFor(() => expect(screen.getByTestId('language-grid').textContent).toMatch(/Live list/));
-    expect(within(screen.getByTestId('language-grid')).getByText('मराठी')).toBeTruthy();
+    // ₹ beside the per-minute rate is the per-minute value, never the per-call one.
+    expect(rates.textContent).toContain('≈ ₹87.4');
+    expect(rates.textContent).not.toContain('999');
+    await waitFor(() => expect(within(screen.getByTestId('language-grid')).getByText('मराठी')).toBeTruthy());
   });
 });
 

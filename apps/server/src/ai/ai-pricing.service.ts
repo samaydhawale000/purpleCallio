@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
+import { usdInrRate } from '../exchange-rate/exchange-rate';
+
 /** Provider list price for one realtime model, USD per 1M tokens. */
 export interface AiModelPrice {
   inputUsdPerMillion: number;
@@ -35,7 +37,7 @@ export const AI_PROVIDER_PRICES: Record<string, ProviderPrices> = {
   },
 };
 
-export const DEFAULT_USD_INR_RATE = 88;
+export { DEFAULT_USD_INR_RATE } from '../exchange-rate/exchange-rate';
 
 export interface AiUsageForCost {
   provider: string;
@@ -50,11 +52,9 @@ export interface AiUsageForCost {
  */
 @Injectable()
 export class AiPricingService {
-  /** USD → INR from AI_USD_INR_RATE (read on every call, like aiConfig). */
+  /** USD → INR: AI_USD_INR_RATE when pinned, else the live rate (exchange-rate.ts). */
   usdInrRate(): number {
-    const raw = process.env.AI_USD_INR_RATE;
-    const value = raw === undefined || raw.trim() === '' ? NaN : Number(raw);
-    return Number.isFinite(value) && value > 0 ? value : DEFAULT_USD_INR_RATE;
+    return usdInrRate();
   }
 
   priceFor(provider: string, model: string | null): AiModelPrice | null {

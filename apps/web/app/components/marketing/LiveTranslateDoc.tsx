@@ -150,7 +150,7 @@ export function LiveTranslateDoc() {
                   ["useTranslation()", "Hook exposing translation state, phrases and actions for your own UI."],
                ]}
             />
-            <p>Indian scripts use Noto Sans fonts loaded only for languages in the call; Arabic and Urdu render right-to-left.</p>
+            <p>Non-Latin scripts use Noto Sans fonts loaded only for languages in the call; Arabic and Urdu render right-to-left.</p>
          </Sec>
 
          <Sec id="purplelex" title="PurpleLex: lexicons">
@@ -198,7 +198,7 @@ export function LiveTranslateDoc() {
 
          <Sec id="costguard" title="CostGuard: budgets, limits and estimates">
             <p>
-               Translation is billed per translated participant-minute (per listener) at the voice or captions rate,
+               Translation is billed per minute for each person who has translation on (one side 1×, both sides 2×) at the voice or captions rate,
                in credits. Rates are set by PurpleCallio and shown on the <Link href="/pricing#live-translate" className="text-[#6425C4] underline">pricing page</Link>{" "}
                and in your dashboard; a session keeps the rate it started with. Starting translation needs credits for
                at least one minute of the chosen mode.

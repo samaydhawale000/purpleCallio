@@ -24,12 +24,16 @@ import {
    Globe2,
    Headphones,
    KeyRound,
+   Languages,
+   Layers,
    Monitor,
    MonitorUp,
    Network,
    PackageSearch,
+   Play,
    Palette,
    Radio,
+   ShieldCheck,
    ShoppingCart,
    SlidersHorizontal,
    Sparkles,
@@ -40,10 +44,16 @@ import {
 } from "lucide-react";
 
 const HERO_POINTS = [
-   "Bidirectional speech translation",
-   "Voice, video & AI voice agents",
-   "TURN relay included",
-   "Prepaid credits, no surprise bills",
+   "Real-time speech translation",
+   "Audio & video APIs",
+   "AI voice agents",
+   "Usage-based credits",
+];
+
+const HERO_TRUST = [
+   { label: "Secure authentication", icon: ShieldCheck },
+   { label: "Developer-first", icon: Code2 },
+   { label: "Usage-based credits", icon: Layers },
 ];
 
 const PLATFORM_CAPABILITIES = [
@@ -272,8 +282,8 @@ export default function LandingPage() {
                      href={LIVE_TRANSLATE_PATH}
                      className="hero-badge group inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium mb-7 transition-colors hover:border-[#7F40E8]/50"
                   >
-                     <span className="rounded-full bg-[#7F40E8] px-2 py-0.5 text-[10px] font-semibold text-white">{LIVE_TRANSLATE_STATUS}</span>
-                     Real-time speech translation
+                     <Languages size={14} className="text-[#6425C4]" aria-hidden="true" />
+                     AI-powered voice translation
                      <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                   </Link>
 
@@ -299,11 +309,14 @@ export default function LandingPage() {
                         href={LIVE_TRANSLATE_PATH}
                         className="btn-secondary inline-flex items-center gap-2 font-semibold text-sm px-6 py-3.5 rounded-xl border border-[#E7DFF5] text-[#170B2E] transition-all hover:border-[#D6C4EE]"
                      >
+                        <span className="grid h-6 w-6 place-items-center rounded-full border-2 border-[#6425C4] text-[#6425C4]">
+                           <Play size={10} fill="currentColor" aria-hidden="true" />
+                        </span>
                         Explore Live Translate
                      </Link>
                   </div>
 
-                  <ul className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-[#3D3650]">
+                  <ul className="grid max-w-lg grid-cols-2 gap-x-6 gap-y-3 text-sm text-[#3D3650]">
                      {HERO_POINTS.map((point) => (
                         <li key={point} className="flex items-center gap-2">
                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#7F40E8]/10 text-[#6425C4]">
@@ -324,6 +337,15 @@ export default function LandingPage() {
                   <TranslationHeroVisual />
                </div>
             </div>
+
+            <ul className="relative mx-auto mt-14 flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs text-[#3D3650] lg:mt-16">
+               {HERO_TRUST.map(({ label, icon: Icon }) => (
+                  <li key={label} className="flex items-center gap-2">
+                     <Icon size={16} className="text-[#6425C4]" aria-hidden="true" />
+                     {label}
+                  </li>
+               ))}
+            </ul>
 
             {/* Wave edge into the next (section-alt) section */}
             <svg

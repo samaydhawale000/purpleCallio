@@ -33,8 +33,8 @@ function RateValue({ estimate }: { estimate: TranslationEstimate | null }) {
    if (!estimate) return <span className="text-[#3D3650]">{PRICING_FALLBACK}</span>;
    return (
       <span>
-         <strong className="text-[#170B2E]">{fmt(estimate.ratePerMinute)} credits</strong> per translated minute
-         {estimate.approxInrPerCall != null && <span className="text-[#3D3650]"> (≈ ₹{fmt(estimate.approxInrPerCall)})</span>}
+         <strong className="text-[#170B2E]">{fmt(estimate.ratePerMinute)} credits</strong> per minute, per person translating
+         {estimate.approxInrPerMinute != null && <span className="text-[#3D3650]"> (≈ ₹{fmt(estimate.approxInrPerMinute)})</span>}
       </span>
    );
 }
@@ -66,6 +66,7 @@ export function CostGuardEstimator() {
    const [mode, setMode] = useState<EstimateMode>("voice");
    const [minutes, setMinutes] = useState(10);
    const [calls, setCalls] = useState(100);
+   const [listeners, setListeners] = useState<1 | 2>(2);
    const [result, setResult] = useState<TranslationEstimate | null>(null);
    const [status, setStatus] = useState<"loading" | "ready" | "unavailable">("loading");
 
@@ -73,7 +74,7 @@ export function CostGuardEstimator() {
       let active = true;
       setStatus("loading");
       const t = window.setTimeout(() => {
-         fetchTranslationEstimate({ mode, minutes: Math.max(1, minutes), calls: Math.max(1, calls) }).then((r) => {
+         fetchTranslationEstimate({ mode, minutes: Math.max(1, minutes), calls: Math.max(1, calls), listeners }).then((r) => {
             if (!active) return;
             setResult(r);
             setStatus(r ? "ready" : "unavailable");
@@ -83,11 +84,12 @@ export function CostGuardEstimator() {
          active = false;
          window.clearTimeout(t);
       };
-   }, [mode, minutes, calls]);
+   }, [mode, minutes, calls, listeners]);
 
-   const total = result ? (result.totalCredits ?? Math.ceil(result.ratePerMinute * minutes * calls)) : null;
-   const perCall = result ? (result.creditsPerCall ?? Math.ceil(result.ratePerMinute * minutes)) : null;
+   const perCall = result ? (result.creditsPerCall ?? Math.ceil(result.ratePerMinute * minutes * listeners)) : null;
+   const total = result ? (result.totalCredits ?? (perCall ?? 0) * calls) : null;
    const inrPerCall = result?.approxInrPerCall ?? null;
+   const inrTotal = result?.approxInrTotal ?? null;
 
    return (
       <div id="costguard-calculator" className="scroll-mt-24 rounded-2xl border border-[#E7DFF5] bg-white p-6" data-testid="costguard-estimator">
@@ -97,7 +99,7 @@ export function CostGuardEstimator() {
          </p>
          <p className="mt-1 text-sm text-[#3D3650]">Estimate what translated calls will cost before you scale.</p>
 
-         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <fieldset>
                <legend className="mb-1.5 text-xs font-semibold text-[#3D3650]">Mode</legend>
                <div className="flex rounded-lg border border-[#E7DFF5] p-1">
@@ -112,6 +114,24 @@ export function CostGuardEstimator() {
                         }`}
                      >
                         {m}
+                     </button>
+                  ))}
+               </div>
+            </fieldset>
+            <fieldset>
+               <legend className="mb-1.5 text-xs font-semibold text-[#3D3650]">People translating</legend>
+               <div className="flex rounded-lg border border-[#E7DFF5] p-1">
+                  {([1, 2] as const).map((n) => (
+                     <button
+                        key={n}
+                        type="button"
+                        aria-pressed={listeners === n}
+                        onClick={() => setListeners(n)}
+                        className={`flex-1 rounded-md px-3 py-1.5 text-sm transition-colors ${
+                           listeners === n ? "bg-[#7F40E8] text-white" : "text-[#3D3650] hover:bg-[#F8F4FD]"
+                        }`}
+                     >
+                        {n === 1 ? "One side" : "Both"}
                      </button>
                   ))}
                </div>
@@ -161,15 +181,15 @@ export function CostGuardEstimator() {
                   <p>
                      <span className="block text-xs text-[#3D3650]">Per month</span>
                      <strong className="text-[#170B2E]">{fmt(total ?? 0, 0)} credits</strong>
-                     {inrPerCall != null && <span className="text-[#3D3650]"> ≈ ₹{fmt(inrPerCall * calls)}</span>}
+                     {inrTotal != null && <span className="text-[#3D3650]"> ≈ ₹{fmt(inrTotal)}</span>}
                   </p>
                </div>
             )}
             {status === "ready" && result?.note && <p className="mt-3 text-xs text-[#3D3650]">{result.note}</p>}
          </div>
          <p className="mt-3 text-xs text-[#3D3650]">
-            Billed per translated participant-minute (per listener), in credits from your prepaid balance. Rupee amounts are
-            approximate and depend on your plan&apos;s credit value. GST extra.
+            Billed per minute for each person who has translation on: one side is 1× the rate, both sides 2×. Credits come
+            from your prepaid balance; rupee amounts use the published credit price. GST extra.
          </p>
       </div>
    );

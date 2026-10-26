@@ -1,3 +1,4 @@
+import { resetLiveUsdInrRate, setLiveUsdInrRate } from '../exchange-rate/exchange-rate';
 import { BillingConfigService } from '../billing/billing-config.service';
 import { UsageBillingService } from '../billing/usage-billing.service';
 import { AiAccessService } from './ai-access.service';
@@ -129,7 +130,7 @@ function createFakePrisma() {
     call: model('call'),
     callEvent: model('callEvent'),
     callUsage: model('callUsage'),
-    topUpPackage: model('topUpPackage'),
+    creditPricingVersion: model('creditPricingVersion'),
     usage: model('usage'),
     user: model('user'),
     $queryRaw: async () => [],
@@ -582,6 +583,10 @@ describe('AI billing', () => {
   });
 
   describe('provider cost (admin only)', () => {
+    // The live USD → INR rate (refreshed daily); AI_USD_INR_RATE pins it.
+    beforeEach(() => setLiveUsdInrRate(88, 'test'));
+    afterEach(() => resetLiveUsdInrRate());
+
     it('prices token counts per model in paise at AI_USD_INR_RATE', () => {
       const usage = {
         provider: 'gemini',
@@ -595,6 +600,10 @@ describe('AI billing', () => {
       expect(world.pricing.providerCostPaise(usage)).toBe(120_000);
       process.env.AI_USD_INR_RATE = 'nonsense';
       expect(world.pricing.providerCostPaise(usage)).toBe(132_000);
+      // Unpinned, it follows the live rate.
+      delete process.env.AI_USD_INR_RATE;
+      setLiveUsdInrRate(95, 'test');
+      expect(world.pricing.providerCostPaise(usage)).toBe(142_500);
     });
 
     it('falls back to the provider default and returns null for unknown providers', () => {
@@ -618,12 +627,7 @@ describe('AI billing', () => {
 
     it('is saved on the session at finalize and summarized with margin for admins', async () => {
       world.credits.fund(OWNER, 1000);
-      await world.store.topUpPackage.create({
-        data: { status: 'ACTIVE', pricePaise: 50_000, credits: 1000 },
-      });
-      await world.store.topUpPackage.create({
-        data: { status: 'ACTIVE', pricePaise: 90_000, credits: 2000 },
-      });
+      world.store.creditPricingVersion.findFirst = async () => ({ creditPricePaise: 45 });
       const session = await seedSession(world, {
         connectedAt: new Date(NOW.getTime() - 120_000),
       });
@@ -643,12 +647,14 @@ describe('AI billing', () => {
         creditsCharged: 30,
         providerCostPaise: 792,
         creditValuePaise: 45,
-        creditValueSource: 'topup',
+        creditValueSource: 'published',
         revenuePaise: 1350,
         marginPaise: 558,
         marginPercent: 41.33,
       });
 
+      // Without a published price, AI_CREDIT_VALUE_PAISE applies.
+      world.store.creditPricingVersion.findFirst = async () => null;
       process.env.AI_CREDIT_VALUE_PAISE = '100';
       const fromEnv = await world.billing.adminSummary(
         PERIOD_START,
