@@ -88,22 +88,55 @@ describe('SonioxProvider', () => {
     expect(stt.json().filter((m) => m.type === 'finalize')).toHaveLength(1);
   });
 
-  it('voices only final translation text and ends the phrase after TTS terminates', async () => {
+  it('voices each finished phrase in one TTS stream and ends the phrase when it terminates', async () => {
     const { stt, events } = await connect('voice');
     stt.push({ tokens: [o('namaste', true), t('hel')] });
-    expect(FakeSocket.instances).toHaveLength(1);
+    expect(FakeSocket.instances).toHaveLength(1); // no TTS until the phrase is final
     stt.push({ tokens: [t('hello', true), { text: '<end>', is_final: true }] });
     const tts = FakeSocket.instances[1];
     tts.open();
     const sent = tts.json();
     const streamId = sent[0].stream_id;
-    expect(sent.slice(1)).toEqual([
-      { stream_id: streamId, text: 'hello', text_end: false },
-      { stream_id: streamId, text: '', text_end: true },
-    ]);
+    expect(sent[0]).toMatchObject({ model: 'tts-rt-v2', voice: 'Adrian', audio_format: 'pcm_s16le', language: 'en' });
+    expect(sent.slice(1)).toEqual([{ stream_id: streamId, text: 'hello', text_end: true }]);
     expect(events.some(([n]) => n === 'phraseDone')).toBe(false);
     tts.push({ stream_id: streamId, audio: Buffer.alloc(480).toString('base64') });
     tts.push({ stream_id: streamId, terminated: true });
     expect(events.map(([n]) => n)).toEqual(expect.arrayContaining(['audio', 'phraseDone']));
+  });
+
+  it('a TTS error drops only that phrase audio; captions and the next phrase carry on', async () => {
+    const { stt, events } = await connect('voice');
+    stt.push({ tokens: [o('ek', true), t('one', true), { text: '<end>', is_final: true }] });
+    const tts = FakeSocket.instances[1];
+    tts.open();
+    tts.push({ stream_id: tts.json()[0].stream_id, error_type: 'request_timeout' });
+    expect(events.some(([n]) => n === 'error')).toBe(false);
+    expect(events.filter(([n]) => n === 'phraseDone')).toHaveLength(1);
+    stt.push({ tokens: [o('do', true), t('two', true), { text: '<end>', is_final: true }] });
+    expect(tts.json().filter((m) => m.text === 'two')).toHaveLength(1);
+  });
+
+  it('reopens TTS after Soniox closes an idle connection', async () => {
+    const { stt, events } = await connect('voice');
+    stt.push({ tokens: [o('ek', true), t('one', true), { text: '<end>', is_final: true }] });
+    const first = FakeSocket.instances[1];
+    first.open();
+    first.push({ stream_id: first.json()[0].stream_id, terminated: true });
+    first.emit('close');
+    stt.push({ tokens: [o('do', true), t('two', true), { text: '<end>', is_final: true }] });
+    const second = FakeSocket.instances[2];
+    expect(second).toBeDefined();
+    second.open();
+    expect(second.json().some((m) => m.text === 'two')).toBe(true);
+    expect(events.some(([n]) => n === 'error')).toBe(false);
+  });
+
+  it('releases a phrase whose TTS stream never terminates', async () => {
+    const { stt, events } = await connect('voice');
+    stt.push({ tokens: [o('ek', true), t('one', true), { text: '<end>', is_final: true }] });
+    FakeSocket.instances[1].open();
+    jest.advanceTimersByTime(20_000);
+    expect(events.filter(([n]) => n === 'phraseDone')).toHaveLength(1);
   });
 });

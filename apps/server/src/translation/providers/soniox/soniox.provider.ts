@@ -25,6 +25,8 @@ const KEEPALIVE_MS = 8_000;
 const PHRASE_SETTLE_MS = 1_500;
 /** Marker tokens: `<end>` (endpoint detection) and `<fin>` (manual finalize). */
 const BOUNDARY_TOKENS = new Set(['<end>', '<fin>']);
+/** Upper bound for voicing one phrase before it is released without the rest of its audio. */
+const TTS_STREAM_MAX_MS = 20_000;
 
 type Token = {
   text?: string;
@@ -95,11 +97,11 @@ class SonioxSession extends TranslationProviderSession {
   private tts: WebSocket | null = null;
   private ttsReady = false;
   private readonly referenceId = `translation-${Math.random().toString(36).slice(2)}`;
+  /** The phrase being voiced; its `phraseDone` is emitted when its stream ends. */
   private ttsStreamId: string | null = null;
-  /** `text_end` sent; waiting for Soniox to terminate the stream. */
-  private ttsEnding = false;
-  private ttsQueue: { text: string; end: boolean }[] = [];
-  private phraseDonePending = false;
+  private ttsStreamTimer: NodeJS.Timeout | null = null;
+  /** Finished phrases waiting to be voiced, one TTS stream each. */
+  private ttsQueue: string[] = [];
 
   constructor(
     private readonly stt: WebSocket,
@@ -169,6 +171,7 @@ class SonioxSession extends TranslationProviderSession {
     this.closed = true;
     if (this.keepalive) clearInterval(this.keepalive);
     if (this.settleTimer) clearTimeout(this.settleTimer);
+    if (this.ttsStreamTimer) clearTimeout(this.ttsStreamTimer);
     try { if (this.stt.readyState === WebSocket.OPEN) this.stt.send(''); } catch {}
     try { this.stt.close(); } catch {}
     try { this.tts?.close(); } catch {}
@@ -201,13 +204,12 @@ class SonioxSession extends TranslationProviderSession {
     let nonFinalTranslation = '';
     let language: string | undefined;
     let confidence: number | undefined;
-    let newFinalTranslation = '';
     for (const token of message.tokens ?? []) {
       const text = token.text ?? '';
       if (BOUNDARY_TOKENS.has(text)) { this.boundary = true; continue; }
       const final = token.is_final === true;
       if (token.translation_status === 'translation') {
-        if (final) { this.finalTranslation += text; newFinalTranslation += text; }
+        if (final) this.finalTranslation += text;
         else nonFinalTranslation += text;
       } else {
         if (final) this.finalOriginal += text;
@@ -228,7 +230,6 @@ class SonioxSession extends TranslationProviderSession {
       this.sentTranslation = translation;
       this.emit('translation', { text: translation, final: false });
     }
-    if (this.config.mode === 'voice' && newFinalTranslation) this.sendTts(newFinalTranslation, false);
 
     if (!this.boundary) return;
     if (!nonFinalTranslation && this.finalTranslation.trim()) this.finishPhrase();
@@ -252,8 +253,8 @@ class SonioxSession extends TranslationProviderSession {
     if (original && !originalSent) this.emit('transcript', { text: original, final: true });
     this.emit('translation', { text: translation, final: true });
     if (this.config.mode === 'voice' && translation) {
-      this.phraseDonePending = true;
-      this.sendTts('', true);
+      this.ttsQueue.push(translation);
+      this.flushTts();
     } else {
       this.emit('phraseDone');
     }
@@ -269,7 +270,11 @@ class SonioxSession extends TranslationProviderSession {
     this.sentTranslation = '';
   }
 
-  /** Opened on first use and reopened after Soniox closes an idle TTS socket. */
+  /**
+   * Opened on first use and reopened after Soniox closes it (it drops idle
+   * connections after 40 s). TTS problems never fail the direction: the
+   * phrase just ends without audio and captions carry on.
+   */
   private openTts() {
     const tts = new WebSocket(process.env.SONIOX_TTS_URL?.trim() || SONIOX_TTS_URL, {
       headers: { Authorization: `Bearer ${this.apiKey}` },
@@ -284,55 +289,59 @@ class SonioxSession extends TranslationProviderSession {
     tts.on('message', (raw) => {
       if (this.tts !== tts) return;
       let m: { audio?: string; error_type?: string; terminated?: boolean; stream_id?: string };
-      try { m = JSON.parse(raw.toString()); } catch { return this.fail(); }
+      try { m = JSON.parse(raw.toString()); } catch { return; }
       if (m.error_type) {
-        this.logger.warn(`event=translation_provider_error provider=soniox-tts type=${m.error_type}`);
-        return this.fail();
+        this.logger.warn(`event=translation_tts_error provider=soniox type=${m.error_type}`);
+        if (!m.stream_id || m.stream_id === this.ttsStreamId) this.endTtsStream();
+        return;
       }
-      if (m.audio) {
+      if (m.audio && m.stream_id === this.ttsStreamId) {
         const audio = Buffer.from(m.audio, 'base64');
         this.emit('usage', { audioOutSeconds: pcm16Seconds(audio, TRANSLATION_OUTPUT_SAMPLE_RATE) });
         this.emit('audio', audio);
       }
       if (m.terminated && m.stream_id === this.ttsStreamId) this.endTtsStream();
     });
-    tts.on('error', () => { if (this.tts === tts) this.fail(); });
+    tts.on('error', () => undefined); // 'close' follows and recovers
     tts.on('close', () => {
       if (this.tts !== tts || this.closed) return;
-      // An idle close between phrases is normal; mid-phrase the phrase is closed without audio.
       this.tts = null;
       this.ttsReady = false;
       if (this.ttsStreamId) this.endTtsStream();
+      else this.flushTts();
     });
   }
 
+  /** The current phrase's audio is done (or abandoned): release it and voice the next. */
   private endTtsStream() {
+    if (this.ttsStreamTimer) { clearTimeout(this.ttsStreamTimer); this.ttsStreamTimer = null; }
+    if (!this.ttsStreamId) return;
     this.ttsStreamId = null;
-    this.ttsEnding = false;
-    if (this.phraseDonePending) { this.phraseDonePending = false; this.emit('phraseDone'); }
+    this.emit('phraseDone');
     this.flushTts();
   }
 
-  private sendTts(text: string, end: boolean) {
-    this.ttsQueue.push({ text, end });
-    this.flushTts();
-  }
-
-  /** One TTS stream per phrase: text chunks as they finalize, then `text_end`. */
+  /**
+   * One TTS stream per finished phrase: config, then the whole text with
+   * `text_end`. Sending it in one message avoids Soniox's in-stream timeout
+   * (a stream with no text for a few seconds is terminated).
+   */
   private flushTts() {
-    if (this.closed || !this.ttsQueue.length) return;
+    if (this.closed || this.ttsStreamId || !this.ttsQueue.length) return;
     if (!this.tts) return this.openTts();
-    if (!this.ttsReady || this.tts.readyState !== WebSocket.OPEN || this.ttsEnding) return;
-    while (this.ttsQueue.length) {
-      if (!this.ttsStreamId) {
-        this.ttsStreamId = `${this.referenceId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-        this.tts.send(JSON.stringify({ stream_id: this.ttsStreamId, model: process.env.SONIOX_TTS_MODEL?.trim() || SONIOX_TTS_MODEL, language: normalizeLanguage(this.config.targetLanguage), voice: process.env.SONIOX_TTS_VOICE?.trim() || 'Adrian', audio_format: 'pcm_s16le', sample_rate: TRANSLATION_OUTPUT_SAMPLE_RATE, client_reference_id: this.referenceId }));
-      }
-      const chunk = this.ttsQueue.shift()!;
-      this.tts.send(JSON.stringify({ stream_id: this.ttsStreamId, text: chunk.text, text_end: chunk.end }));
-      // The next phrase waits until this stream is terminated.
-      if (chunk.end) { this.ttsEnding = true; return; }
+    if (!this.ttsReady || this.tts.readyState !== WebSocket.OPEN) return;
+    const text = this.ttsQueue.shift()!;
+    const streamId = `${this.referenceId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    this.ttsStreamId = streamId;
+    try {
+      this.tts.send(JSON.stringify({ stream_id: streamId, model: process.env.SONIOX_TTS_MODEL?.trim() || SONIOX_TTS_MODEL, language: normalizeLanguage(this.config.targetLanguage), voice: process.env.SONIOX_TTS_VOICE?.trim() || 'Adrian', audio_format: 'pcm_s16le', sample_rate: TRANSLATION_OUTPUT_SAMPLE_RATE, client_reference_id: this.referenceId }));
+      this.tts.send(JSON.stringify({ stream_id: streamId, text, text_end: true }));
+    } catch {
+      return this.endTtsStream();
     }
+    // Never let one stuck stream block the listener's queue.
+    this.ttsStreamTimer = setTimeout(() => { this.ttsStreamTimer = null; if (this.ttsStreamId === streamId) this.endTtsStream(); }, TTS_STREAM_MAX_MS);
+    this.ttsStreamTimer.unref?.();
   }
 
   private fail() {
