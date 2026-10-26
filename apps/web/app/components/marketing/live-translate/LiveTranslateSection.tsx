@@ -26,8 +26,8 @@ export function LiveTranslateSection() {
                   <p className="mt-4 max-w-xl leading-relaxed text-[#3D3650]">
                      Two people on a 1:1 call speak different languages, and each hears and reads the other in their
                      own, a short moment behind the speaker. Built so possible misunderstandings get flagged, costs
-                     stay inside your limits and quality is measurable. India-first, with Hindi, Marathi, Tamil and
-                     more.
+                     stay inside your limits and quality is measurable. 60 languages, from English, Spanish and
+                     Arabic to Hindi, Japanese and more.
                   </p>
                   <div className="mt-8 flex flex-wrap gap-3">
                      <Link

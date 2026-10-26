@@ -21,6 +21,10 @@ import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
 import { useCanWrite } from '../../../lib/admin-access';
 import { ErrorText, Field, inputCls, linkBtn, Modal, Panel, rowCls, Spinner, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
+/** Soniox list prices (server falls back to the same values). */
+const SONIOX_DEFAULT_COSTS: Record<string, number> = { 'soniox-voice': 67, 'soniox-captions': 17 };
+const RETIRED_ROUTE = /^(sarvam|openai)/;
+
 const whole = (s: string) => /^\d+$/.test(s.trim());
 
 /** Admin → Billing → Live Translate: provider costs, guardrails, margin report and per-customer overrides. */
@@ -59,7 +63,10 @@ function CostsPanel({ notify }: { notify: (m: string) => void }) {
 
   useEffect(() => {
     if (!cfg || !supported) return;
-    setCosts(Object.entries(cfg.translationProviderCostsPaise ?? {}).map(([route, paise]) => ({ route, paise: String(paise) })));
+    // Soniox is the only route: retired OpenAI/Sarvam entries drop out on the next save.
+    const saved = Object.entries(cfg.translationProviderCostsPaise ?? {}).filter(([route]) => !RETIRED_ROUTE.test(route));
+    const defaults = Object.entries(SONIOX_DEFAULT_COSTS).filter(([route]) => !saved.some(([r]) => r === route));
+    setCosts([...defaults, ...saved].map(([route, paise]) => ({ route, paise: String(paise) })));
     setWarn(String(cfg.translationMarginWarnPercent ?? 40));
     setMaxMinutes(String(cfg.translationDefaultMaxMinutes ?? 60));
     setMaxBudget(String(cfg.translationMaxBudgetCredits ?? ''));
@@ -82,7 +89,7 @@ function CostsPanel({ notify }: { notify: (m: string) => void }) {
     for (const c of costs) {
       const route = c.route.trim();
       if (!route && !c.paise.trim()) continue;
-      if (!/^[a-z0-9][a-z0-9-]*$/.test(route)) return setSaveError('Route ids use lowercase letters, numbers and dashes (e.g. sarvam-voice).');
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(route)) return setSaveError('Route ids use lowercase letters, numbers and dashes (e.g. soniox-voice).');
       if (!whole(c.paise)) return setSaveError(`Cost for "${route}" must be a whole number of paise.`);
       if (route in map) return setSaveError(`Route "${route}" is listed twice.`);
       map[route] = Number(c.paise);
@@ -118,6 +125,10 @@ function CostsPanel({ notify }: { notify: (m: string) => void }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <p className="text-xs font-medium text-[#3D3650] mb-2">Provider cost (paise per direction-minute)</p>
+            <p className="text-xs text-[#3D3650] mb-2">
+              Soniox bills the whole open stream: about 17 paise/min for captions; voice adds speech synthesis (about 67 paise/min).
+              These list prices are used when a route has no entry.
+            </p>
             <div className="flex flex-col gap-2" data-testid="provider-costs">
               {costs.map((c, i) => (
                 <div key={i} className="flex items-center gap-2">

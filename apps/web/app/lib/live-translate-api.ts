@@ -36,9 +36,12 @@ export type EstimateMode = "voice" | "captions";
 export interface TranslationEstimate {
    mode: EstimateMode;
    ratePerMinute: number;
+   listeners: 1 | 2;
    creditsPerCall: number | null;
    totalCredits: number | null;
+   approxInrPerMinute: number | null;
    approxInrPerCall: number | null;
+   approxInrTotal: number | null;
    note: string | null;
 }
 
@@ -51,9 +54,12 @@ function parseEstimate(data: unknown, mode: EstimateMode): TranslationEstimate |
    return {
       mode,
       ratePerMinute: rate,
+      listeners: d?.listeners === 1 ? 1 : 2,
       creditsPerCall: num(d?.creditsPerCall),
       totalCredits: num(d?.totalCredits),
+      approxInrPerMinute: num(d?.approxInrPerMinute),
       approxInrPerCall: num(d?.approxInrPerCall),
+      approxInrTotal: num(d?.approxInrTotal),
       note: typeof d?.note === "string" ? d.note : null,
    };
 }
@@ -62,10 +68,11 @@ export async function fetchTranslationEstimate(params: {
    mode: EstimateMode;
    minutes: number;
    calls?: number;
+   listeners?: 1 | 2;
 }): Promise<TranslationEstimate | null> {
    try {
       const res = await api.get("/translation/estimate", {
-         params: { mode: params.mode, minutes: params.minutes, calls: params.calls ?? 1 },
+         params: { mode: params.mode, minutes: params.minutes, calls: params.calls ?? 1, listeners: params.listeners ?? 2 },
       });
       return parseEstimate(res?.data, params.mode);
    } catch {
@@ -84,8 +91,8 @@ let ratesCache: { at: number; promise: Promise<TranslationRates> } | null = null
 export function loadTranslationRates(): Promise<TranslationRates> {
    if (ratesCache && Date.now() - ratesCache.at < 5 * 60 * 1000) return ratesCache.promise;
    const promise = Promise.all([
-      fetchTranslationEstimate({ mode: "voice", minutes: 1 }),
-      fetchTranslationEstimate({ mode: "captions", minutes: 1 }),
+      fetchTranslationEstimate({ mode: "voice", minutes: 1, listeners: 1 }),
+      fetchTranslationEstimate({ mode: "captions", minutes: 1, listeners: 1 }),
    ]).then(([voice, captions]) => ({ voice, captions }));
    ratesCache = { at: Date.now(), promise };
    return promise;

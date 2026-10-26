@@ -129,7 +129,7 @@ function createFakePrisma() {
     call: model('call'),
     callEvent: model('callEvent'),
     callUsage: model('callUsage'),
-    topUpPackage: model('topUpPackage'),
+    creditPricingVersion: model('creditPricingVersion'),
     usage: model('usage'),
     user: model('user'),
     $queryRaw: async () => [],
@@ -618,12 +618,7 @@ describe('AI billing', () => {
 
     it('is saved on the session at finalize and summarized with margin for admins', async () => {
       world.credits.fund(OWNER, 1000);
-      await world.store.topUpPackage.create({
-        data: { status: 'ACTIVE', pricePaise: 50_000, credits: 1000 },
-      });
-      await world.store.topUpPackage.create({
-        data: { status: 'ACTIVE', pricePaise: 90_000, credits: 2000 },
-      });
+      world.store.creditPricingVersion.findFirst = async () => ({ creditPricePaise: 45 });
       const session = await seedSession(world, {
         connectedAt: new Date(NOW.getTime() - 120_000),
       });
@@ -643,12 +638,14 @@ describe('AI billing', () => {
         creditsCharged: 30,
         providerCostPaise: 792,
         creditValuePaise: 45,
-        creditValueSource: 'topup',
+        creditValueSource: 'published',
         revenuePaise: 1350,
         marginPaise: 558,
         marginPercent: 41.33,
       });
 
+      // Without a published price, AI_CREDIT_VALUE_PAISE applies.
+      world.store.creditPricingVersion.findFirst = async () => null;
       process.env.AI_CREDIT_VALUE_PAISE = '100';
       const fromEnv = await world.billing.adminSummary(
         PERIOD_START,

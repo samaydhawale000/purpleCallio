@@ -89,7 +89,7 @@ export default function PrivacyPage() {
           availability.
         </p>
         <LegalBullets items={[
-          "Audio and translation: while translation is on, participants' speech is streamed through PurpleCallio's servers to translation sub-processors (OpenAI and Sarvam, depending on the language pair) to produce captions and translated speech. PurpleCallio does not store call audio by default.",
+          "Audio and translation: while translation is on, participants' speech is streamed through PurpleCallio's servers to our translation sub-processor (Soniox) to produce captions and translated speech. PurpleCallio does not store call audio by default.",
           "Original-audio replay: off by default. If a customer opts in for a project, recent call audio (about 30 seconds per speaker) is held in server memory only so participants can replay a phrase. It is never written to disk and is cleared when the call ends, and participants are shown that replay is enabled.",
           "Transcripts and reports: translated call text is stored only if the customer opts in to the Post-Call Suite. Stored text is redacted for certain sensitive patterns (such as card numbers, keys and email addresses) and deleted after the retention period the customer chooses.",
           "Metrics: PurpleCallio keeps aggregate translation metrics (such as minutes, delays, error counts and flag counts) to operate, bill and improve the feature. These do not include transcript text.",
@@ -168,7 +168,7 @@ export default function PrivacyPage() {
           "Email providers",
           "Monitoring providers",
           "Security providers",
-          "AI translation providers (OpenAI and Sarvam) for Live Translate, when a customer enables it",
+          "AI translation provider (Soniox) for Live Translate, when a customer enables it",
         ]} />
         <p>We do not sell customer personal information as a business model.</p>
       </LegalSection>

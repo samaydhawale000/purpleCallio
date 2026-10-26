@@ -53,6 +53,17 @@ export function translationCreditsFor(input: {
   return { credits: raw > 0 ? Math.ceil(raw - 1e-6) : 0, trialSeconds: trial };
 }
 
+/**
+ * Soniox list prices per direction-minute when Admin → Live Translate has no
+ * entry: STT+translation $0.12/h (≈ 17 paise/min at ₹85/$), billed for the
+ * whole open stream; voice adds TTS ≈ $0.70/h of speech (≈ 50 paise/min at
+ * ~half the minute spoken).
+ */
+export const DEFAULT_PROVIDER_COSTS_PAISE: Readonly<Record<string, number>> = {
+  'soniox-captions': 17,
+  'soniox-voice': 67,
+};
+
 /** Provider cost per direction-minute by route (for example `soniox-voice`). */
 export function providerCostPaiseFor(
   costs: unknown,
@@ -62,7 +73,7 @@ export function providerCostPaiseFor(
 ): number {
   const table = (costs && typeof costs === 'object' ? costs : {}) as Record<string, unknown>;
   const modeKey = `${route}-${String(mode).toLowerCase() === 'voice' ? 'voice' : 'captions'}`;
-  const raw = table[modeKey] ?? table[route];
+  const raw = table[modeKey] ?? table[route] ?? DEFAULT_PROVIDER_COSTS_PAISE[modeKey];
   const perMinute = typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
   return Math.round((Math.max(0, seconds) / 60) * perMinute);
 }

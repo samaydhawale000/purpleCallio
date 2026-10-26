@@ -260,9 +260,13 @@ export interface TranslationReport {
 export interface TranslationEstimate {
   mode: TranslationMode;
   ratePerMinute: number;
+  /** People with translation on: 1 (one side) or 2 (both). */
+  listeners: 1 | 2;
   creditsPerCall: number;
   totalCredits: number;
+  approxInrPerMinute: number | null;
   approxInrPerCall: number | null;
+  approxInrTotal: number | null;
   note?: string;
 }
 
@@ -293,7 +297,7 @@ const data = <T>(p: Promise<{ data: T }>) => p.then((r) => r.data);
 
 export const getLanguages = () =>
   data(api.get<{ languages: TranslationLanguage[]; pairs?: string }>('/translation/languages'));
-export const getEstimate = (params: { mode: TranslationMode; minutes: number; calls: number }) =>
+export const getEstimate = (params: { mode: TranslationMode; minutes: number; calls: number; listeners: 1 | 2 }) =>
   data(api.get<TranslationEstimate>('/translation/estimate', { params }));
 
 export const getSettings = (projectId: string) => data(api.get<TranslationSettings>(`${P(projectId)}/settings`));
@@ -429,7 +433,6 @@ export function checkLexiconCsv(text: string): { rows: number; languages: string
 export interface TranslationBillingConfig {
   translationVoiceCreditsPerMinute?: number;
   translationCaptionsCreditsPerMinute?: number;
-  translationIndicVoiceCreditsPerMinute?: number | null;
   translationMinimumCredits?: number | null;
   translationTrialMinutes?: number;
   postCallReportCredits?: number;
@@ -440,7 +443,7 @@ export interface TranslationBillingConfig {
   translationMaxBudgetCredits?: number;
 }
 
-/** Credits for a two-way translated call: both listener directions × minutes × rate, rounded up once per direction. */
+/** Credits for a translated call: listeners (1 or 2 people translating) × minutes × rate, rounded up once per direction. */
 export function translatedCallCredits(minutes: number, perMinute: number, directions = 2) {
   const raw = minutes * perMinute;
   return raw > 0 ? directions * Math.ceil(raw - 1e-6) : 0;

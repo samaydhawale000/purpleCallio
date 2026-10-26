@@ -32,11 +32,10 @@ const config = {
   pendingCheckoutTtlHours: 24,
   translationVoiceCreditsPerMinute: 450,
   translationCaptionsCreditsPerMinute: 60,
-  translationIndicVoiceCreditsPerMinute: 300,
   translationMinimumCredits: null,
   translationTrialMinutes: 30,
   postCallReportCredits: 100,
-  translationProviderCostsPaise: { 'openai-translate': 300, 'sarvam-voice': 150 },
+  translationProviderCostsPaise: { 'openai-translate': 300, 'soniox-voice': 150 },
   translationMarginWarnPercent: 40,
   translationDefaultMaxMinutes: 60,
   translationMaxBudgetCredits: 10000000,
@@ -76,11 +75,11 @@ describe('Credit rates — Live Translate group', () => {
     render(<CreditRatesTab />);
 
     const group = await screen.findByTestId('translation-rates');
-    expect(group.textContent).toContain('A 10-min two-way voice call ≈ 9,000 credits.');
+    expect(group.textContent).toContain('A 10-min call ≈ 4,500 credits one side, 9,000 both sides.');
+    expect(screen.queryByLabelText(/Indian-language voice/)).toBeNull();
     expect(screen.getByText(/apply to new translation sessions only/)).toBeTruthy();
     expect(screen.getByText(/Customers are notified/)).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText(/^Indian-language voice \(credits \/ min, optional\)/), { target: { value: '' } });
     fireEvent.change(screen.getByLabelText(/^Voice translation \(credits \/ min\)/), { target: { value: '500' } });
     fireEvent.click(screen.getByText('Save credit rates'));
 
@@ -89,7 +88,6 @@ describe('Credit rates — Live Translate group', () => {
     expect(api.patch.mock.calls[0][1]).toMatchObject({
       translationVoiceCreditsPerMinute: 500,
       translationCaptionsCreditsPerMinute: 60,
-      translationIndicVoiceCreditsPerMinute: null,
       translationMinimumCredits: null,
       translationTrialMinutes: 30,
       postCallReportCredits: 100,
@@ -116,12 +114,14 @@ describe('Admin Live Translate tab', () => {
     expect(within(report).getByRole('alert').textContent).toContain('below the 40% margin warning');
     expect(await screen.findByText('ops@acme.com')).toBeTruthy();
 
-    expect(((await screen.findByLabelText('Cost for sarvam-voice (paise)')) as HTMLInputElement).value).toBe('150');
+    expect(((await screen.findByLabelText('Cost for soniox-voice (paise)')) as HTMLInputElement).value).toBe('150');
+    expect((screen.getByLabelText('Cost for soniox-captions (paise)') as HTMLInputElement).value).toBe('17');
+    expect(screen.queryByLabelText('Cost for openai-translate (paise)')).toBeNull();
     fireEvent.change(screen.getByLabelText(/^Margin warning below \(\%\)/), { target: { value: '35' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Live Translate settings' }));
     await waitFor(() => expect(api.patch).toHaveBeenCalled());
     expect(api.patch.mock.calls[0][1]).toEqual({
-      translationProviderCostsPaise: { 'openai-translate': 300, 'sarvam-voice': 150 },
+      translationProviderCostsPaise: { 'soniox-captions': 17, 'soniox-voice': 150 },
       translationMarginWarnPercent: 35,
       translationDefaultMaxMinutes: 60,
       translationMaxBudgetCredits: 10000000,

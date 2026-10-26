@@ -26,6 +26,7 @@ import { Breadcrumbs } from "../../components/seo/Breadcrumbs";
 import { JsonLd } from "../../components/seo/JsonLd";
 import { CodeBlock } from "../../components/marketing/InteractiveTools";
 import { AiRateNote } from "../../components/marketing/AiRateNote";
+import { FaqList } from "../../components/marketing/FaqItem";
 import { Reveal, RevealGroup, RevealItem } from "../../components/motion/Reveal";
 import { pageMetadata, siteUrl } from "../../lib/seo";
 import { AI_REACT_COMPONENT_EXAMPLE, AI_SECURITY_NOTES, AI_SERVER_SESSION_EXAMPLE } from "../../lib/ai-docs";
@@ -487,16 +488,8 @@ export default function AiVoiceAgentsPage() {
             {/* ── FAQ ── */}
             <Reveal as="section" amount={0.1} className="mt-24">
                <h2 className="text-3xl font-bold text-[#170B2E]">Frequently asked questions</h2>
-               <div className="mt-8 divide-y divide-[#E7DFF5] rounded-2xl border border-[#E7DFF5]">
-                  {FAQ.map(([q, a]) => (
-                     <details key={q} className="group p-6">
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold text-[#170B2E]">
-                           {q}
-                           <ArrowRight size={16} className="shrink-0 text-[#6425C4] transition-transform group-open:rotate-90" aria-hidden="true" />
-                        </summary>
-                        <p className="mt-3 text-sm leading-relaxed">{a}</p>
-                     </details>
-                  ))}
+               <div className="mt-8">
+                  <FaqList items={FAQ} />
                </div>
             </Reveal>
 

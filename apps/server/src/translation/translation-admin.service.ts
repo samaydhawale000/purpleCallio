@@ -14,7 +14,8 @@ import {
   DEFAULT_FEATURES,
   FeatureKey,
 } from '../billing/plans/feature-registry';
-import { creditValuePaise, round2 } from './translation-estimate.service';
+import { creditValuePaise } from '../billing/credit-value';
+import { round2 } from './translation-estimate.service';
 
 const badRequest = (message: string) =>
   new BadRequestException({ statusCode: 400, code: 'TRANSLATION_INVALID_REQUEST', message });

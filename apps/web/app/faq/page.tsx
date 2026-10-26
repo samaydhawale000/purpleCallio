@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
 import { PURPLECALLIO_HOST } from '../lib/brand';
 import { PricingAuthority } from '../components/PricingAuthority';
 import { formatRate, usePublicPricing } from '../lib/public-pricing';
 import { Reveal } from '../components/motion/Reveal';
+import { FaqItem } from '../components/marketing/FaqItem';
 import { LIVE_TRANSLATE_FAQ } from '../lib/live-translate';
 
 const FAQ_GROUPS = [
@@ -128,34 +128,6 @@ const FAQ_SCHEMA = {
     acceptedAnswer: { '@type': 'Answer', text: item.a.replace('{GST}', 'the applicable rate') },
   })),
 };
-
-function FaqItem({ q, a }: { q: string; a: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div
-      className="rounded-xl border border-[#E7DFF5] overflow-hidden transition-all"
-      style={{ background: open ? '#F3ECFB' : '#FFFFFF' }}
-    >
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-white/[0.02] transition-all"
-      >
-        <span className="text-sm font-semibold text-[#170B2E]">{q}</span>
-        <span
-          className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-xs text-[#3D3650] transition-all"
-          style={{ background: open ? 'rgba(127,64,232,0.12)' : '#F3ECFB', color: open ? '#6425C4' : '#3D3650' }}
-        >
-          {open ? '−' : '+'}
-        </span>
-      </button>
-      {open && (
-        <div className="px-5 pb-5 border-t border-[#E7DFF5]">
-          <p className="text-sm text-[#3D3650] leading-relaxed pt-4">{a}</p>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function FaqPage() {
   const pricing = usePublicPricing();

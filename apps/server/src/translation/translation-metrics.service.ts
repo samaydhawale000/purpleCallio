@@ -2,7 +2,8 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma, TranslationMode, TranslationSessionStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { creditValuePaise, round2 } from './translation-estimate.service';
+import { creditValuePaise } from '../billing/credit-value';
+import { round2 } from './translation-estimate.service';
 import { parsePairLoose } from './translation-pair';
 
 const badRequest = (message: string) =>

@@ -12,6 +12,7 @@ export function CostEstimator({ defaultMinutes }: { defaultMinutes?: string }) {
   const [mode, setMode] = useState<TranslationMode>('voice');
   const [minutes, setMinutes] = useState(defaultMinutes && whole(defaultMinutes) ? defaultMinutes : '10');
   const [calls, setCalls] = useState('100');
+  const [listeners, setListeners] = useState<1 | 2>(2);
   const [estimate, setEstimate] = useState<TranslationEstimate | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,7 +25,7 @@ export function CostEstimator({ defaultMinutes }: { defaultMinutes?: string }) {
     }
     setLoading(true);
     try {
-      setEstimate(await getEstimate({ mode, minutes: Number(minutes), calls: Number(calls) }));
+      setEstimate(await getEstimate({ mode, minutes: Number(minutes), calls: Number(calls), listeners }));
     } catch (err) {
       setEstimate(null);
       setError(translationErrorText(err, 'Could not calculate an estimate. Please try again.'));
@@ -43,6 +44,13 @@ export function CostEstimator({ defaultMinutes }: { defaultMinutes?: string }) {
             <option value="captions">Captions</option>
           </select>
         </div>
+        <div className="flex flex-col gap-1.5 w-44">
+          <label htmlFor="est-listeners" className="text-sm font-medium text-[#3D3650]">People translating</label>
+          <select id="est-listeners" className={selectCls} value={listeners} onChange={(e) => setListeners(e.target.value === '1' ? 1 : 2)}>
+            <option value={1}>One side (1×)</option>
+            <option value={2}>Both sides (2×)</option>
+          </select>
+        </div>
         <div className="w-36">
           <Input label="Minutes per call" type="number" min={1} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
         </div>
@@ -58,9 +66,10 @@ export function CostEstimator({ defaultMinutes }: { defaultMinutes?: string }) {
             <strong>{fmtNumber(estimate.creditsPerCall)} credits</strong> per call
             {estimate.approxInrPerCall != null && <> (≈ {fmtInr(estimate.approxInrPerCall)})</>} ·{' '}
             <strong>{fmtNumber(estimate.totalCredits)} credits</strong> for {fmtNumber(Number(calls))} calls
+            {estimate.approxInrTotal != null && <> (≈ {fmtInr(estimate.approxInrTotal)})</>}
           </p>
           <p className="text-xs text-[#3D3650] mt-1">
-            {fmtNumber(estimate.ratePerMinute)} credits per translated minute, per listener direction.
+            {fmtNumber(estimate.ratePerMinute)} credits per minute for each person translating.
             {estimate.note ? ` ${estimate.note}` : ''}
           </p>
         </div>

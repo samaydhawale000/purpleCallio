@@ -161,15 +161,22 @@ describe('Live Translate settings', () => {
       '/projects': projects,
       [`${P}/settings`]: settings,
       [`${P}/lexicons`]: [],
-      '/translation/estimate': { mode: 'voice', ratePerMinute: 450, creditsPerCall: 9000, totalCredits: 900000, approxInrPerCall: 90, note: '' },
+      '/translation/estimate': { mode: 'voice', ratePerMinute: 450, listeners: 2, creditsPerCall: 9000, totalCredits: 900000, approxInrPerCall: 1800, approxInrTotal: 180000, note: '' },
     });
     render(<SettingsPage />);
     const estimator = await screen.findByTestId('cost-estimator');
     fireEvent.click(within(estimator).getByRole('button', { name: 'Estimate' }));
     const result = await screen.findByTestId('estimate-result');
     expect(result.textContent).toContain('9,000 credits');
-    expect(result.textContent).toContain('₹90.00');
-    expect(api.get).toHaveBeenCalledWith('/translation/estimate', { params: { mode: 'voice', minutes: 10, calls: 100 } });
+    expect(result.textContent).toContain('₹1,800.00');
+    expect(result.textContent).toContain('₹1,80,000.00');
+    expect(api.get).toHaveBeenCalledWith('/translation/estimate', { params: { mode: 'voice', minutes: 10, calls: 100, listeners: 2 } });
+
+    fireEvent.change(within(estimator).getByLabelText('People translating'), { target: { value: '1' } });
+    fireEvent.click(within(estimator).getByRole('button', { name: 'Estimate' }));
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/translation/estimate', { params: { mode: 'voice', minutes: 10, calls: 100, listeners: 1 } }),
+    );
   });
 });
 

@@ -21,7 +21,6 @@ type Key = (typeof FIELDS)[number]['key'] | 'minimumCreditsToStartCall' | 'aiCre
 const T_FIELDS = [
   { key: 'translationVoiceCreditsPerMinute', label: 'Voice translation (credits / min)', optional: false, min: 1 },
   { key: 'translationCaptionsCreditsPerMinute', label: 'Captions (credits / min)', optional: false, min: 1 },
-  { key: 'translationIndicVoiceCreditsPerMinute', label: 'Indian-language voice (credits / min, optional)', optional: true, min: 1 },
   { key: 'translationMinimumCredits', label: 'Minimum credits to start translation (optional)', optional: true, min: 0 },
   { key: 'translationTrialMinutes', label: 'Free trial minutes', optional: false, min: 0 },
   { key: 'postCallReportCredits', label: 'Post-call report (credits / report)', optional: false, min: 0 },
@@ -162,7 +161,7 @@ export function CreditRatesTab() {
       {tForm && (
         <Panel
           title="Live Translate"
-          subtitle="Credits per translated minute, per listener direction (a two-way call has two directions). Rounded up once per direction."
+          subtitle="Credits per minute for each person translating, same for every language: one side is 1× the rate, both sides 2×. Rounded up once per direction."
         >
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" data-testid="translation-rates">
             {T_FIELDS.map((f) => (
@@ -219,13 +218,9 @@ function translationHint(key: TKey, f: Record<TKey, string>, minutes: number): s
   const n = (k: TKey) => Number(f[k]) || 0;
   switch (key) {
     case 'translationVoiceCreditsPerMinute':
-      return `A ${minutes}-min two-way voice call ≈ ${formatCredits(translatedCallCredits(minutes, n(key)))} credits.`;
+      return `Per person translating, every language. A ${minutes}-min call ≈ ${formatCredits(translatedCallCredits(minutes, n(key), 1))} credits one side, ${formatCredits(translatedCallCredits(minutes, n(key), 2))} both sides.`;
     case 'translationCaptionsCreditsPerMinute':
-      return `A ${minutes}-min two-way captioned call ≈ ${formatCredits(translatedCallCredits(minutes, n(key)))} credits.`;
-    case 'translationIndicVoiceCreditsPerMinute':
-      return f[key].trim()
-        ? `Used when both languages are Indian. A ${minutes}-min call ≈ ${formatCredits(translatedCallCredits(minutes, n(key)))} credits.`
-        : 'Blank = the voice rate applies to Indian-language pairs too.';
+      return `Per person translating. A ${minutes}-min call ≈ ${formatCredits(translatedCallCredits(minutes, n(key), 1))} credits one side, ${formatCredits(translatedCallCredits(minutes, n(key), 2))} both sides.`;
     case 'translationMinimumCredits':
       return 'Blank = one minute of the chosen mode. Calls themselves are never blocked by this.';
     case 'translationTrialMinutes':

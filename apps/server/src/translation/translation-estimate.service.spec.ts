@@ -3,28 +3,38 @@ import { TranslationEstimateService, effectiveRates } from './translation-estima
 const config = {
   translationVoiceCreditsPerMinute: 450,
   translationCaptionsCreditsPerMinute: 60,
-  translationIndicVoiceCreditsPerMinute: 300,
   postCallReportCredits: 100,
 } as never;
 
-function setup(override: Record<string, unknown> | null = null, topUps = [{ pricePaise: 10000, credits: 100 }]) {
+function setup(override: Record<string, unknown> | null = null, published: { creditPricePaise: number } | null = { creditPricePaise: 20 }) {
   const prisma: any = {
     translationRateOverride: { findUnique: jest.fn().mockResolvedValue(override) },
-    topUpPackage: { findMany: jest.fn().mockResolvedValue(topUps) },
+    creditPricingVersion: { findFirst: jest.fn().mockResolvedValue(published) },
   };
   return new TranslationEstimateService(prisma, { get: jest.fn().mockResolvedValue(config) } as never);
 }
 
 describe('TranslationEstimateService', () => {
-  it('estimates two directions per call, rounded up once', async () => {
+  it('defaults to both people translating, rounded up once, ₹ at the published price', async () => {
     const out = await setup().estimate({ mode: 'voice', minutes: '10', calls: '100' });
-    expect(out).toMatchObject({ mode: 'voice', ratePerMinute: 450, creditsPerCall: 9000, totalCredits: 900000, approxInrPerCall: 9000 });
+    expect(out).toMatchObject({
+      mode: 'voice', ratePerMinute: 450, listeners: 2, creditsPerCall: 9000, totalCredits: 900000,
+      approxInrPerMinute: 90, approxInrPerCall: 1800, approxInrTotal: 180000,
+    });
     expect(out.note).toEqual(expect.any(String));
   });
 
-  it('uses the Indic voice rate for Indian pairs', async () => {
-    expect((await setup().estimate({ mode: 'voice', minutes: '1', pair: 'hi-mr' })).ratePerMinute).toBe(300);
-    expect((await setup().estimate({ mode: 'voice', minutes: '1', pair: 'hi-en' })).ratePerMinute).toBe(450);
+  it('one person translating costs 1× the rate', async () => {
+    const out = await setup().estimate({ mode: 'captions', minutes: '10', listeners: '1' });
+    expect(out).toMatchObject({ listeners: 1, creditsPerCall: 600 });
+    await expect(setup().estimate({ listeners: '3' })).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('values 90,000 credits at the published price, not legacy top-ups', async () => {
+    const out = await setup().estimate({ mode: 'captions', minutes: '15', calls: '50', listeners: '2' });
+    expect(out.totalCredits).toBe(90000);
+    expect(out.approxInrTotal).toBe(18000);
+    expect((await setup(null, null).estimate({})).approxInrPerCall).toBeNull();
   });
 
   it('applies the signed-in user override', async () => {
@@ -38,10 +48,9 @@ describe('TranslationEstimateService', () => {
     await expect(setup().estimate({ minutes: '-1' })).rejects.toMatchObject({ status: 400 });
   });
 
-  it('effectiveRates: a voice override wins over the Indic rate', () => {
+  it('effectiveRates: an override wins field by field', () => {
     expect(effectiveRates(config, { voiceCreditsPerMinute: 200, captionsCreditsPerMinute: null, postCallReportCredits: null })).toMatchObject({
       voiceRate: 200,
-      indicVoiceRate: 200,
       captionsRate: 60,
       reportCredits: 100,
     });

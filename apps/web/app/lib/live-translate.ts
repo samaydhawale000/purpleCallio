@@ -62,7 +62,7 @@ export const LIVE_TRANSLATE_FEATURES: LiveTranslateFeature[] = [
       brand: "Translation UI Kit",
       description: "Drop-in multilingual call components",
       promise: "A multilingual call screen without building the UI yourself.",
-      why: "Split views, language pickers, Indian scripts and right-to-left text are already handled, so you ship the feature instead of the plumbing.",
+      why: "Split views, language pickers, non-Latin scripts and right-to-left text are already handled, so you ship the feature instead of the plumbing.",
       theme: "Understand",
       icon: LayoutTemplate,
    },
@@ -121,30 +121,8 @@ export interface TranslationLanguage {
    captions: boolean | null;
 }
 
-/**
- * Shown until GET /translation/languages answers (and when it can't).
- * Voice and captions availability is unknown here, so both show as
- * "being validated" rather than as supported.
- */
+/** Shown until GET /translation/languages answers (and when it can't). */
 export const FALLBACK_LANGUAGES: TranslationLanguage[] = SONIOX_FALLBACK_LANGUAGES;
-/* Legacy literal kept below temporarily for source-history readability.
-   { code: "hi", name: "Hindi", nativeName: "हिन्दी", voice: null, captions: null },
-   { code: "mr", name: "Marathi", nativeName: "मराठी", voice: null, captions: null },
-   { code: "ta", name: "Tamil", nativeName: "தமிழ்", voice: null, captions: null },
-   { code: "te", name: "Telugu", nativeName: "తెలుగు", voice: null, captions: null },
-   { code: "bn", name: "Bengali", nativeName: "বাংলা", voice: null, captions: null },
-   { code: "gu", name: "Gujarati", nativeName: "ગુજરાતી", voice: null, captions: null },
-   { code: "kn", name: "Kannada", nativeName: "ಕನ್ನಡ", voice: null, captions: null },
-   { code: "ml", name: "Malayalam", nativeName: "മലയാളം", voice: null, captions: null },
-   { code: "pa", name: "Punjabi", nativeName: "ਪੰਜਾਬੀ", voice: null, captions: null },
-   { code: "or", name: "Odia", nativeName: "ଓଡ଼ିଆ", voice: null, captions: null },
-   { code: "en", name: "English", nativeName: "English", voice: null, captions: null },
-   { code: "ur", name: "Urdu", nativeName: "اردو", rtl: true, voice: null, captions: null },
-   { code: "ar", name: "Arabic", nativeName: "العربية", rtl: true, voice: null, captions: null },
-   { code: "es", name: "Spanish", nativeName: "Español", voice: null, captions: null },
-   { code: "fr", name: "French", nativeName: "Français", voice: null, captions: null },
-   { code: "de", name: "German", nativeName: "Deutsch", voice: null, captions: null },
-]; */
 
 export const PRICING_FALLBACK = "Pricing set at launch";
 
@@ -269,31 +247,35 @@ export const LT_METRICS_SNIPPET = `GET /translation/metrics?from=2026-10-01&to=2
 { "totals":   { "calls": 412, "voiceMinutes": 3820, "captionsMinutes": 640, ... },
   "latency":  { "firstAudioMsP50": ..., "captionDelayMsP95": ... },
   "guard":    { "flags": 37, "byReason": { "term_mismatch:amount": 9 }, ... },
-  "byPair":   [ { "pair": "mr-en", "route": "sarvam", ... } ] }`;
+  "byPair":   [ { "pair": "mr-en", "route": "soniox", ... } ] }`;
 
-export const LT_ESTIMATE_SNIPPET = `GET /translation/estimate?mode=voice&minutes=10&calls=100
+export const LT_ESTIMATE_SNIPPET = `GET /translation/estimate?mode=voice&minutes=10&calls=100&listeners=2
 
-{ "mode": "voice", "ratePerMinute": …, "creditsPerCall": …,
-  "totalCredits": …, "approxInrPerCall": …, "note": "…" }`;
+{ "mode": "voice", "ratePerMinute": …, "listeners": 2, "creditsPerCall": …,
+  "totalCredits": …, "approxInrPerCall": …, "approxInrTotal": …, "note": "…" }`;
 
-// ── Comparison (plan §1, phrased cautiously) ─────────────────────────────
-export const COMPARISON_COLUMNS = ["Agora", "Twilio", "LiveKit", "Zoom Video SDK", "PurpleCallio"] as const;
+// ── Comparison: building it yourself vs built in (no vendor names) ───────
+export interface ComparisonRow {
+   label: string;
+   /** What a team typically has to do on a plain calling SDK. */
+   diy: string;
+   /** The PurpleCallio feature that covers it. */
+   feature: string;
+   detail: string;
+}
 
-export const COMPARISON_ROWS: { label: string; cells: [string, string, string, string, string] }[] = [
-   { label: "Translated captions", cells: ["Available (priced per language)", "Build it yourself", "Build it yourself", "Available", "Built in"] },
-   { label: "Voice-to-voice translation", cells: ["Build it yourself", "Build it yourself (tutorials)", "Build it yourself (cookbook)", "Not documented for the SDK", "Built in"] },
-   { label: "Original and translation side by side, time-synced", cells: ["Not documented", "Not documented", "Not documented", "Not documented", "DualView Translation"] },
-   { label: "Company vocabulary for translation", cells: ["Not documented", "Not documented", "Not documented", "Not documented", "PurpleLex"] },
-   { label: "Misunderstanding flags, replay and repeat", cells: ["Not documented", "Not documented", "Not documented", "Not documented", "MeaningGuard"] },
-   { label: "Translation latency and quality metrics", cells: ["Not documented", "Not documented", "Not documented", "Not documented", "Translation Observability"] },
-   { label: "AI cost budgets and per-call limits", cells: ["Not documented", "Not documented", "Not documented", "Not documented", "CostGuard"] },
-   { label: "Multilingual transcript and summary after the call", cells: ["Needs recording and processing", "Partial", "Build it yourself", "Partial", "Post-Call Suite (opt-in)"] },
-   { label: "Drop-in translation UI", cells: ["Raw text tracks", "Not documented", "Not documented", "Not documented", "Translation UI Kit"] },
-   { label: "Indian languages", cells: ["Limited", "Depends on provider", "Depends on provider", "Not documented", "Captions and voice per validated language"] },
-   { label: "Pricing", cells: ["Per feature and language", "Provider bill plus Twilio", "Agent minutes plus provider", "Contact sales", "One INR rate per translated minute"] },
+export const COMPARISON_ROWS: ComparisonRow[] = [
+   { label: "Voice and captions", diy: "Wire speech recognition, translation and speech synthesis providers into your media pipeline.", feature: "Built in", detail: "Turn on one flag per call; voice and captions just work." },
+   { label: "Original next to translation", diy: "Sync two text streams and build the side-by-side view yourself.", feature: "DualView Translation", detail: "Time-synced original and translated captions." },
+   { label: "Company vocabulary", diy: "Maintain prompt hacks or glossaries per provider.", feature: "PurpleLex", detail: "One reusable glossary for brand names and industry terms." },
+   { label: "Catching misunderstandings", diy: "No signal when a number, date or name changes in translation.", feature: "MeaningGuard", detail: "Flags risky phrases with replay and ask-to-repeat." },
+   { label: "Latency and quality", diy: "Instrument every provider hop yourself.", feature: "Translation Observability", detail: "Delay, failures and flag rates by language pair." },
+   { label: "Cost control", diy: "Several provider bills and no per-call limits.", feature: "CostGuard", detail: "Budgets and per-call limits enforced on the server." },
+   { label: "Notes after the call", diy: "Record, store and process audio in a separate pipeline.", feature: "Post-Call Suite", detail: "Transcript, summary and action items in each language (opt-in)." },
+   { label: "Call screen", diy: "Build pickers, split views and right-to-left layouts from scratch.", feature: "Translation UI Kit", detail: "Drop-in components for React, Vue, Svelte and more." },
+   { label: "Languages", diy: "Coverage and pricing change with each provider you add.", feature: "60 languages", detail: "Any to any, with voice and captions in every language." },
+   { label: "Pricing", diy: "Per-provider bills on top of your calling platform.", feature: "One simple rate", detail: "Per minute, per person translating, from one credit balance." },
 ];
-
-export const COMPARISON_FOOTNOTE = "Based on public documentation as of Oct 2026; verify before relying on it.";
 
 // ── FAQ (feature page + FAQ page) ────────────────────────────────────────
 export const LIVE_TRANSLATE_FAQ: [string, string][] = [
@@ -307,7 +289,7 @@ export const LIVE_TRANSLATE_FAQ: [string, string][] = [
    ],
    [
       "Which languages are supported?",
-      "Captions and voice are listed separately for each language. Indian languages are a focus, including code-mixed speech like Hinglish. Voice availability is being validated language by language, and only languages that pass are offered in voice mode; others fall back to captions.",
+      "60 languages across Europe, Asia, the Middle East and Africa, each with both captions and voice translation, from English, Spanish, French and Arabic to Hindi, Chinese, Japanese and Swahili. Speech in any of them can be translated into any other, and the speaker's language can be detected automatically.",
    ],
    [
       "Is call audio or the transcript stored?",
@@ -327,4 +309,4 @@ export const LIVE_TRANSLATE_FAQ: [string, string][] = [
    ],
 ];
 
-export const PROVIDERS_TEXT = "Powered by OpenAI and Sarvam";
+export const PROVIDERS_TEXT = "Powered by Soniox";

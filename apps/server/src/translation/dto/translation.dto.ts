@@ -45,7 +45,8 @@ export interface EstimateQuery {
   mode?: string;
   minutes?: string;
   calls?: string;
-  pair?: string;
+  /** People with translation on: 1 (one side) or 2 (both). Default 2. */
+  listeners?: string;
 }
 
 /**

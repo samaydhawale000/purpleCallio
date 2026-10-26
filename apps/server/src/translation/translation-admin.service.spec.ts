@@ -14,12 +14,12 @@ function setup() {
     },
     translationSession: {
       findMany: jest.fn().mockResolvedValue([
-        { route: 'sarvam', sourceLanguage: 'hi', targetLanguage: 'en', voiceSeconds: 600, captionsSeconds: 0, creditsCharged: 4500, providerCostPaise: 1500 },
+        { route: 'soniox', sourceLanguage: 'hi', targetLanguage: 'en', voiceSeconds: 600, captionsSeconds: 0, creditsCharged: 4500, providerCostPaise: 1500 },
         { route: 'openai-translate', sourceLanguage: 'en', targetLanguage: 'hi', voiceSeconds: 600, captionsSeconds: 0, creditsCharged: 100, providerCostPaise: 3000 },
       ]),
     },
     translationReport: { aggregate: jest.fn().mockResolvedValue({ _sum: { creditsCharged: 200 }, _count: 2 }) },
-    topUpPackage: { findMany: jest.fn().mockResolvedValue([{ pricePaise: 1000, credits: 100 }]) },
+    creditPricingVersion: { findFirst: jest.fn().mockResolvedValue({ creditPricePaise: 10 }) },
   };
   const audit = { log: jest.fn() };
   const config = { get: jest.fn().mockResolvedValue({ translationMarginWarnPercent: 40, translationProviderCostsPaise: {} }) };
@@ -53,9 +53,9 @@ describe('TranslationAdminService', () => {
   it('computes margin by route and pair and flags low margins', async () => {
     const out = await setup().service.margin(new Date(0), new Date());
     expect(out.warnPercent).toBe(40);
-    const sarvam = out.byRoute.find((r) => r.route === 'sarvam')!;
+    const soniox = out.byRoute.find((r) => r.route === 'soniox')!;
     // 4500 credits × ₹0.10 = ₹450 revenue, ₹15 cost
-    expect(sarvam).toMatchObject({ revenueCredits: 4500, revenueInr: 450, providerCostInr: 15, warn: false });
+    expect(soniox).toMatchObject({ revenueCredits: 4500, revenueInr: 450, providerCostInr: 15, warn: false });
     const openai = out.byRoute.find((r) => r.route === 'openai-translate')!;
     expect(openai.warn).toBe(true);
     expect(out.byPair.map((p) => p.pair).sort()).toEqual(['en-hi', 'hi-en']);

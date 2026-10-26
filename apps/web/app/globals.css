@@ -171,7 +171,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .stripe-gradient-canvas { display: none; }
-  .translation-speaking, .translation-wave, .translation-audio, .translation-arrow-right, .translation-arrow-left { animation: none; }
+  .translation-speaking, .translation-wave, .translation-audio, .translation-arrow-right, .translation-arrow-left, .hero-arrow-path, .hero-orb, .lt-fade-up, .lt-pop { animation: none; }
 }
 
 .hero-badge-dot {
@@ -204,6 +204,37 @@ body {
 @keyframes translation-arrow-left {
   50% { transform: translateX(-11px) translateY(4px); opacity: .55; }
 }
+
+/* Hero globe: dotted world texture, floating orbs, flowing arrows */
+.hero-globe-dots {
+  background-image: radial-gradient(rgba(124, 77, 230, .55) 1.1px, transparent 1.7px);
+  background-size: 8px 8px;
+  -webkit-mask-image: radial-gradient(circle at 45% 45%, #000 30%, rgba(0,0,0,.5) 55%, transparent 72%);
+          mask-image: radial-gradient(circle at 45% 45%, #000 30%, rgba(0,0,0,.5) 55%, transparent 72%);
+  opacity: .7;
+}
+.hero-orb {
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, #D9C2FF, #8B5CF6 55%, #5B21B6);
+  box-shadow: 0 6px 14px -4px rgba(91, 33, 182, .5);
+  animation: hero-orb-float 6s ease-in-out infinite;
+}
+.hero-arrow-path {
+  stroke-dasharray: 6 5;
+  animation: hero-arrow-flow 1.4s linear infinite;
+}
+@keyframes hero-orb-float {
+  50% { transform: translateY(-8px); }
+}
+@keyframes hero-arrow-flow {
+  to { stroke-dashoffset: -22; }
+}
+
+/* Live Translate in-call demo */
+.lt-fade-up { animation: lt-fade-up .35s ease both; }
+.lt-pop { animation: lt-pop .3s ease both; }
+@keyframes lt-fade-up { from { opacity: 0; transform: translateY(8px); } }
+@keyframes lt-pop { from { opacity: 0; transform: translateY(8px) scale(.96); } }
 
 /* ── Code block ───────────────────────────────────────────── */
 .lp-code-block { background: var(--surface-2); }

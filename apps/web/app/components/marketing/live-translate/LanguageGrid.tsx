@@ -17,8 +17,8 @@ function Badge({ on, label }: { on: boolean | null; label: string }) {
 
 /**
  * Languages with separate voice and captions badges, from
- * GET /translation/languages. The static list is shown first (server render)
- * and whenever the API isn't available, marked as still being validated.
+ * GET /translation/languages. The static Soniox list is shown first (server
+ * render) and whenever the API isn't available.
  */
 export function LanguageGrid() {
    const [live, setLive] = useState<TranslationLanguage[] | null>(null);
@@ -48,9 +48,7 @@ export function LanguageGrid() {
             ))}
          </ul>
          <p className="mt-4 text-xs text-[#3D3650]">
-            {live
-               ? "Live list from the Live Translate API. Voice is offered only in languages that pass our testing; others fall back to captions."
-               : "Planned languages for early access. Voice availability is being validated, language by language; languages that don't pass fall back to captions. The final list is published at launch."}
+            Every language supports captions and voice, and any language can be translated into any other.
          </p>
       </div>
    );

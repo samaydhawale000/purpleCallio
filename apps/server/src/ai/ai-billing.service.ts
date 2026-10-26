@@ -12,6 +12,7 @@ import {
   toCredits,
 } from '../billing/billing-config.service';
 import { CreditService } from '../billing/credits/credit.service';
+import { creditValuePaise } from '../billing/credit-value';
 import { SubscriptionService } from '../billing/subscriptions/subscription.service';
 import { UsageBillingService } from '../billing/usage-billing.service';
 import { aiConfig } from './ai.config';
@@ -221,8 +222,8 @@ export class AiBillingService {
 
   /**
    * Admin: AI minutes, credits, provider cost and margin for sessions billed
-   * in [from, to). Credits are valued at AI_CREDIT_VALUE_PAISE, or else the
-   * lowest pre-GST price per credit among active top-ups.
+   * in [from, to). Credits are valued at the published credit price
+   * (see billing/credit-value.ts).
    */
   async adminSummary(from: Date, to: Date) {
     const [agg, creditValue] = await Promise.all([
@@ -238,7 +239,7 @@ export class AiBillingService {
         },
         _count: true,
       }),
-      this.creditValuePaise(),
+      creditValuePaise(this.prisma),
     ]);
     const creditsCharged = agg._sum.creditsCharged ?? 0;
     const providerCostPaise = agg._sum.providerCostPaise ?? 0;
@@ -269,24 +270,6 @@ export class AiBillingService {
       usdInrRate: this.pricing.usdInrRate(),
       currency: 'INR',
     };
-  }
-
-  private async creditValuePaise(): Promise<{
-    paise: number | null;
-    source: 'env' | 'topup' | 'none';
-  }> {
-    const raw = process.env.AI_CREDIT_VALUE_PAISE;
-    const fromEnv = raw === undefined || raw.trim() === '' ? NaN : Number(raw);
-    if (Number.isFinite(fromEnv) && fromEnv > 0) {
-      return { paise: fromEnv, source: 'env' };
-    }
-    const topUps = await this.prisma.topUpPackage.findMany({
-      where: { status: 'ACTIVE', credits: { gt: 0 } },
-      select: { pricePaise: true, credits: true },
-    });
-    if (!topUps.length) return { paise: null, source: 'none' };
-    const lowest = Math.min(...topUps.map((t) => t.pricePaise / t.credits));
-    return { paise: round2(lowest), source: 'topup' };
   }
 }
 

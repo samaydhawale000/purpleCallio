@@ -13,9 +13,9 @@ function monthToDate() {
 }
 
 const CREDIT_VALUE_SOURCE = {
-  env: 'AI_CREDIT_VALUE_PAISE',
-  topup: 'lowest active top-up price per credit, before GST',
-  none: 'no active top-ups to value credits',
+  published: 'the published credit price, before GST',
+  env: 'AI_CREDIT_VALUE_PAISE (no published credit price)',
+  none: 'nothing yet: publish a credit price to value credits',
 } as const;
 
 /**

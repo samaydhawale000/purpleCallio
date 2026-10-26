@@ -4,7 +4,7 @@ const row = (over: Record<string, unknown> = {}) => ({
   callId: 'c1',
   sourceLanguage: 'hi',
   targetLanguage: 'en',
-  route: 'sarvam',
+  route: 'soniox',
   mode: 'VOICE',
   status: 'ENDED',
   voiceSeconds: 120,
@@ -68,11 +68,11 @@ describe('TranslationMetricsService', () => {
   it('filters by project, pair and route', async () => {
     const prisma: any = {
       translationSession: { findMany: jest.fn().mockResolvedValue([row()]) },
-      topUpPackage: { findMany: jest.fn().mockResolvedValue([]) },
+      creditPricingVersion: { findFirst: jest.fn().mockResolvedValue(null) },
     };
-    const out = await new TranslationMetricsService(prisma).metrics('p1', { pair: 'hi-en', route: 'sarvam' });
+    const out = await new TranslationMetricsService(prisma).metrics('p1', { pair: 'hi-en', route: 'soniox' });
     const where = prisma.translationSession.findMany.mock.calls[0][0].where;
-    expect(where).toMatchObject({ projectId: 'p1', route: 'sarvam', sourceLanguage: { startsWith: 'hi' }, targetLanguage: { startsWith: 'en' } });
+    expect(where).toMatchObject({ projectId: 'p1', route: 'soniox', sourceLanguage: { startsWith: 'hi' }, targetLanguage: { startsWith: 'en' } });
     expect(out.totals.approxInrPerCallMinute).toBeNull();
   });
 
@@ -88,7 +88,7 @@ describe('TranslationMetricsService', () => {
       },
       aiCallSession: { aggregate: jest.fn().mockResolvedValue({ _sum: { durationSeconds: 300, creditsCharged: 75 }, _count: 1 }) },
       translationReport: { aggregate: jest.fn().mockResolvedValue({ _sum: { creditsCharged: 100 }, _count: 1 }) },
-      topUpPackage: { findMany: jest.fn().mockResolvedValue([]) },
+      creditPricingVersion: { findFirst: jest.fn().mockResolvedValue(null) },
     };
     const out = await new TranslationMetricsService(prisma).usageBreakdown('u1', {});
     expect(out.callMinutes).toEqual({ minutes: 15, credits: 30 });

@@ -436,7 +436,7 @@ const docs = {
       sections: [
          [
             "How it works",
-            "You set each participant's language and a translation mode when you create the call. During the call, each browser streams speech to PurpleCallio, which runs speech recognition, translation and (in voice mode) synthesized speech on the server through OpenAI or Sarvam, depending on the language pair. Both participants receive DualView captions; only the listener receives translated audio, and the original voice is turned down rather than muted.",
+            "You set each participant's language and a translation mode when you create the call. During the call, each browser streams speech to PurpleCallio, which runs speech recognition, translation and (in voice mode) synthesized speech on the server through Soniox. Both participants receive DualView captions; only the listener receives translated audio, and the original voice is turned down rather than muted.",
          ],
          [
             "Modes",
