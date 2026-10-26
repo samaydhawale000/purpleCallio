@@ -61,6 +61,12 @@ describe('provider-aware agent form', () => {
     expect(screen.queryByLabelText('Provider')).toBeNull();
   });
 
+  it('hides the select when only one provider is available', () => {
+    render(<AgentForm initial={agentToForm(AGENT)} submitLabel="Save" onSubmit={vi.fn()} providers={['gemini']} />);
+    expect(screen.queryByLabelText('Provider')).toBeNull();
+    expect(screen.getByLabelText('Voice')).toBeTruthy();
+  });
+
   it('lists configured providers, keeps the current one and swaps the voice list', async () => {
     const onSubmit = vi.fn();
     render(<AgentForm initial={agentToForm(AGENT)} submitLabel="Save" onSubmit={onSubmit} providers={['openai']} />);

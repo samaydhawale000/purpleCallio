@@ -77,7 +77,8 @@ export function AgentForm({ initial, submitLabel, onSubmit, header, disabled, pr
   const providerOptions = providers
     ? Array.from(new Set([...providers, ...(values.provider ? [values.provider] : [])]))
     : [];
-  const showProvider = providerOptions.length > 0;
+  // Nothing to choose with one provider: the agent just uses it.
+  const showProvider = providerOptions.length > 1;
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-4">
