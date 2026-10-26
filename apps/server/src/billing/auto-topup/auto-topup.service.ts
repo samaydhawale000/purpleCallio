@@ -30,7 +30,43 @@ export class AutoTopUpService {
     return { available: configured && liveAllowed && !!authType, reason: !configured ? 'Razorpay test credentials and RAZORPAY_CHARGE_AT_WILL_ENABLED=true are required.' : !liveAllowed ? 'Live charging remains disabled pending verified test-mode flow.' : !authType ? 'Set the account-approved RAZORPAY_EMANDATE_AUTH_TYPE before accepting authorizations.' : null };
   }
 
+  /**
+   * Confirms a PENDING mandate by asking Razorpay directly, so Auto Top-Up
+   * doesn't depend on the token webhook arriving (it can't reach a local
+   * server and may be delayed). The webhook still works as before.
+   */
+  async syncMandate(userId: string) {
+    const s = await this.prisma.autoTopUpSetting.findUnique({ where: { userId } });
+    if (!s || s.mandateStatus !== AutoTopUpMandateStatus.PENDING || !s.mandateOrderId || !s.providerCustomerId) return s;
+    let result;
+    try {
+      result = await this.provider.getMandateStatus(s.mandateOrderId, s.providerCustomerId);
+    } catch {
+      return s; // Provider unreachable: stay PENDING and try again next time.
+    }
+    if (result.status === 'pending') {
+      return result.tokenId && result.tokenId !== s.providerTokenId
+        ? this.prisma.autoTopUpSetting.update({ where: { id: s.id }, data: { providerTokenId: result.tokenId } })
+        : s;
+    }
+    const where = { id: s.id, mandateStatus: AutoTopUpMandateStatus.PENDING, mandateOrderId: s.mandateOrderId };
+    await this.prisma.autoTopUpSetting.updateMany({
+      where,
+      data:
+        result.status === 'confirmed'
+          ? { providerTokenId: result.tokenId, mandateStatus: AutoTopUpMandateStatus.ACTIVE, attentionReason: null }
+          : {
+              enabled: false,
+              mandateStatus: result.status === 'cancelled' ? AutoTopUpMandateStatus.REVOKED : AutoTopUpMandateStatus.FAILED,
+              attentionReason: 'mandate_inactive',
+              attentionAt: new Date(),
+            },
+    });
+    return this.prisma.autoTopUpSetting.findUnique({ where: { userId } });
+  }
+
   async get(userId: string) {
+    await this.syncMandate(userId);
     const [setting, wallet] = await Promise.all([
       this.prisma.autoTopUpSetting.findUnique({ where: { userId } }), this.credits.getSummary(userId),
     ]);

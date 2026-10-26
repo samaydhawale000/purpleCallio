@@ -178,6 +178,13 @@ export class FakeProvider implements PaymentProvider {
     return { providerOrderId, providerCustomerId: `cust_${this.seq}`, publicKey: 'pk_test', currency: input.currency };
   }
 
+  /** Test hook: what getMandateStatus reports for each authorization order. */
+  mandateStatuses = new Map<string, { status: 'pending' | 'confirmed' | 'rejected' | 'cancelled'; tokenId: string | null }>();
+
+  async getMandateStatus(providerOrderId: string) {
+    return this.mandateStatuses.get(providerOrderId) ?? { status: 'pending' as const, tokenId: null };
+  }
+
   async createChargeAtWillPayment(input: any) {
     const providerPaymentId = `pay_${++this.seq}`;
     const payment: ProviderPayment = { providerPaymentId, providerOrderId: input.providerOrderId, status: 'pending', amountPaise: input.amountPaise, currency: input.currency, method: 'emandate' };

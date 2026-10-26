@@ -201,6 +201,7 @@ class FakeCredits {
       granted,
       balance,
       available: balance,
+      paidAvailable: balance,
       usedPercent: granted ? ((granted - balance) / granted) * 100 : 0,
     };
   }

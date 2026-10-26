@@ -9,14 +9,13 @@ import { useAuthStore } from '../../store/auth.store';
 /**
  * Shared chrome for every billing page: title, sub-navigation and the
  * loading / error states. Plan, Credits and Usage are the center of the
- * billing area; payment methods are secondary.
+ * billing area. Payment is chosen at checkout, so there is no payment-methods tab.
  */
 const NAV: { label: string; href: string; match?: (p: string) => boolean }[] = [
   { label: 'Overview', href: '/dashboard/billing', match: (p) => p === '/dashboard/billing' },
   { label: 'Credits', href: '/dashboard/billing/credits', match: (p) => p.startsWith('/dashboard/billing/credits') },
   { label: 'Usage', href: '/dashboard/usage', match: (p) => p.startsWith('/dashboard/usage') },
   { label: 'Payments & receipts', href: '/dashboard/billing/payments', match: (p) => p.startsWith('/dashboard/billing/payments') || p.startsWith('/dashboard/billing/invoices') },
-  { label: 'Payment methods', href: '/dashboard/billing/payments#payment-methods', match: () => false },
 ];
 
 export function BillingNav() {

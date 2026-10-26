@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -101,6 +101,14 @@ function mediaRates(rates: CreditRates): MediaRate[] {
       ? [{ key: 'ai' as const, icon: Bot, label: 'AI voice', rate: rates.aiCreditsPerMinute, perParticipant: false }]
       : []),
   ];
+}
+
+/** The auth token after mount only: server HTML is the signed-out version, so hydration matches. */
+function useClientToken() {
+  const token = useAuthStore((s) => s.token);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return mounted ? token : null;
 }
 
 const creditWord = (n: number) => (n === 1 ? 'credit' : 'credits');
@@ -464,7 +472,7 @@ const toPaise = (rupees: number) => Math.round(rupees * 100);
  * price is published. The checkout quote stays authoritative.
  */
 export function BuyCreditsCalculator({ rates, credit }: { rates: CreditRates; credit: PublishedCreditPricing | null }) {
-  const token = useAuthStore((s) => s.token);
+  const token = useClientToken();
   const minRupees = credit ? Math.ceil(credit.minimumPurchasePaise / 100) : 0;
   const [rupees, setRupees] = useState<number | null>(null);
   const amount = rupees ?? minRupees;
@@ -503,8 +511,9 @@ export function BuyCreditsCalculator({ rates, credit }: { rates: CreditRates; cr
               <strong className="text-[#170B2E]">Paid features unlock</strong> after your first verified credit purchase.
             </li>
             <li>
-              <strong className="text-[#170B2E]">No free monthly credits.</strong> Free accounts can explore the dashboard;
-              any promotional credits we grant carry their own expiry.
+              <strong className="text-[#170B2E]">Free credits are for calls.</strong> Any welcome or promotional credits
+              cover audio, video and screen share only, and carry their own expiry. AI features (Live Translate, AI voice
+              agents, post-call reports) always use purchased credits.
             </li>
           </ul>
         </div>
@@ -588,7 +597,7 @@ export function AutoTopUpExplainer() {
 
 /** Shared visual pricing overview for the home page and /pricing. */
 function PrepaidPricingFeature({ rates, credit, pageHeading = false }: { rates: CreditRates; credit: PublishedCreditPricing | null; pageHeading?: boolean }) {
-  const token = useAuthStore((s) => s.token);
+  const token = useClientToken();
   const cta = token ? '/dashboard/billing/credits#topups' : '/signup';
   const Heading = pageHeading ? 'h1' : 'h2';
   const price = credit ? `${formatMoney(credit.creditPricePaise, credit.currency)} per credit` : 'Published soon';
@@ -697,9 +706,21 @@ function SubHeading({ children }: { children: React.ReactNode }) {
  * `summary` (homepage) renders a link to the pricing page; `full` adds the
  * credit explainer, Auto Top-Up details and Live Translate.
  */
-export default function PricingSection({ variant = 'summary', bare = false }: { variant?: 'summary' | 'full'; /** Inside a page that already has its own heading and gutters. */ bare?: boolean }) {
-  const state = usePublicPricing();
-  const priceState = usePublishedCreditPricing();
+export default function PricingSection({
+  variant = 'summary',
+  bare = false,
+  initialRates,
+  initialCredit,
+}: {
+  variant?: 'summary' | 'full';
+  /** Inside a page that already has its own heading and gutters. */
+  bare?: boolean;
+  /** Server-fetched data so the page's HTML has real rates (SEO/AEO). */
+  initialRates?: PublicPricing;
+  initialCredit?: PublishedCreditPricing | null;
+}) {
+  const state = usePublicPricing(initialRates);
+  const priceState = usePublishedCreditPricing(initialCredit);
   const full = variant === 'full';
   // An unavailable price endpoint is treated like an unpublished price — never invented.
   const credit = priceState.status === 'ready' ? priceState.data : null;

@@ -77,12 +77,14 @@ function setup(seed: any[] = [], googlePayload?: any) {
   const subscriptions = {
     getActiveSubscription: jest.fn(async () => undefined),
   };
+  const signupCredits = { grant: jest.fn(async () => 0) };
 
   const service = new AuthService(
     prisma as any,
     new JwtService({}),
     billing,
     subscriptions as any,
+    signupCredits as any,
   );
   (service as any).googleClient = {
     verifyIdToken: jest.fn(async () => ({
@@ -95,15 +97,16 @@ function setup(seed: any[] = [], googlePayload?: any) {
         },
     })),
   };
-  return { service, prisma, payments, billing };
+  return { service, prisma, payments, billing, signupCredits };
 }
 
 describe('AuthService.loginWithGoogle — onboarding state', () => {
   it('returns onboardingRequired=true for a brand-new user', async () => {
-    const { service, prisma } = setup();
+    const { service, prisma, signupCredits } = setup();
 
     const res = await service.loginWithGoogle('id-token');
 
+    expect(signupCredits.grant).toHaveBeenCalledWith(prisma.users[0].id);
     expect(res.onboardingRequired).toBe(true);
     expect(res.user.profileCompleted).toBe(false);
     expect(res.user.email).toBe('samay@acme.com');

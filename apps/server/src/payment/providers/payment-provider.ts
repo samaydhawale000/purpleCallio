@@ -82,6 +82,13 @@ export interface ProviderChargeAtWillAuthorization {
   publicKey: string;
   currency: string;
 }
+/** Where an eMandate authorization stands, read straight from the provider. */
+export interface ProviderMandateStatus {
+  status: 'pending' | 'confirmed' | 'rejected' | 'cancelled';
+  tokenId: string | null;
+  failureReason?: string | null;
+}
+
 export interface ProviderChargeAtWillChargeInput {
   paymentId: string;
   providerOrderId: string;
@@ -204,6 +211,12 @@ export interface PaymentProvider {
     input: ProviderChargeAtWillAuthorizationInput,
   ): Promise<ProviderChargeAtWillAuthorization>;
   createChargeAtWillPayment(input: ProviderChargeAtWillChargeInput): Promise<ProviderPayment>;
+  /**
+   * The mandate's current state for an authorization order. Lets us confirm
+   * a mandate without waiting for the token webhook (which never reaches a
+   * local server and can be delayed in production).
+   */
+  getMandateStatus(providerOrderId: string, providerCustomerId: string): Promise<ProviderMandateStatus>;
 }
 
 export const PAYMENT_PROVIDER = 'PAYMENT_PROVIDER';

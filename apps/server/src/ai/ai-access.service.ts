@@ -38,8 +38,9 @@ export class AiAccessService {
   }
 
   /**
-   * The wallet must cover one AI minute and the start minimum:
-   * available ≥ max(minimumCreditsToStartCall, aiCreditsPerMinute).
+   * Paid credits must cover one AI minute and the start minimum (free
+   * credits never pay for AI):
+   * paidAvailable ≥ max(minimumCreditsToStartCall, aiCreditsPerMinute).
    */
   async hasCreditsToStart(userId: string): Promise<boolean> {
     const sub = await this.subscriptions.getActiveSubscription(userId);
@@ -52,6 +53,6 @@ export class AiAccessService {
       config.minimumCreditsToStartCall,
       config.aiCreditsPerMinute ?? 1,
     );
-    return wallet.available >= required;
+    return wallet.paidAvailable >= required;
   }
 }

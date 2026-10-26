@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowRight, Coins, RefreshCw } from 'lucide-react';
 import { useRequireAuth } from '../../hooks/useRequireAuth';
 import { Button } from '../../components/ui/Button';
-import { billingErrorMessage, formatCredits, formatDate, getCreditSummary, type WalletSummary } from '../../lib/billing';
+import { billingErrorMessage, formatCredits, formatDate, getCreditSummary, isFreeCreditSource, walletSplit, type WalletSummary } from '../../lib/billing';
 import { BillingHeader, ErrorBanner, PageLoader, SectionCard, useAuthErrorHandler } from './BillingShell';
 
 export default function BillingOverviewPage() {
@@ -35,15 +35,14 @@ export default function BillingOverviewPage() {
         </div>
         {wallet.purchase?.eligible === false && <p className="mt-4 text-sm text-amber-800">{wallet.purchase.reason ?? 'Credit purchases are unavailable for this account.'}</p>}
       </SectionCard>
-      <SectionCard title="Credit balances" subtitle="Purchased and promotional credits are tracked separately.">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Balance label="Purchased" value={wallet.bySource?.purchased ?? wallet.buckets.filter((b) => b.source === 'TOPUP').reduce((n, b) => n + b.remaining, 0)} />
-          <Balance label="Promotional" value={wallet.bySource?.promotional ?? wallet.buckets.filter((b) => b.source === 'PROMOTION').reduce((n, b) => n + b.remaining, 0)} />
-          <Balance label="Legacy plan credits" value={wallet.bySource?.plan ?? wallet.buckets.filter((b) => b.source === 'SUBSCRIPTION').reduce((n, b) => n + b.remaining, 0)} />
+      <SectionCard title="Credit balances" subtitle="Free credits cover audio, video and screen share. Live Translate, AI voice agents and post-call reports use paid credits only.">
+        <div className="grid gap-3 sm:grid-cols-2" data-testid="credit-split">
+          <Balance label="Paid credits · every feature" value={walletSplit(wallet).paid} />
+          <Balance label="Free credits · calls only" value={walletSplit(wallet).free} />
         </div>
       </SectionCard>
       <SectionCard title="Upcoming expiries" subtitle="Each credit lot keeps its own expiry date.">
-        {wallet.buckets.filter((b) => b.remaining > 0 && b.expiresAt).length === 0 ? <p className="text-sm text-[#3D3650]">No expiring credit lots.</p> : <ul className="divide-y divide-[#E7DFF5]">{wallet.buckets.filter((b) => b.remaining > 0 && b.expiresAt).sort((a,b) => (a.expiresAt ?? '').localeCompare(b.expiresAt ?? '')).slice(0, 8).map((bucket) => <li key={bucket.id} className="flex justify-between gap-4 py-3 text-sm"><span>{formatCredits(bucket.remaining)} {bucket.source === 'PROMOTION' ? 'promotional' : 'purchased'} credits</span><span className="text-[#3D3650]">Expires {formatDate(bucket.expiresAt)}</span></li>)}</ul>}
+        {wallet.buckets.filter((b) => b.remaining > 0 && b.expiresAt).length === 0 ? <p className="text-sm text-[#3D3650]">No expiring credit lots.</p> : <ul className="divide-y divide-[#E7DFF5]">{wallet.buckets.filter((b) => b.remaining > 0 && b.expiresAt).sort((a,b) => (a.expiresAt ?? '').localeCompare(b.expiresAt ?? '')).slice(0, 8).map((bucket) => <li key={bucket.id} className="flex justify-between gap-4 py-3 text-sm"><span>{formatCredits(bucket.remaining)} {isFreeCreditSource(bucket.source) ? 'free' : 'paid'} credits</span><span className="text-[#3D3650]">Expires {formatDate(bucket.expiresAt)}</span></li>)}</ul>}
       </SectionCard>
       <div className="flex justify-end"><Link className="inline-flex items-center gap-2 text-sm font-medium text-[#6425C4]" href="/dashboard/billing/credits">View transaction history <ArrowRight size={14} /></Link><button aria-label="Refresh wallet" onClick={() => { setLoading(true); void load(); }} className="ml-4 text-[#6425C4]"><RefreshCw size={16} /></button></div>
     </>}

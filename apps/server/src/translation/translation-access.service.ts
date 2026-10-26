@@ -14,13 +14,12 @@ export type TranslationStartCode =
 export interface TranslationStartCheck {
   ok: boolean;
   code?: TranslationStartCode;
-  /** Running on free trial minutes (plan lacks TRANSLATION). */
-  trial: boolean;
 }
 
 /**
  * Account gates for Live Translate (PROTOCOL.md §1, §4). Only decide whether
  * translation may start; a running call is never cut off by these.
+ * Translation is always paid: free credits and trials never cover it.
  */
 @Injectable()
 export class TranslationAccessService {
@@ -33,18 +32,6 @@ export class TranslationAccessService {
 
   isEntitled(ownerId: string): Promise<boolean> {
     return this.entitlements.hasFeature(ownerId, TRANSLATION_FEATURE);
-  }
-
-  /** Free trial seconds left: translationTrialMinutes × 60 − Σ trialSecondsUsed. */
-  async trialSecondsRemaining(ownerId: string): Promise<number> {
-    const config = await this.billingConfig.get();
-    const total = Math.max(0, config.translationTrialMinutes ?? 0) * 60;
-    if (total <= 0) return 0;
-    const used = await this.prisma.translationSession.aggregate({
-      where: { ownerId },
-      _sum: { trialSecondsUsed: true },
-    });
-    return Math.max(0, total - (used._sum.trialSecondsUsed ?? 0));
   }
 
   /** BillingConfig.translationMinimumCredits, else one minute of the mode's rate. */
@@ -71,22 +58,17 @@ export class TranslationAccessService {
     ownerId: string,
     mode: 'off' | 'voice' | 'captions',
   ): Promise<TranslationStartCheck> {
-    if (mode === 'off') return { ok: true, trial: false };
-    const entitled = await this.isEntitled(ownerId);
-    if (!entitled) {
-      // Trial minutes are free: no credit minimum while they last.
-      if ((await this.trialSecondsRemaining(ownerId)) > 0) {
-        return { ok: true, trial: true };
-      }
-      return { ok: false, code: 'TRANSLATION_NOT_IN_PLAN', trial: false };
+    if (mode === 'off') return { ok: true };
+    if (!(await this.isEntitled(ownerId))) {
+      return { ok: false, code: 'TRANSLATION_NOT_IN_PLAN' };
     }
     const [minimum, wallet] = await Promise.all([
       this.minimumCreditsToStart(mode, ownerId),
       this.credits.getSummary(ownerId),
     ]);
-    if (wallet.available < Math.max(1, minimum)) {
-      return { ok: false, code: 'TRANSLATION_INSUFFICIENT_CREDITS', trial: false };
+    if (wallet.paidAvailable < Math.max(1, minimum)) {
+      return { ok: false, code: 'TRANSLATION_INSUFFICIENT_CREDITS' };
     }
-    return { ok: true, trial: false };
+    return { ok: true };
   }
 }

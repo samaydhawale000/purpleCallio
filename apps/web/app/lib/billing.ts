@@ -168,7 +168,7 @@ export type CreditSourceKind = "purchased" | "promotional" | "plan" | "other";
 
 export interface CreditBucketView {
   id: string;
-  source: "SUBSCRIPTION" | "TOPUP" | "PROMOTION" | "ADMIN" | "MIGRATION";
+  source: "SUBSCRIPTION" | "TOPUP" | "PROMOTION" | "ADMIN" | "MIGRATION" | "SIGNUP";
   /** Server grouping of this lot (purchased / promotional / plan / other). */
   sourceKind?: CreditSourceKind;
   initialAmount: number;
@@ -207,6 +207,10 @@ export interface WalletSummary {
   used: number;
   usedPercent: number;
   buckets: CreditBucketView[];
+  /** Free credits (welcome + promotional): audio, video and screen share only. */
+  freeBalance?: number;
+  /** Credits AI features may spend (Live Translate, AI voice agents, post-call reports). */
+  paidAvailable?: number;
   /** Present on servers with prepaid wallets (`GET /billing/credits`). */
   bySource?: CreditsBySource;
   prepaid?: PrepaidStatus;
@@ -734,6 +738,7 @@ export const CREDIT_SOURCE_LABEL: Record<CreditBucketView["source"], string> = {
   PROMOTION: "Promotion",
   ADMIN: "Adjustment",
   MIGRATION: "Transition credits",
+  SIGNUP: "Welcome credits",
 };
 
 const num = (v: unknown) =>
@@ -1097,3 +1102,15 @@ export function daysUntil(iso: string | null | undefined, now = Date.now()) {
 
 /** Lots expiring within this many days are highlighted as "expiring soon". */
 export const EXPIRING_SOON_DAYS = 30;
+
+/** Free credits (welcome, promotional) pay for calls only, never AI features. */
+export const isFreeCreditSource = (source: CreditBucketView["source"]) =>
+  source === "SIGNUP" || source === "PROMOTION";
+
+/** Free vs paid split of a wallet (older servers: derived from buckets). */
+export function walletSplit(w: WalletSummary): { free: number; paid: number } {
+  const free =
+    w.freeBalance ??
+    w.buckets.filter((b) => isFreeCreditSource(b.source)).reduce((n, b) => n + b.remaining, 0);
+  return { free, paid: w.paidAvailable ?? Math.max(0, w.available - free) };
+}

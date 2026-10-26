@@ -27,7 +27,7 @@ describe('CostGuardService', () => {
     webhooks = { fireForCall: jest.fn(async () => undefined) };
     service = new CostGuardService(
       prisma,
-      { getSummary: jest.fn(async () => ({ available })) } as any,
+      { getSummary: jest.fn(async () => ({ available: available + 5000, paidAvailable: available })) } as any,
       notifications,
       webhooks,
     );
@@ -43,7 +43,6 @@ describe('CostGuardService', () => {
     usedSeconds: 0,
     liveCredits: 0,
     creditsPerMinute: 900,
-    trial: false,
     warned: new Set(),
     budgets: null,
     ...over,
@@ -93,9 +92,11 @@ describe('CostGuardService', () => {
     ]);
   });
 
-  it('trial accounts are not checked against the wallet', async () => {
-    available = 0;
-    expect(await service.evaluate(state({ liveCredits: 5000, trial: true }))).toEqual([]);
+  it('free credits never cover translation', async () => {
+    available = 0; // only free credits in the wallet
+    expect(await service.evaluate(state({ liveCredits: 0 }))).toContainEqual(
+      expect.objectContaining({ scope: 'credits' }),
+    );
   });
 
   it('budget: projection limit and one alert per threshold', async () => {

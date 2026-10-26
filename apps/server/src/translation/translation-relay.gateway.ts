@@ -224,8 +224,6 @@ interface Relay {
   cap: Mode;
   accessOk: boolean;
   lastAccessCode?: string;
-  trial: boolean;
-  trialSecondsAtStart: number;
   participants: Record<Role, Participant>;
   directions: Map<TranslationDirection, DirectionState>;
   phrases: Map<string, LivePhrase>;
@@ -371,13 +369,9 @@ export class TranslationRelayGateway implements OnGatewayConnection, OnModuleDes
       this.billingConfig.get(),
     ]);
 
-    let trial = false;
-    let trialSecondsAtStart = 0;
     if (callMode !== 'off') {
       const check = await this.access.canStart(ownerId, callMode);
       if (!check.ok) return { code: check.code ?? 'TRANSLATION_NOT_IN_PLAN' };
-      trial = check.trial;
-      if (trial) trialSecondsAtStart = await this.access.trialSecondsRemaining(ownerId);
     }
 
     const lexicon = await this.loadLexicon(
@@ -410,8 +404,6 @@ export class TranslationRelayGateway implements OnGatewayConnection, OnModuleDes
       callMode,
       cap: 'voice',
       accessOk: callMode !== 'off',
-      trial,
-      trialSecondsAtStart,
       participants: {
         caller: participant('caller', call.callerLanguage),
         receiver: participant('receiver', call.receiverLanguage),
@@ -564,7 +556,8 @@ export class TranslationRelayGateway implements OnGatewayConnection, OnModuleDes
       replayEnabled: !!relay.replay,
       guard: { enabled: relay.guard.enabled, sensitivity: relay.guard.sensitivity },
       limits: { maxMinutes: relay.maxMinutes, usedSeconds: Math.floor(this.usedMs(relay) / 1000) },
-      trial: relay.trial,
+      // Deprecated: translation has no free trial; kept for SDK compatibility.
+      trial: false,
     };
   }
 
@@ -759,10 +752,6 @@ export class TranslationRelayGateway implements OnGatewayConnection, OnModuleDes
       return false;
     }
     relay.accessOk = true;
-    relay.trial = check.trial;
-    if (check.trial) {
-      relay.trialSecondsAtStart = await this.access.trialSecondsRemaining(relay.ownerId);
-    }
     return true;
   }
 
@@ -1288,13 +1277,6 @@ export class TranslationRelayGateway implements OnGatewayConnection, OnModuleDes
       credits += (d.voiceMs / 60_000) * d.voiceRate + (d.captionsMs / 60_000) * d.captionsRate;
       if (d.accrueSince !== null) perMinute += d.mode === 'voice' ? d.voiceRate : d.captionsRate;
     }
-    if (relay.trial) {
-      // Trial seconds are free: approximate with the blended rate.
-      const seconds = voiceSeconds + captionsSeconds;
-      const trialUsed = Math.min(seconds, relay.trialSecondsAtStart);
-      const perSecond = seconds > 0 ? credits / seconds : 0;
-      credits = Math.max(0, credits - trialUsed * perSecond);
-    }
     return { credits: credits + relay.unbilledCredits, perMinute };
   }
 
@@ -1353,7 +1335,6 @@ export class TranslationRelayGateway implements OnGatewayConnection, OnModuleDes
       usedSeconds: this.usedMs(relay) / 1000,
       liveCredits: live.credits,
       creditsPerMinute: live.perMinute,
-      trial: relay.trial,
       warned: relay.warned,
       budgets: relay.budgets,
     });
@@ -1502,7 +1483,6 @@ export class TranslationRelayGateway implements OnGatewayConnection, OnModuleDes
   }
 
   private directionCredits(relay: Relay, d: DirectionState) {
-    if (relay.trial) return 0;
     return (d.voiceMs / 60_000) * d.voiceRate + (d.captionsMs / 60_000) * d.captionsRate;
   }
 
@@ -1541,7 +1521,6 @@ export class TranslationRelayGateway implements OnGatewayConnection, OnModuleDes
         liveCredits: live.credits,
         creditsPerMinute:
           directions * (m === 'voice' ? relay.lastRates.voice : relay.lastRates.captions),
-        trial: relay.trial,
         // A probe: never consumes the real warnings.
         warned: new Set(relay.warned),
         budgets: relay.budgets,

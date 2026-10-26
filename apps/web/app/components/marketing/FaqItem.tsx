@@ -27,11 +27,10 @@ export function FaqItem({ q, a }: { q: string; a: string }) {
           {open ? '−' : '+'}
         </span>
       </button>
-      {open && (
-        <div id={panelId} className="px-5 pb-5 border-t border-[#E7DFF5]">
-          <p className="text-sm text-[#3D3650] leading-relaxed pt-4">{a}</p>
-        </div>
-      )}
+      {/* Always in the HTML (crawlers and answer engines read it); hidden until opened. */}
+      <div id={panelId} hidden={!open} className="px-5 pb-5 border-t border-[#E7DFF5]">
+        <p className="text-sm text-[#3D3650] leading-relaxed pt-4">{a}</p>
+      </div>
     </div>
   );
 }

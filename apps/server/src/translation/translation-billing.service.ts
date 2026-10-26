@@ -13,7 +13,6 @@ import { SubscriptionService } from '../billing/subscriptions/subscription.servi
 import { UsageBillingService } from '../billing/usage-billing.service';
 import { usdInrRate } from '../exchange-rate/exchange-rate';
 import { PrismaService } from '../prisma/prisma.service';
-import { TranslationAccessService } from './translation-access.service';
 import { translationConfig } from './translation.config';
 
 export const TRANSLATION_SESSION_REFERENCE = 'TRANSLATION_SESSION';
@@ -23,35 +22,25 @@ const UNBILLED_GRACE_MS = 2 * 60_000;
 const SWEEP_BATCH_SIZE = 200;
 
 export interface TranslationCharge {
-  /** Credits owed before the wallet cap (after trial seconds). */
+  /** Credits owed before the wallet cap. */
   credits: number;
   /** Credits actually debited. */
   debited: number;
   shortfall: number;
-  trialSeconds: number;
   providerCostPaise: number;
 }
 
-/**
- * Whole credits for a direction-session, rounded up once (PROTOCOL.md §4).
- * Trial seconds are free and taken from voice first, then captions.
- */
+/** Whole credits for a direction-session, rounded up once (PROTOCOL.md §4). */
 export function translationCreditsFor(input: {
   voiceSeconds: number;
   captionsSeconds: number;
   voiceRate: number;
   captionsRate: number;
-  trialSeconds?: number;
-}): { credits: number; trialSeconds: number } {
-  const voice = Math.max(0, input.voiceSeconds);
-  const captions = Math.max(0, input.captionsSeconds);
-  const trial = Math.min(voice + captions, Math.max(0, input.trialSeconds ?? 0));
-  const trialVoice = Math.min(voice, trial);
-  const trialCaptions = Math.min(captions, trial - trialVoice);
+}): number {
   const raw =
-    ((voice - trialVoice) * input.voiceRate) / 60 +
-    ((captions - trialCaptions) * input.captionsRate) / 60;
-  return { credits: raw > 0 ? Math.ceil(raw - 1e-6) : 0, trialSeconds: trial };
+    (Math.max(0, input.voiceSeconds) * input.voiceRate) / 60 +
+    (Math.max(0, input.captionsSeconds) * input.captionsRate) / 60;
+  return raw > 0 ? Math.ceil(raw - 1e-6) : 0;
 }
 
 /**
@@ -95,14 +84,13 @@ export class TranslationBillingService {
     private readonly prisma: PrismaService,
     private readonly billingConfig: BillingConfigService,
     private readonly credits: CreditService,
-    private readonly access: TranslationAccessService,
     @Optional() private readonly subscriptions?: SubscriptionService,
     @Optional() private readonly usageBilling?: UsageBillingService,
   ) {}
 
   /**
    * Debits a finished direction-session exactly once: the usageRecordedAt
-   * claim, trial allocation, debit and session update commit together under
+   * claim, debit and session update commit together under
    * the wallet lock, and `translation:<id>` is the ledger idempotency key.
    * Returns null when already recorded or still live.
    */
@@ -113,10 +101,7 @@ export class TranslationBillingService {
     if (!session || session.usageRecordedAt) return null;
     if (session.status === TranslationSessionStatus.ACTIVE) return null;
 
-    const [config, entitled] = await Promise.all([
-      this.billingConfig.get(),
-      this.access.isEntitled(session.ownerId),
-    ]);
+    const config = await this.billingConfig.get();
     const sub = this.subscriptions
       ? await this.subscriptions.getActiveSubscription(session.ownerId).catch(() => null)
       : null;
@@ -137,23 +122,11 @@ export class TranslationBillingService {
       });
       if (claimed.count === 0) return null;
 
-      let trialAvailable = 0;
-      if (!entitled && config.translationTrialMinutes > 0) {
-        const used = await tx.translationSession.aggregate({
-          where: { ownerId: session.ownerId },
-          _sum: { trialSecondsUsed: true },
-        });
-        trialAvailable = Math.max(
-          0,
-          config.translationTrialMinutes * 60 - (used._sum.trialSecondsUsed ?? 0),
-        );
-      }
-      const { credits, trialSeconds } = translationCreditsFor({
+      const credits = translationCreditsFor({
         voiceSeconds: session.voiceSeconds,
         captionsSeconds: session.captionsSeconds,
         voiceRate: session.voiceRate,
         captionsRate: session.captionsRate,
-        trialSeconds: trialAvailable,
       });
       const debit =
         credits > 0
@@ -166,6 +139,7 @@ export class TranslationBillingService {
                 referenceId: session.id,
                 idempotencyKey: `translation:${session.id}`,
                 allowPartial: true,
+                paidOnly: true,
                 metadata: {
                   sessionId: session.id,
                   callId: session.callId,
@@ -173,7 +147,6 @@ export class TranslationBillingService {
                   route: session.route,
                   voiceSeconds: session.voiceSeconds,
                   captionsSeconds: session.captionsSeconds,
-                  trialSeconds,
                   voiceRate: session.voiceRate,
                   captionsRate: session.captionsRate,
                   credits,
@@ -186,7 +159,6 @@ export class TranslationBillingService {
         where: { id: session.id },
         data: {
           creditsCharged: debit.debited,
-          trialSecondsUsed: trialSeconds,
           providerCostPaise,
         },
       });
@@ -194,7 +166,6 @@ export class TranslationBillingService {
         credits,
         debited: debit.debited,
         shortfall: debit.shortfall,
-        trialSeconds,
         providerCostPaise,
       };
     });
@@ -206,7 +177,7 @@ export class TranslationBillingService {
       );
     }
     this.logger.log(
-      `event=translation_billing_recorded sessionId=${session.id} ownerId=${session.ownerId} credits=${result.debited} trialSeconds=${result.trialSeconds}`,
+      `event=translation_billing_recorded sessionId=${session.id} ownerId=${session.ownerId} credits=${result.debited}`,
     );
     if (result.debited > 0 && sub?.currentPeriodStart && before && this.usageBilling) {
       await this.usageBilling.notifyThresholds(
@@ -234,6 +205,7 @@ export class TranslationBillingService {
       referenceId: callId,
       idempotencyKey: `translation-report:${callId}`,
       allowPartial: true,
+      paidOnly: true,
       metadata: { callId, credits: Math.ceil(credits) },
     });
   }

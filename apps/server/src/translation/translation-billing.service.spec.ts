@@ -11,14 +11,8 @@ describe('translationCreditsFor', () => {
   it('rounds up once per session', () => {
     expect(
       translationCreditsFor({ voiceSeconds: 61, captionsSeconds: 30, voiceRate: 450, captionsRate: 60 }),
-    ).toEqual({ credits: Math.ceil((61 * 450) / 60 + (30 * 60) / 60), trialSeconds: 0 });
-    expect(translationCreditsFor({ voiceSeconds: 0, captionsSeconds: 0, voiceRate: 450, captionsRate: 60 }).credits).toBe(0);
-  });
-
-  it('trial seconds are free (voice first)', () => {
-    expect(
-      translationCreditsFor({ voiceSeconds: 60, captionsSeconds: 60, voiceRate: 450, captionsRate: 60, trialSeconds: 90 }),
-    ).toEqual({ credits: 30, trialSeconds: 90 });
+    ).toBe(Math.ceil((61 * 450) / 60 + (30 * 60) / 60));
+    expect(translationCreditsFor({ voiceSeconds: 0, captionsSeconds: 0, voiceRate: 450, captionsRate: 60 })).toBe(0);
   });
 
   it('provider cost uses route-mode keys first', () => {
@@ -41,10 +35,8 @@ describe('translationCreditsFor', () => {
 
 describe('TranslationBillingService', () => {
   let session: any;
-  let entitled: boolean;
   let config: any;
   let debits: any[];
-  let trialUsedTotal: number;
   let service: TranslationBillingService;
   let credits: any;
 
@@ -54,11 +46,8 @@ describe('TranslationBillingService', () => {
   });
 
   beforeEach(() => {
-    entitled = true;
     debits = [];
-    trialUsedTotal = 0;
     config = {
-      translationTrialMinutes: 0,
       translationProviderCostsPaise: { soniox: 100 },
     };
     session = {
@@ -82,7 +71,6 @@ describe('TranslationBillingService', () => {
           session.usageRecordedAt = new Date();
           return { count: 1 };
         }),
-        aggregate: jest.fn(async () => ({ _sum: { trialSecondsUsed: trialUsedTotal } })),
         update: jest.fn(async ({ data }: any) => Object.assign(session, data)),
       },
     };
@@ -101,13 +89,12 @@ describe('TranslationBillingService', () => {
       prisma,
       { get: jest.fn(async () => config) } as any,
       credits,
-      { isEntitled: jest.fn(async () => entitled) } as any,
     );
   });
 
   it('debits once with the idempotency key and reference', async () => {
     const charge = await service.recordSession('ts_1');
-    expect(charge).toMatchObject({ credits: 900, debited: 900, trialSeconds: 0, providerCostPaise: 200 });
+    expect(charge).toMatchObject({ credits: 900, debited: 900, providerCostPaise: 200 });
     expect(await service.recordSession('ts_1')).toBeNull();
     expect(debits).toHaveLength(1);
     expect(debits[0]).toMatchObject({
@@ -117,6 +104,7 @@ describe('TranslationBillingService', () => {
       referenceId: 'ts_1',
       idempotencyKey: 'translation:ts_1',
       allowPartial: true,
+      paidOnly: true,
     });
     expect(session.creditsCharged).toBe(900);
   });
@@ -124,20 +112,6 @@ describe('TranslationBillingService', () => {
   it('uses the rates locked on the session', async () => {
     session.voiceRate = 100;
     expect((await service.recordSession('ts_1'))!.credits).toBe(200);
-  });
-
-  it('trial seconds are free when the plan lacks TRANSLATION', async () => {
-    entitled = false;
-    config.translationTrialMinutes = 3;
-    trialUsedTotal = 120; // 60 s left
-    const charge = await service.recordSession('ts_1');
-    expect(charge).toMatchObject({ trialSeconds: 60, credits: 450 });
-    expect(session.trialSecondsUsed).toBe(60);
-  });
-
-  it('entitled accounts never use trial', async () => {
-    config.translationTrialMinutes = 10;
-    expect((await service.recordSession('ts_1'))!.trialSeconds).toBe(0);
   });
 
   it('skips live sessions', async () => {

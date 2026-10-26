@@ -2,9 +2,9 @@ import { ImageResponse } from "next/og";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const alt = "PurpleCallio: video, audio and AI voice agent APIs for developers";
+export const alt = "PurpleCallio: video, audio, live translation and AI voice agent APIs for developers";
 
-const pills = ["Video calls", "Audio calls", "AI voice agents"];
+const pills = ["Video calls", "Audio calls", "Live Translate", "AI voice agents"];
 
 export default function OpenGraphImage() {
   return new ImageResponse(
@@ -41,7 +41,7 @@ export default function OpenGraphImage() {
       </div>
       <div style={{ display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", fontSize: 70, fontWeight: 700, lineHeight: 1.08, maxWidth: 980, letterSpacing: "-0.02em" }}>
-          Real-time calls and AI voice agents for your product
+          Real-time calls, live translation and AI voice agents
         </div>
         <div style={{ display: "flex", marginTop: 36 }}>
           {pills.map((p) => (

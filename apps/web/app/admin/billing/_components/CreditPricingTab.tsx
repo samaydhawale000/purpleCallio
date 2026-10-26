@@ -409,7 +409,7 @@ export function CreditPricingTab() {
       {canWrite && (
         <Panel
           title="Grant promotional credits"
-          subtitle="The grant is recorded in a separate promotional bucket with an expiry, reason, campaign reference, and issuing administrator."
+          subtitle="Free credits for one customer, recorded in a separate promotional bucket with an expiry, reason, campaign reference, and issuing administrator. They pay for audio, video and screen share only, never AI features."
         >
           <form className="grid gap-4 sm:grid-cols-3" onSubmit={grantPromo}>
             <Field label="Customer user ID">

@@ -26,8 +26,14 @@ export default function BillingTermsPage() {
       <LegalSection num="2" title="Subscription Plans">
         <p>
           PurpleCallio does not offer new recurring subscription plans or monthly subscription credit
-          grants. Free accounts do not receive recurring monthly subscription credits. An authorized
-          administrator may grant promotional credits under the applicable campaign or account rules.
+          grants. Free accounts do not receive recurring monthly subscription credits. New accounts may
+          receive one-time welcome credits, and an authorized administrator may grant promotional credits
+          under the applicable campaign or account rules.
+        </p>
+        <p>
+          Welcome and promotional credits are free credits. They can be used for audio, video and screen
+          share only. AI features (Live Translate, AI voice agents and Post-Call Suite reports) are always
+          paid and use purchased credits only.
         </p>
         <p>
           Existing subscription records and pre-existing customer terms are retained as historical records.
@@ -82,10 +88,10 @@ export default function BillingTermsPage() {
         <LegalBullets items={[
           "Rates: translation is billed in credits per translated participant-minute, meaning each minute that a listener receives translation, at the voice or captions rate set by PurpleCallio and shown on the pricing page and in your dashboard. This is in addition to the call's own audio or video participant-minutes. Calls without translation are not charged for it.",
           "Rate changes: a translation session keeps the rate in effect when it started. New rates apply only to sessions started after the change.",
-          "Minimum balance: starting translation requires enough credits for at least one minute of the chosen mode.",
+          "Paid credits only: translation and Post-Call Suite reports use purchased credits. Welcome and promotional credits never pay for them, and there is no free trial.",
+          "Minimum balance: starting translation requires enough purchased credits for at least one minute of the chosen mode.",
           "Post-Call Suite: if you opt in, each generated report is charged once at the report rate shown in your dashboard.",
           "CostGuard limits: when a per-call limit, project budget or your credit balance is reached, translation steps down from voice to captions or pauses, according to your settings. The call itself continues and is billed as usual.",
-          "Trial minutes: where PurpleCallio offers trial minutes for accounts whose plan does not include translation, trial minutes are not charged and end once used.",
         ]} />
       </LegalSection>
 

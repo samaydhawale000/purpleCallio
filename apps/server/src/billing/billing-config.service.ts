@@ -45,12 +45,13 @@ export type BillingConfigUpdate = Partial<
     | 'autoRenewGraceHours'
     | 'freeAccountsCanPurchaseCredits'
     | 'freeAccountsCanUseAutoTopUp'
+    | 'signupFreeCredits'
+    | 'signupFreeCreditsValidityDays'
     // Live Translate (translation/PROTOCOL.md §4)
     | 'translationVoiceCreditsPerMinute'
     | 'translationCaptionsCreditsPerMinute'
     | 'translationIndicVoiceCreditsPerMinute'
     | 'translationMinimumCredits'
-    | 'translationTrialMinutes'
     | 'postCallReportCredits'
     | 'translationProviderCostsPaise'
     | 'translationMarginWarnPercent'
@@ -70,7 +71,6 @@ const TRANSLATION_INT_FIELDS: {
   { field: 'translationCaptionsCreditsPerMinute', min: 1 },
   { field: 'translationIndicVoiceCreditsPerMinute', min: 1, nullable: true },
   { field: 'translationMinimumCredits', min: 0, nullable: true },
-  { field: 'translationTrialMinutes', min: 0 },
   { field: 'postCallReportCredits', min: 0 },
   { field: 'translationMarginWarnPercent', min: 0, max: 100 },
   { field: 'translationDefaultMaxMinutes', min: 1, max: 600 },
@@ -97,6 +97,7 @@ const INT_FIELDS = [
   'renewalReminderDays',
   'pendingCheckoutTtlHours',
   'autoRenewGraceHours',
+  'signupFreeCredits',
 ] as const;
 
 /** Whole credits for fractional usage, rounding up (tolerant of float noise). */
@@ -234,6 +235,15 @@ export class BillingConfigService {
         throw new BadRequestException('Invalid topUpExpiryPolicy.');
       }
       data.topUpExpiryPolicy = input.topUpExpiryPolicy;
+    }
+    if (input.signupFreeCreditsValidityDays !== undefined) {
+      const days = input.signupFreeCreditsValidityDays;
+      if (days !== null && (!Number.isInteger(days) || days < 1)) {
+        throw new BadRequestException(
+          'signupFreeCreditsValidityDays must be a whole number of days (at least 1), or empty for no expiry.',
+        );
+      }
+      data.signupFreeCreditsValidityDays = days;
     }
     if (input.topUpExpiryDays !== undefined) {
       if (

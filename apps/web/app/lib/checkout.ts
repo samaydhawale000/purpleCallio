@@ -50,8 +50,11 @@ export async function runAutoTopUpMandateSetup() {
     const rzp = new window.Razorpay({
       key: session.publicKey,
       order_id: session.providerOrderId,
+      // Both are required for Razorpay to register a mandate token; without
+      // customer_id the authorization is a plain ₹0 payment and no token is created.
+      customer_id: session.customerId,
+      recurring: '1',
       name: 'PurpleCallio', description: 'Authorize Auto Top-Up eMandate',
-      recurring: true,
       prefill: { email: undefined, contact: undefined },
       handler: () => resolve(),
       modal: { ondismiss: () => reject(new Error('Authorization window closed.')) },

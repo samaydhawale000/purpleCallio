@@ -18,6 +18,20 @@ export class InsufficientCreditsError extends BadRequestException {
   }
 }
 
+/**
+ * Free credits (signup, promotions) pay for audio, video and screen share
+ * only. AI features (Live Translate, AI voice agents, post-call reports)
+ * debit with `paidOnly` and can never spend them.
+ */
+export const FREE_CREDIT_SOURCES: readonly CreditBucketSource[] = [
+  CreditBucketSource.SIGNUP,
+  CreditBucketSource.PROMOTION,
+];
+
+export function isFreeCreditSource(source: CreditBucketSource): boolean {
+  return FREE_CREDIT_SOURCES.includes(source);
+}
+
 export interface GrantInput {
   userId: string;
   amount: number;
@@ -50,6 +64,8 @@ export interface DebitInput {
    * the balance). The balance still never goes negative.
    */
   allowPartial?: boolean;
+  /** AI features: spend purchased/plan credits only, never free ones. */
+  paidOnly?: boolean;
 }
 
 export interface DebitResult {
@@ -72,9 +88,9 @@ export interface DebitResult {
  *    serialized and the balance can never go below zero.
  *  - Each logical event carries an idempotencyKey (unique in the ledger):
  *    replaying it (duplicate webhook, retried job) is a no-op.
- *  - Credits live in buckets with their own expiry; spending drains the
- *    soonest-expiring bucket first, and expiring a bucket can only remove
- *    that bucket's remaining credits.
+ *  - Credits live in buckets with their own expiry; spending drains free
+ *    buckets first (they can only pay for calls), then the soonest-expiring
+ *    bucket, and expiring a bucket can only remove that bucket's credits.
  */
 @Injectable()
 export class CreditService {
@@ -207,14 +223,25 @@ export class CreditService {
         // Expired credits must never be spendable.
         await this.expireDueBuckets(t, input.userId, wallet);
 
-        const available = Math.max(0, wallet.balance - wallet.reserved);
+        const spendable = input.paidOnly
+          ? await this.paidBalance(t, wallet.id)
+          : wallet.balance;
+        const available = Math.max(
+          0,
+          Math.min(spendable, wallet.balance - wallet.reserved),
+        );
         if (input.amount > available && !input.allowPartial) {
           throw new InsufficientCreditsError(input.amount, available);
         }
         const toDebit = Math.min(input.amount, available);
         const shortfall = input.amount - toDebit;
 
-        const drained = await this.drainBuckets(t, wallet.id, toDebit);
+        const drained = await this.drainBuckets(
+          t,
+          wallet.id,
+          toDebit,
+          !!input.paidOnly,
+        );
         const balanceBefore = wallet.balance;
         const balanceAfter = balanceBefore - toDebit;
         // Conditional decrement: belt-and-braces against any path that
@@ -261,17 +288,52 @@ export class CreditService {
     );
   }
 
-  /** Takes `amount` from buckets, soonest-expiring first (never-expiring last). */
-  private async drainBuckets(t: Tx, walletId: string, amount: number) {
+  /** Unexpired purchased/plan credits (excludes free buckets). */
+  private async paidBalance(t: Tx, walletId: string): Promise<number> {
+    const agg = await t.creditBucket.aggregate({
+      where: {
+        walletId,
+        remaining: { gt: 0 },
+        expiredAt: null,
+        source: { notIn: [...FREE_CREDIT_SOURCES] },
+      },
+      _sum: { remaining: true },
+    });
+    return agg._sum.remaining ?? 0;
+  }
+
+  /**
+   * Takes `amount` from buckets: free credits first, then soonest-expiring
+   * (never-expiring last). `paidOnly` skips free buckets entirely.
+   */
+  private async drainBuckets(
+    t: Tx,
+    walletId: string,
+    amount: number,
+    paidOnly = false,
+  ) {
     const drained: { bucketId: string; amount: number }[] = [];
     if (amount <= 0) return drained;
-    const buckets = await t.creditBucket.findMany({
-      where: { walletId, remaining: { gt: 0 }, expiredAt: null },
+    const found = await t.creditBucket.findMany({
+      where: {
+        walletId,
+        remaining: { gt: 0 },
+        expiredAt: null,
+        ...(paidOnly
+          ? { source: { notIn: [...FREE_CREDIT_SOURCES] } }
+          : {}),
+      },
       orderBy: [
         { expiresAt: { sort: 'asc', nulls: 'last' } },
         { createdAt: 'asc' },
       ],
     });
+    // Stable: keeps the expiry order within free and within paid buckets.
+    const buckets = [...found].sort(
+      (a, b) =>
+        Number(isFreeCreditSource(b.source)) -
+        Number(isFreeCreditSource(a.source)),
+    );
     let left = amount;
     for (const b of buckets) {
       if (left <= 0) break;
@@ -476,11 +538,19 @@ export class CreditService {
     // counting immediately, even before the expiry job sweeps it into the
     // ledger (wallet.balance catches up then).
     const balance = buckets.reduce((s, b) => s + b.remaining, 0);
+    const freeBalance = buckets
+      .filter((b) => isFreeCreditSource(b.source))
+      .reduce((s, b) => s + b.remaining, 0);
     const reserved = wallet?.reserved ?? 0;
+    const available = Math.max(0, balance - reserved);
     return {
       balance,
       reserved,
-      available: Math.max(0, balance - reserved),
+      available,
+      /** Free credits: audio, video and screen share only. */
+      freeBalance,
+      /** What AI features may spend: available minus free credits. */
+      paidAvailable: Math.max(0, Math.min(available, balance - freeBalance)),
       granted,
       used: Math.max(0, granted - balance),
       usedPercent:

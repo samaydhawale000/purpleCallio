@@ -7,6 +7,7 @@ import {
   ProviderChargeAtWillAuthorization,
   ProviderChargeAtWillAuthorizationInput,
   ProviderChargeAtWillChargeInput,
+  ProviderMandateStatus,
   ProviderEventType,
   ProviderPayment,
   ProviderPaymentState,
@@ -268,6 +269,33 @@ export class RazorpayProvider implements PaymentProvider {
       notes: input.notes,
     });
     return { providerOrderId: order.id, providerCustomerId: customer.id, publicKey: process.env.RAZORPAY_KEY_ID as string, currency: input.currency };
+  }
+
+  async getMandateStatus(providerOrderId: string, providerCustomerId: string): Promise<ProviderMandateStatus> {
+    if (!this.razorpay) throw new Error('Razorpay is not configured.');
+    const payments: any[] = (await this.razorpay.orders.fetchPayments(providerOrderId))?.items ?? [];
+    // The authorization payment that carries the token; newest first.
+    const payment = payments
+      .filter((p) => p.token_id && p.status !== 'failed')
+      .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0];
+    if (!payment) {
+      // A completed authorization that produced no token registered nothing
+      // (e.g. Checkout opened without customer_id): it will never confirm.
+      const tokenless = payments.find((p) => p.status === 'captured' || p.status === 'authorized');
+      if (tokenless) return { status: 'rejected', tokenId: null, failureReason: 'The authorization completed without registering a mandate.' };
+      const failed = payments.find((p) => p.status === 'failed');
+      return failed
+        ? { status: 'rejected', tokenId: null, failureReason: failed.error_description ?? null }
+        : { status: 'pending', tokenId: null };
+    }
+    const token = await this.razorpay.customers.fetchToken(providerCustomerId, payment.token_id);
+    const state = String(token?.recurring_details?.status ?? '').toLowerCase();
+    const status: ProviderMandateStatus['status'] =
+      state === 'confirmed' ? 'confirmed'
+        : state === 'rejected' ? 'rejected'
+          : state === 'cancelled' || state === 'paused' ? 'cancelled'
+            : 'pending';
+    return { status, tokenId: payment.token_id, failureReason: token?.recurring_details?.failure_reason ?? null };
   }
 
   async createChargeAtWillPayment(input: ProviderChargeAtWillChargeInput): Promise<ProviderPayment> {

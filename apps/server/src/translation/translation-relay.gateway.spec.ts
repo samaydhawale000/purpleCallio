@@ -213,7 +213,7 @@ describe('TranslationRelayGateway', () => {
       }),
     };
     const credits: any = {
-      getSummary: jest.fn(async () => ({ available: wallet - debited })),
+      getSummary: jest.fn(async () => ({ available: wallet - debited, paidAvailable: wallet - debited })),
     };
     webhooks = { fireForCall: jest.fn(async () => undefined) };
     const costGuard = new CostGuardService(prisma, credits, undefined, webhooks);
