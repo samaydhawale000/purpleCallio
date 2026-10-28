@@ -31,7 +31,10 @@ export interface UseTranslationResult {
   error: TranslationError | null;
   /** Resolves with `ready`, or `null` on failure (the error lands in `error`). */
   enable: (options?: TranslationOptions) => Promise<TranslationReady | null>;
-  disable: () => void;
+  /** With `meeting.translation` this is for the whole call; `{ share: false }` leaves only you. */
+  disable: (options?: { share?: boolean }) => void;
+  /** "Join translation": retries audio the browser blocked (`state.audioBlocked`). Call from a click. */
+  resumeAudio: () => Promise<boolean>;
   setMode: (mode: TranslationMode) => void;
   setLanguages: (languages: { speak?: string; hear?: string }) => void;
   setOriginalVolume: (volume: number) => void;
@@ -53,7 +56,8 @@ const IDLE_STATE: TranslationState = {
   trial: false,
   speaking: false,
   playingPhraseId: null,
-  originalVolume: 0.2,
+  originalVolume: 0,
+  audioBlocked: false,
   limit: null,
   error: null,
 };
@@ -119,7 +123,8 @@ export function useTranslation(options: UseTranslationOptions): UseTranslationRe
     },
     [client],
   );
-  const disable = useCallback(() => client?.disable(), [client]);
+  const disable = useCallback((o?: { share?: boolean }) => client?.disable(o), [client]);
+  const resumeAudio = useCallback(async () => (client ? client.resumeAudio() : false), [client]);
   const setMode = useCallback((m: TranslationMode) => client?.setMode(m), [client]);
   const setLanguages = useCallback((l: { speak?: string; hear?: string }) => client?.setLanguages(l), [client]);
   const setOriginalVolume = useCallback((v: number) => client?.setOriginalVolume(v), [client]);
@@ -142,6 +147,7 @@ export function useTranslation(options: UseTranslationOptions): UseTranslationRe
     error: state.error,
     enable,
     disable,
+    resumeAudio,
     setMode,
     setLanguages,
     setOriginalVolume,

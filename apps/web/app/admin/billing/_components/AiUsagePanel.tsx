@@ -31,28 +31,29 @@ export function AiUsagePanel() {
     <Panel
       title="AI voice agents"
       subtitle="AI calls billed in the range. Provider cost and margin are internal and never shown to customers."
+      actions={
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="From">
+            <input
+              type="date"
+              className={`${inputCls} w-40`}
+              value={range.from}
+              max={range.to}
+              onChange={(e) => e.target.value && setRange({ ...range, from: e.target.value })}
+            />
+          </Field>
+          <Field label="To">
+            <input
+              type="date"
+              className={`${inputCls} w-40`}
+              value={range.to}
+              min={range.from}
+              onChange={(e) => e.target.value && setRange({ ...range, to: e.target.value })}
+            />
+          </Field>
+        </div>
+      }
     >
-      <div className="flex flex-wrap items-end gap-3 mb-4">
-        <Field label="From">
-          <input
-            type="date"
-            className={`${inputCls} w-44`}
-            value={range.from}
-            max={range.to}
-            onChange={(e) => e.target.value && setRange({ ...range, from: e.target.value })}
-          />
-        </Field>
-        <Field label="To">
-          <input
-            type="date"
-            className={`${inputCls} w-44`}
-            value={range.to}
-            min={range.from}
-            onChange={(e) => e.target.value && setRange({ ...range, to: e.target.value })}
-          />
-        </Field>
-      </div>
-
       {!valid ? (
         <ErrorText>Pick a start date on or before the end date.</ErrorText>
       ) : loading ? (
@@ -61,7 +62,7 @@ export function AiUsagePanel() {
         <ErrorText>{error || 'Failed to load'}</ErrorText>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4" data-testid="ai-usage-summary">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-5 lg:grid-cols-5" data-testid="ai-usage-summary">
             <Stat
               label="AI minutes"
               value={data.minutes.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
@@ -88,7 +89,7 @@ export function AiUsagePanel() {
               hint={data.marginPercent == null ? undefined : `${data.marginPercent}%`}
             />
           </div>
-          <p className="mt-3 text-xs text-[#3D3650]">
+          <p className="mt-5 text-xs text-[#6B6478]">
             Credits are valued at {CREDIT_VALUE_SOURCE[data.creditValueSource]}. Provider cost uses list audio prices per
             model on {formatCredits(data.inputTokens)} input and {formatCredits(data.outputTokens)} output tokens.
           </p>

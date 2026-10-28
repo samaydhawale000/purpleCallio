@@ -15,11 +15,9 @@ import {
   listRateOverrides,
   saveRateOverride,
 } from '../../../lib/translation';
-import { Button } from '../../../components/ui/Button';
-import { Badge } from '../../../components/ui/Badge';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
 import { useCanWrite } from '../../../lib/admin-access';
-import { ErrorText, Field, inputCls, linkBtn, Modal, Panel, rowCls, Spinner, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
+import { Badge, Button, ErrorText, Field, inputCls, linkBtn, Modal, Panel, rowCls, Spinner, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
 const RETIRED_ROUTE = /^(sarvam|openai)/;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -32,7 +30,7 @@ function LiveSonioxCosts() {
   const live = data?.defaultProviderCostsPaisePerMinute;
   const paise = (key: string) => (live?.[key] != null ? `${fmtNumber(live[key], 0)} paise/min` : '…');
   return (
-    <p className="text-xs text-[#3D3650] mb-2" data-testid="live-soniox-costs">
+    <p className="mb-3 text-xs text-[#6B6478]" data-testid="live-soniox-costs">
       Leave Soniox routes empty to use its list prices at the live dollar rate
       {data?.usdInrRate ? ` (₹${fmtNumber(data.usdInrRate, 2)}/$ today)` : ''}: captions {paise('soniox-captions')}, voice{' '}
       {paise('soniox-voice')}. These update automatically; add a route only to override them.
@@ -45,7 +43,7 @@ export function TranslationTab() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const notify = (message: string, type: ToastState['type'] = 'success') => setToast({ id: Date.now(), type, message });
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-10">
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
       <CostsPanel notify={notify} />
       <MarginPanel />
@@ -90,7 +88,7 @@ function CostsPanel({ notify }: { notify: (m: string) => void }) {
   if (!supported) {
     return (
       <Panel title="Live Translate pricing">
-        <p className="text-sm text-[#3D3650]">This server does not have Live Translate billing yet.</p>
+        <p className="text-sm text-[#6B6478]">This server does not have Live Translate billing yet.</p>
       </Panel>
     );
   }
@@ -137,7 +135,7 @@ function CostsPanel({ notify }: { notify: (m: string) => void }) {
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
-            <p className="text-xs font-medium text-[#3D3650] mb-2">Provider cost (paise per direction-minute)</p>
+            <p className="mb-1 text-[13px] font-medium text-[#170B2E]">Provider cost (paise per direction-minute)</p>
             <LiveSonioxCosts />
             <div className="flex flex-col gap-2" data-testid="provider-costs">
               {costs.map((c, i) => (
@@ -160,7 +158,7 @@ function CostsPanel({ notify }: { notify: (m: string) => void }) {
                     onChange={(e) => setCosts(costs.map((x, j) => (j === i ? { ...x, paise: e.target.value } : x)))}
                   />
                   {canWrite && (
-                    <button type="button" aria-label={`Remove ${c.route || 'route'}`} onClick={() => setCosts(costs.filter((_, j) => j !== i))} className="p-2 text-[#3D3650] hover:text-red-600">
+                    <button type="button" aria-label={`Remove ${c.route || 'route'}`} onClick={() => setCosts(costs.filter((_, j) => j !== i))} className="rounded-md p-2 text-[#6B6478] hover:bg-white hover:text-red-600">
                       <Trash2 size={14} />
                     </button>
                   )}
@@ -207,6 +205,7 @@ function MarginPanel() {
     <Panel
       title="Margin report"
       subtitle="Revenue at the credit value used for AI, against provider cost."
+      flush
       actions={
         <div className="flex items-end gap-2">
           <Field label="From">
@@ -225,7 +224,7 @@ function MarginPanel() {
       ) : data ? (
         <div className="flex flex-col gap-5" data-testid="margin-report">
           {low > 0 && (
-            <p role="alert" className="text-sm text-amber-800 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+            <p role="alert" className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {low} {low === 1 ? 'row is' : 'rows are'} below the {data.warnPercent ?? 'configured'}
               {data.warnPercent != null ? '%' : ''} margin warning. Consider raising the rate or changing the route.
             </p>
@@ -241,15 +240,15 @@ function MarginPanel() {
 function MarginTable({ title, rows, labelKey }: { title: string; rows: MarginRow[]; labelKey: 'route' | 'pair' }) {
   return (
     <div>
-      <p className="text-xs font-semibold text-[#170B2E] mb-2">{title}</p>
+      <p className="mb-2 text-[13px] font-medium text-[#170B2E]">{title}</p>
       <Table
         headers={[labelKey === 'route' ? 'Route' : 'Pair', 'Minutes', 'Revenue (credits)', 'Revenue', 'Provider cost', 'Margin']}
         empty={rows.length === 0 ? 'No translated minutes in this period.' : undefined}
       >
         {rows.map((r) => (
           <tr key={`${r[labelKey]}-${r.route ?? ''}`} className={rowCls}>
-            <td className={`${tdCls} font-mono text-xs text-[#170B2E]`}>{r[labelKey] ?? '—'}</td>
-            <td className={tdCls}>{r.minutes != null ? fmtNumber(r.minutes, 1) : '—'}</td>
+            <td className={`${tdCls} font-mono text-[13px]`}>{r[labelKey] ?? '—'}</td>
+            <td className={`${tdCls} tabular-nums`}>{r.minutes != null ? fmtNumber(r.minutes, 1) : '—'}</td>
             <td className={tdCls}>{fmtNumber(r.revenueCredits)}</td>
             <td className={tdCls}>{fmtInr(r.revenueInr)}</td>
             <td className={tdCls}>{fmtInr(r.providerCostInr)}</td>
@@ -350,7 +349,8 @@ function OverridesPanel({ notify }: { notify: (m: string) => void }) {
     <Panel
       title="Per-customer overrides"
       subtitle="Custom Live Translate rates for a customer. Blank fields use the standard rate."
-      actions={canWrite ? <Button size="sm" onClick={() => edit()}><Plus size={13} className="mr-1" /> Add override</Button> : undefined}
+      flush
+      actions={canWrite ? <Button size="sm" onClick={() => edit()}><Plus size={14} /> Add override</Button> : undefined}
     >
       {loading && !data ? (
         <Spinner tall={false} />
@@ -366,8 +366,8 @@ function OverridesPanel({ notify }: { notify: (m: string) => void }) {
             {(data ?? []).map((o) => (
               <tr key={o.userId} className={rowCls}>
                 <td className={tdCls}>
-                  <p className="text-[#170B2E]">{o.user?.companyName || o.user?.name || o.user?.email || o.userId}</p>
-                  {o.user?.email && <p className="text-xs">{o.user.email}</p>}
+                  <p className="font-medium">{o.user?.companyName || o.user?.name || o.user?.email || o.userId}</p>
+                  {o.user?.email && <p className="text-xs text-[#6B6478]">{o.user.email}</p>}
                 </td>
                 <td className={tdCls}>{o.voiceCreditsPerMinute ?? 'Standard'}</td>
                 <td className={tdCls}>{o.captionsCreditsPerMinute ?? 'Standard'}</td>
@@ -376,8 +376,8 @@ function OverridesPanel({ notify }: { notify: (m: string) => void }) {
                 <td className={`${tdCls} whitespace-nowrap`}>
                   {canWrite && (
                     <div className="flex gap-3">
-                      <button className={linkBtn} onClick={() => edit(o)} aria-label={`Edit override for ${o.user?.email ?? o.userId}`}>Edit</button>
-                      <button className={linkBtn} disabled={busy === o.userId} onClick={() => remove(o)} aria-label={`Remove override for ${o.user?.email ?? o.userId}`}>
+                      <button type="button" className={linkBtn} onClick={() => edit(o)} aria-label={`Edit override for ${o.user?.email ?? o.userId}`}>Edit</button>
+                      <button type="button" className={linkBtn} disabled={busy === o.userId} onClick={() => remove(o)} aria-label={`Remove override for ${o.user?.email ?? o.userId}`}>
                         Remove
                       </button>
                     </div>
@@ -409,7 +409,7 @@ function OverridesPanel({ notify }: { notify: (m: string) => void }) {
             <Field label="Note (internal)">
               <input className={inputCls} maxLength={500} value={editing.form.note} onChange={(e) => set('note', e.target.value)} />
             </Field>
-            <p className="text-xs text-[#3D3650]">Applies to new translation sessions; sessions in progress keep their locked rate.</p>
+            <p className="text-xs text-[#6B6478]">Applies to new translation sessions; sessions in progress keep their locked rate.</p>
             <div className="flex items-center gap-3">
               <Button type="submit" loading={saving}>Save override</Button>
               <Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>

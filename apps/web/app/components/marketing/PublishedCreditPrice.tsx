@@ -46,7 +46,7 @@ export function PublishedCreditPrice() {
                   : PRICE_NOT_PUBLISHED}
             </p>
           )}
-          <Link href={token ? "/dashboard/billing/credits#topups" : "/signup"} className="mt-5 inline-flex">
+          <Link href={token ? "/dashboard/billing?add=1" : "/signup"} className="mt-5 inline-flex">
             <Button size="sm">
               {token ? "Buy credits" : "Create account"} <ArrowRight size={14} />
             </Button>

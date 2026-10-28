@@ -52,7 +52,7 @@ describe('public prepaid pricing page', () => {
     render(await PricingPage());
     // The signed-in link switches in after mount (server HTML is the signed-out version).
     const cta = await screen.findByTestId('pricing-primary-cta');
-    await waitFor(() => expect(cta.getAttribute('href')).toBe('/dashboard/billing/credits#topups'));
+    await waitFor(() => expect(cta.getAttribute('href')).toBe('/dashboard/billing?add=1'));
   });
 
   it('does not invent a price when published pricing is unavailable', async () => {

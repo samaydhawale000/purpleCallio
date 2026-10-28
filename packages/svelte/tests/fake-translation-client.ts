@@ -12,6 +12,7 @@ export class FakeTranslationClient {
   readonly setOriginalVolume = vi.fn();
   readonly replay = vi.fn(() => true);
   readonly requestRepeat = vi.fn(() => true);
+  readonly resumeAudio = vi.fn(async () => true);
   constructor(readonly config: Record<string, unknown> = {}) {
     FakeTranslationClient.instances.push(this);
   }

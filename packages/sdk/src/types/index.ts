@@ -175,6 +175,13 @@ export interface EngineConfig {
     maxRestarts?: number;
     failDeadlineMs?: number;
   };
+  /**
+   * Live Translate is one switch per call: when either participant (or your
+   * backend via `PATCH /calls/:id/translation`) turns it on or off,
+   * `meeting.translation` follows. Default true; false leaves it to you
+   * (listen for `translation.changed`).
+   */
+  followTranslation?: boolean;
 }
 
 export interface MeetingSnapshot {

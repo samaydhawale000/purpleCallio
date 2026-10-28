@@ -14,6 +14,7 @@ import {
   type AdminMember,
   type AdminPermissions,
 } from '../../lib/admin-access';
+import { ErrorNote, Loading, PageHeader, Panel, Table, buttonCls, inputCls } from '../../dashboard/_ui';
 
 const LEVELS: { value: AdminAccessLevel | ''; label: string }[] = [
   { value: '', label: 'No access' },
@@ -58,25 +59,41 @@ export default function AdminAdminsPage() {
     }
   };
 
-  if (loading) return <div className="text-[#3D3650] text-sm py-20 text-center">Loading admins…</div>;
-  if (error) return <div className="py-20 text-center text-red-600 text-sm">{error}</div>;
+  const addButton =
+    canWrite && editing === null ? (
+      <button type="button" onClick={() => setEditing('new')} className={buttonCls('primary')}>
+        <Plus size={16} aria-hidden="true" /> Add admin
+      </button>
+    ) : undefined;
+
+  const header = (
+    <PageHeader
+      title="Admins"
+      description="People who can access this admin panel, and what they can do in each section."
+      actions={!loading && !error ? addButton : undefined}
+    />
+  );
+
+  if (loading) {
+    return (
+      <>
+        {header}
+        <Loading label="Loading admins…" />
+      </>
+    );
+  }
+  if (error) {
+    return (
+      <>
+        {header}
+        <ErrorNote message={error} />
+      </>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-[#170B2E]">Admins</h1>
-          <p className="text-[#3D3650] text-sm mt-1">People who can access this admin panel, and what they can do in each section.</p>
-        </div>
-        {canWrite && editing === null && (
-          <button
-            onClick={() => setEditing('new')}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#7F40E8] px-4 py-2 text-sm font-medium text-white hover:bg-[#6425C4]"
-          >
-            <Plus size={16} aria-hidden="true" /> Add admin
-          </button>
-        )}
-      </header>
+    <>
+      {header}
 
       {editing !== null && (
         <AdminForm
@@ -89,48 +106,51 @@ export default function AdminAdminsPage() {
         />
       )}
 
-      <div className="rounded-xl border border-[#E7DFF5] overflow-hidden bg-white">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[#E7DFF5] text-left">
-                <th className="px-4 py-3 text-xs font-mono uppercase tracking-widest text-[#3D3650]">Person</th>
-                <th className="px-4 py-3 text-xs font-mono uppercase tracking-widest text-[#3D3650]">Access</th>
-                {canWrite && <th className="px-4 py-3" />}
-              </tr>
-            </thead>
-            <tbody>
-              {admins.map((a) => (
-                <tr key={a.id} className="border-b border-[#E7DFF5]/60 align-top">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-[#170B2E]">
-                      {a.name || a.email}
-                      {a.id === myId && <span className="ml-2 text-xs font-normal text-[#3D3650]">(you)</span>}
-                    </p>
-                    {a.name && <p className="text-xs text-[#3D3650]">{a.email}</p>}
-                  </td>
-                  <td className="px-4 py-3 text-[#3D3650]">{accessSummary(a)}</td>
-                  {canWrite && (
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
-                      {a.id !== myId && (
-                        <>
-                          <button onClick={() => setEditing(a)} className="text-sm text-[#6425C4] hover:underline">
-                            Edit
-                          </button>
-                          <button onClick={() => onRemove(a)} className="ml-4 text-sm text-red-600 hover:underline">
-                            Remove
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+      <Table
+        rows={admins}
+        rowKey={(a) => a.id}
+        columns={[
+          {
+            key: 'person',
+            label: 'Person',
+            render: (a) => (
+              <div className="leading-tight">
+                <p className="font-medium text-[#170B2E]">
+                  {a.name || a.email}
+                  {a.id === myId && <span className="ml-2 text-xs font-normal text-[#6B6478]">(you)</span>}
+                </p>
+                {a.name && <p className="text-[13px] text-[#6B6478]">{a.email}</p>}
+              </div>
+            ),
+          },
+          { key: 'access', label: 'Access', className: 'whitespace-normal text-[#6B6478]', render: (a) => accessSummary(a) },
+          ...(canWrite
+            ? [
+                {
+                  key: 'actions',
+                  label: '',
+                  align: 'right' as const,
+                  render: (a: AdminMember) =>
+                    a.id !== myId && (
+                      <span className="inline-flex gap-1">
+                        <button type="button" onClick={() => setEditing(a)} className={buttonCls('ghost', 'px-2.5 py-1')}>
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRemove(a)}
+                          className="rounded-lg px-2.5 py-1 text-sm font-medium text-red-600 hover:bg-red-50"
+                        >
+                          Remove
+                        </button>
+                      </span>
+                    ),
+                },
+              ]
+            : []),
+        ]}
+      />
+    </>
   );
 }
 
@@ -166,30 +186,31 @@ function AdminForm({ admin, onCancel, onSaved }: { admin: AdminMember | null; on
   };
 
   return (
-    <div className="rounded-xl border border-[#E7DFF5] bg-[#F8F4FD] p-5 space-y-4">
-      <h2 className="font-semibold text-[#170B2E]">{admin ? `Edit access for ${admin.email}` : 'Add admin'}</h2>
+    <Panel className="mb-8 space-y-4">
+      <h2 className="text-[15px] font-semibold text-[#170B2E]">{admin ? `Edit access for ${admin.email}` : 'Add admin'}</h2>
       {!admin && (
         <label className="block max-w-sm">
-          <span className="text-xs text-[#3D3650]">Email</span>
+          <span className="text-sm font-medium text-[#170B2E]">Email</span>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="name@company.com"
-            className="mt-1 w-full rounded-lg border border-[#E7DFF5] bg-white px-3 py-2 text-sm text-[#170B2E] outline-none focus:border-[#7F40E8]"
+            className={`${inputCls} mt-1.5`}
           />
-          <span className="mt-1 block text-xs text-[#3D3650]">They sign in with Google using this email.</span>
+          <span className="mt-1 block text-xs text-[#6B6478]">They sign in with Google using this email.</span>
         </label>
       )}
 
       <div className="grid gap-2 sm:grid-cols-2">
         {ADMIN_TABS.map((t) => (
-          <div key={t.key} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 border border-[#E7DFF5]">
+          <div key={t.key} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2">
             <span className="text-sm text-[#170B2E]">{t.label}</span>
             <select
               value={perms[t.key] ?? ''}
               onChange={(e) => setLevel(t.key, e.target.value as AdminAccessLevel | '')}
-              className="rounded-md border border-[#E7DFF5] bg-white px-2 py-1 text-sm text-[#170B2E]"
+              aria-label={`${t.label} access`}
+              className="rounded-md border border-[#E4DEEE] bg-white px-2 py-1 text-sm text-[#170B2E] focus:border-[#7F40E8] focus:outline-none"
             >
               {LEVELS.map((l) => (
                 <option key={l.value} value={l.value}>
@@ -200,21 +221,22 @@ function AdminForm({ admin, onCancel, onSaved }: { admin: AdminMember | null; on
           </div>
         ))}
       </div>
-      <p className="text-xs text-[#3D3650]">Dashboard and Notifications are visible to every admin. Read = view only, Write = view and make changes.</p>
+      <p className="text-xs text-[#6B6478]">Dashboard and Notifications are visible to every admin. Read = view only, Write = view and make changes.</p>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <ErrorNote message={error} />}
       <div className="flex gap-2">
         <button
+          type="button"
           onClick={save}
           disabled={saving || (!admin && !email.trim())}
-          className="rounded-lg bg-[#7F40E8] px-4 py-2 text-sm font-medium text-white hover:bg-[#6425C4] disabled:opacity-50"
+          className={buttonCls('primary')}
         >
           {saving ? 'Saving…' : admin ? 'Save access' : 'Add admin'}
         </button>
-        <button onClick={onCancel} className="rounded-lg border border-[#E7DFF5] bg-white px-4 py-2 text-sm text-[#3D3650]">
+        <button type="button" onClick={onCancel} className={buttonCls('secondary')}>
           Cancel
         </button>
       </div>
-    </div>
+    </Panel>
   );
 }

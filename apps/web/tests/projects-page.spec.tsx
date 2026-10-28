@@ -63,7 +63,7 @@ describe('/dashboard/projects — projects and API keys together', () => {
     );
     render(<ProjectsPage />);
 
-    fireEvent.click((await screen.findAllByRole('button', { name: /Create Project/ }))[0]);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'New project' }))[0]);
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Mobile app' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create project & key' }));
 
@@ -78,7 +78,7 @@ describe('/dashboard/projects — projects and API keys together', () => {
     api.post.mockResolvedValue({ data: project('p9', 'Mobile app') });
     render(<ProjectsPage />);
 
-    fireEvent.click((await screen.findAllByRole('button', { name: /Create Project/ }))[0]);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'New project' }))[0]);
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Mobile app' } });
     fireEvent.click(screen.getByLabelText('Generate an API key for this project'));
     fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
@@ -94,7 +94,7 @@ describe('/dashboard/projects — projects and API keys together', () => {
     );
     render(<ProjectsPage />);
 
-    fireEvent.click((await screen.findAllByRole('button', { name: /Create Project/ }))[0]);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'New project' }))[0]);
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Mobile app' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create project & key' }));
 

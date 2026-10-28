@@ -19,6 +19,7 @@ import { TicketThread } from '../../../components/support/TicketThread';
 import { ToastHost, ToastState } from '../../../dashboard/billing/Toast';
 import { CustomPlanBadge, CustomPlanContextPanel } from '../_components/CustomPlanContext';
 import { useCanWrite } from '../../../lib/admin-access';
+import { DetailList, ErrorNote, Loading, Panel, inputCls } from '../../../dashboard/_ui';
 
 type AdminTicketDetail = SupportTicket & {
   type?: 'GENERAL' | 'CUSTOM_PLAN';
@@ -101,21 +102,21 @@ export default function AdminTicketPage() {
   const backLink = (
     <Link
       href="/admin/support"
-      className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E]"
+      className="inline-flex items-center gap-1 text-[13px] text-[#6B6478] hover:text-[#170B2E]"
     >
       <ArrowLeft size={14} /> Back to Support
     </Link>
   );
 
   if (loading) {
-    return <div className="text-[#3D3650] text-sm py-20 text-center">Loading ticket…</div>;
+    return <Loading label="Loading ticket…" />;
   }
 
   if (error || !ticket) {
     return (
-      <div className="space-y-4">
+      <div className="flex flex-col gap-4">
         {backLink}
-        <p className="text-red-600 text-sm py-10 text-center">{error || 'Ticket not found.'}</p>
+        <ErrorNote message={error || 'Ticket not found.'} />
       </div>
     );
   }
@@ -134,11 +135,11 @@ export default function AdminTicketPage() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
       {backLink}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_300px] items-start">
+      <div className="grid items-start gap-6 lg:grid-cols-[1fr_300px]">
         <div className="min-w-0">
           <TicketThread
             messages={ticket.messages}
@@ -149,19 +150,19 @@ export default function AdminTicketPage() {
             onReply={canWrite ? reply : undefined}
             header={
               <>
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <span className="font-mono text-xs text-[#6425C4]">{ticket.ticketNumber}</span>
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xs text-[#6B6478]">{ticket.ticketNumber}</span>
                   <TicketStatusBadge status={ticket.status} />
                   {ticket.type === 'CUSTOM_PLAN' && <CustomPlanBadge />}
                 </div>
-                <h1 className="text-lg font-bold text-[#170B2E] break-words">{ticket.subject}</h1>
-                <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2 text-xs text-[#3D3650]">
+                <h1 className="break-words text-lg font-semibold text-[#170B2E]">{ticket.subject}</h1>
+                <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-[#6B6478]">
                   <span>Created {new Date(ticket.createdAt).toLocaleString()}</span>
                   <span>Updated {new Date(ticket.updatedAt).toLocaleString()}</span>
                   {doc && (
                     <Link
                       href={`/docs/${ticket.documentationId}`}
-                      className="inline-flex items-center gap-1 text-[#6425C4] hover:text-[#170B2E]"
+                      className="inline-flex items-center gap-1 text-[#5B21B6] hover:underline"
                     >
                       <BookOpen size={12} /> {doc}
                     </Link>
@@ -176,39 +177,38 @@ export default function AdminTicketPage() {
           {ticket.type === 'CUSTOM_PLAN' && ticket.customPlanRequest && (
             <CustomPlanContextPanel requestId={ticket.customPlanRequest.id} />
           )}
-          {canWrite && <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-            <p className="text-xs font-mono uppercase tracking-widest text-[#3D3650] mb-3">Status</p>
-            <select
-              value={ticket.status}
-              disabled={savingStatus}
-              onChange={(e) => changeStatus(e.target.value as TicketStatus)}
-              className="w-full px-3 py-2.5 rounded-lg text-sm text-[#170B2E] bg-white border border-[#D6C4EE] outline-none focus:border-[#7F40E8]/60 disabled:opacity-50"
-            >
-              {TICKET_STATUSES.map((s) => (
-                <option key={s} value={s}>{ticketStatusLabel(s)}</option>
-              ))}
-            </select>
-          </div>}
+          {canWrite && (
+            <Panel>
+              <label htmlFor="ticket-status" className="mb-2 block text-sm font-semibold text-[#170B2E]">
+                Status
+              </label>
+              <select
+                id="ticket-status"
+                value={ticket.status}
+                disabled={savingStatus}
+                onChange={(e) => changeStatus(e.target.value as TicketStatus)}
+                className={`${inputCls} disabled:opacity-50`}
+              >
+                {TICKET_STATUSES.map((s) => (
+                  <option key={s} value={s}>{ticketStatusLabel(s)}</option>
+                ))}
+              </select>
+            </Panel>
+          )}
 
-          <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-            <p className="text-xs font-mono uppercase tracking-widest text-[#3D3650] mb-3">Customer</p>
-            <Link
-              href={`/admin/customers/${c.id}`}
-              className="text-sm font-semibold text-[#170B2E] hover:text-[#6425C4]"
-            >
+          <Panel>
+            <p className="mb-1 text-sm font-semibold text-[#170B2E]">Customer</p>
+            <Link href={`/admin/customers/${c.id}`} className="text-sm font-medium text-[#5B21B6] hover:underline">
               {c.name || c.email}
             </Link>
-            <dl className="mt-3 space-y-2 text-xs">
-              {customerRows
-                .filter(([, v]) => v)
-                .map(([k, v]) => (
-                  <div key={k} className="flex justify-between gap-3">
-                    <dt className="text-[#3D3650] shrink-0">{k}</dt>
-                    <dd className="text-[#170B2E] text-right break-all">{v}</dd>
-                  </div>
-                ))}
-            </dl>
-          </div>
+            <div className="mt-2">
+              <DetailList
+                items={customerRows
+                  .filter(([, v]) => v)
+                  .map(([k, v]) => ({ label: k, value: v }))}
+              />
+            </div>
+          </Panel>
         </div>
       </div>
     </div>

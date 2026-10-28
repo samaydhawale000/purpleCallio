@@ -230,5 +230,137 @@ async getUsage(userId: string) {
       calls: v.calls,
     }));
   }
+
+  /**
+   * Credits and minutes per UTC day for the last N days, split by product.
+   * Reads the same billed rows as the translation usage breakdown, so the
+   * daily totals add up to what the Usage page's product table shows.
+   */
+  async getDailyUsage(userId: string, days = 30, projectId?: string) {
+    const span = Math.min(Math.max(1, Math.floor(days)), 90);
+    const start = new Date();
+    start.setUTCHours(0, 0, 0, 0);
+    start.setUTCDate(start.getUTCDate() - (span - 1));
+    const range = { gte: start };
+
+    if (projectId) {
+      const owned = await this.prisma.project.findFirst({
+        where: { id: projectId, ownerId: userId },
+        select: { id: true },
+      });
+      if (!owned) throw new NotFoundException('Project not found');
+    }
+    const project = projectId ? { projectId } : {};
+    // CallUsage rows only carry the call id, so a project filter goes
+    // through that project's calls in the window.
+    const callFilter = projectId
+      ? {
+          callId: {
+            in: (
+              await this.prisma.call.findMany({
+                where: { projectId, createdAt: { gte: new Date(start.getTime() - 86_400_000) } },
+                select: { id: true },
+              })
+            ).map((c) => c.id),
+          },
+        }
+      : {};
+
+    const [callRows, translationRows, aiRows, reportRows] = await Promise.all([
+      this.prisma.callUsage.findMany({
+        where: { usage: { companyId: userId }, createdAt: range, ...callFilter },
+        select: {
+          createdAt: true,
+          creditsCharged: true,
+          audioMinutes: true,
+          videoMinutes: true,
+          screenShareMinutes: true,
+        },
+      }),
+      this.prisma.translationSession.findMany({
+        where: { ownerId: userId, startedAt: range, ...project },
+        select: {
+          startedAt: true,
+          creditsCharged: true,
+          voiceSeconds: true,
+          captionsSeconds: true,
+        },
+      }),
+      this.prisma.aiCallSession.findMany({
+        where: { ownerId: userId, usageRecordedAt: range, ...project },
+        select: {
+          usageRecordedAt: true,
+          creditsCharged: true,
+          durationSeconds: true,
+        },
+      }),
+      this.prisma.translationReport.findMany({
+        where: { call: { project: { ownerId: userId } }, createdAt: range, ...project },
+        select: { createdAt: true, creditsCharged: true },
+      }),
+    ]);
+
+    type Day = {
+      date: string;
+      callCredits: number;
+      translateCredits: number;
+      aiCredits: number;
+      reportCredits: number;
+      callMinutes: number;
+      translateMinutes: number;
+      aiMinutes: number;
+    };
+    const buckets = new Map<string, Day>();
+    for (let i = 0; i < span; i++) {
+      const d = new Date(start);
+      d.setUTCDate(d.getUTCDate() + i);
+      const date = d.toISOString().slice(0, 10);
+      buckets.set(date, {
+        date,
+        callCredits: 0,
+        translateCredits: 0,
+        aiCredits: 0,
+        reportCredits: 0,
+        callMinutes: 0,
+        translateMinutes: 0,
+        aiMinutes: 0,
+      });
+    }
+    const day = (at: Date | null) =>
+      at ? buckets.get(at.toISOString().slice(0, 10)) : undefined;
+
+    for (const r of callRows) {
+      const b = day(r.createdAt);
+      if (!b) continue;
+      b.callCredits += r.creditsCharged;
+      b.callMinutes += r.audioMinutes + r.videoMinutes + r.screenShareMinutes;
+    }
+    for (const r of translationRows) {
+      const b = day(r.startedAt);
+      if (!b) continue;
+      b.translateCredits += r.creditsCharged;
+      b.translateMinutes += (r.voiceSeconds + r.captionsSeconds) / 60;
+    }
+    for (const r of aiRows) {
+      const b = day(r.usageRecordedAt);
+      if (!b) continue;
+      b.aiCredits += r.creditsCharged ?? 0;
+      b.aiMinutes += (r.durationSeconds ?? 0) / 60;
+    }
+    for (const r of reportRows) {
+      const b = day(r.createdAt);
+      if (b) b.reportCredits += r.creditsCharged;
+    }
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    return [...buckets.values()].map((b) => ({
+      ...b,
+      callMinutes: round2(b.callMinutes),
+      translateMinutes: round2(b.translateMinutes),
+      aiMinutes: round2(b.aiMinutes),
+      totalCredits:
+        b.callCredits + b.translateCredits + b.aiCredits + b.reportCredits,
+    }));
+  }
 }
 

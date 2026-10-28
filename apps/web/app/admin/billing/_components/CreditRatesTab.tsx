@@ -4,10 +4,9 @@ import { FormEvent, useEffect, useState } from 'react';
 import { getCreditRates, updateCreditRates, type BillingConfigUpdate } from '../../../lib/admin-billing';
 import { formatCredits } from '../../../lib/billing';
 import { translatedCallCredits, type TranslationBillingConfig } from '../../../lib/translation';
-import { Button } from '../../../components/ui/Button';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
 import { useCanWrite } from '../../../lib/admin-access';
-import { ErrorText, Field, inputCls, Panel, Spinner, useAdminErrorHandler, useResource } from './ui';
+import { Button, ErrorText, Field, inputCls, Panel, Spinner, useAdminErrorHandler, useResource } from './ui';
 
 const FIELDS = [
   { key: 'audioCreditsPerMinute', label: 'Audio' },
@@ -120,7 +119,7 @@ export function CreditRatesTab() {
   };
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+    <form onSubmit={submit} className="flex flex-col gap-8" noValidate>
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
       <Panel title="Credit rates" subtitle="Credits consumed per participant-minute. Each media type is rounded up to whole credits per call.">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -177,7 +176,7 @@ export function CreditRatesTab() {
               />
             </Field>
           </div>
-          <p className="text-xs text-[#3D3650] mt-4">
+          <p className="mt-4 text-xs text-[#6B6478]">
             To give one customer extra free credits, use “Grant promotional credits” on the Credit Pricing tab. Those are calls-only too.
           </p>
         </Panel>
@@ -226,7 +225,7 @@ export function CreditRatesTab() {
               </Field>
             ))}
           </div>
-          <p className="text-xs text-[#3D3650] mt-4">
+          <p className="mt-4 text-xs text-[#6B6478]">
             Changes apply to new translation sessions only — rates are locked when a session starts. Customers are notified of
             rate changes. Per-customer overrides are on the Live Translate tab.
           </p>

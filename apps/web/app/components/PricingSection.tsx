@@ -481,7 +481,7 @@ export function BuyCreditsCalculator({ rates, credit }: { rates: CreditRates; cr
   const aboveMax = credit?.maximumPurchasePaise != null && amountPaise > credit.maximumPurchasePaise;
   const credits = credit && !belowMin && !aboveMax ? creditsForAmount(amountPaise, credit) : null;
   const gstPaise = Math.round((amountPaise * (rates.taxPercent ?? 0)) / 100);
-  const cta = token ? '/dashboard/billing/credits#topups' : '/signup';
+  const cta = token ? '/dashboard/billing?add=1' : '/signup';
 
   return (
     <div
@@ -598,7 +598,7 @@ export function AutoTopUpExplainer() {
 /** Shared visual pricing overview for the home page and /pricing. */
 function PrepaidPricingFeature({ rates, credit, pageHeading = false }: { rates: CreditRates; credit: PublishedCreditPricing | null; pageHeading?: boolean }) {
   const token = useClientToken();
-  const cta = token ? '/dashboard/billing/credits#topups' : '/signup';
+  const cta = token ? '/dashboard/billing?add=1' : '/signup';
   const Heading = pageHeading ? 'h1' : 'h2';
   const price = credit ? `${formatMoney(credit.creditPricePaise, credit.currency)} per credit` : 'Published soon';
   const purchaseSteps = ['Choose a purchase amount', 'See estimated credits and taxes', 'Complete payment securely', 'Credits added after successful payment'];

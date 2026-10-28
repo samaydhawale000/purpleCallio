@@ -1,8 +1,7 @@
 'use client';
 
 import { ChangeEvent, useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2, Upload } from 'lucide-react';
-import { Button } from '../../../components/ui/Button';
+import { Trash2 } from 'lucide-react';
 import {
   Lexicon,
   LexiconTerm,
@@ -16,6 +15,7 @@ import {
   putLexiconTerms,
   translationErrorText,
 } from '../../../lib/translation';
+import { buttonCls, inputCls } from '../../_ui';
 import { Card, ErrorBox, Loading } from './shared';
 
 interface Row {
@@ -40,8 +40,8 @@ const toRow = (t: LexiconTerm): Row => ({
 });
 
 const LANG = /^[a-z]{2,3}(-[a-z0-9]{2,8})?$/i;
-const cell = 'px-2 py-2 align-top';
-const ctl = 'w-full px-2 py-1.5 rounded-md text-sm text-[#170B2E] bg-white border border-[#D6C4EE] outline-none focus:border-[#7F40E8]/60';
+const cell = 'px-3 py-2 align-top';
+const ctl = 'w-full rounded-md border border-[#E4DEEE] bg-white px-2 py-1.5 text-sm text-[#170B2E] outline-none focus:border-[#7F40E8] focus:ring-2 focus:ring-[#7F40E8]/15';
 
 /** Validates rows and builds the bulk-upsert body, or returns an error message. */
 export function rowsToTerms(rows: Row[]): LexiconTerm[] | string {
@@ -184,48 +184,52 @@ export function LexiconEditor({
   return (
     <Card
       title={lexicon.name}
-      subtitle={`ID ${lexicon.id} — pass it as translation.lexiconId`}
+      subtitle={`ID ${lexicon.id} · pass it as translation.lexiconId`}
       actions={
         <>
-          <Button variant="secondary" size="sm" onClick={() => setCsvOpen((o) => !o)}>
-            <Upload size={13} className="mr-1" /> Import CSV
-          </Button>
-          <Button variant="secondary" size="sm" onClick={addRow}>
-            <Plus size={13} className="mr-1" /> Add term
-          </Button>
+          <button type="button" className={buttonCls('secondary', 'px-3 py-1.5')} onClick={() => setCsvOpen((o) => !o)}>
+            Import CSV
+          </button>
+          <button type="button" className={buttonCls('secondary', 'px-3 py-1.5')} onClick={addRow}>
+            Add term
+          </button>
         </>
       }
     >
       {csvOpen && (
-        <div className="rounded-xl border border-[#E7DFF5] bg-[#F8F4FD] p-4 mb-4 flex flex-col gap-3">
-          <p className="text-xs text-[#3D3650]">
+        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-[#ECE8F2] bg-white p-4">
+          <p className="text-xs text-[#6B6478]">
             Columns: <code className="font-mono">term,kind,lang:hi,lang:ta,…,pronunciation</code>. Kind is DO_NOT_TRANSLATE, TRANSLATE_AS or
             PRONOUNCE_AS. Existing terms with the same name are updated.
           </p>
-          <label htmlFor="lexicon-csv" className="text-sm font-medium text-[#3D3650]">Paste CSV</label>
+          <label htmlFor="lexicon-csv" className="text-[13px] font-medium text-[#170B2E]">Paste CSV</label>
           <textarea
             id="lexicon-csv"
             rows={5}
             value={csv}
             onChange={(e) => setCsv(e.target.value)}
             placeholder={'term,kind,lang:hi,pronunciation\nPurpleCallio,DO_NOT_TRANSLATE,,\ninvoice,TRANSLATE_AS,चालान,'}
-            className="w-full px-3 py-2 rounded-lg text-sm font-mono text-[#170B2E] bg-white border border-[#D6C4EE] outline-none"
+            className={`${inputCls} font-mono`}
           />
           <div className="flex flex-wrap items-center gap-3">
-            <label className="text-sm text-[#6425C4] font-medium">
+            <label className="text-[13px] text-[#6B6478]">
               <span>Or upload a .csv file</span>
               <input type="file" accept=".csv,text/csv" onChange={onFile} className="ml-2 text-xs" aria-label="Upload CSV file" />
             </label>
           </div>
           {csvCheck && !('error' in csvCheck) && (
-            <p className="text-xs text-[#3D3650]">
+            <p className="text-xs text-[#6B6478]">
               {csvCheck.rows} terms{csvCheck.languages.length ? ` · languages: ${csvCheck.languages.join(', ')}` : ''}
             </p>
           )}
           {csvError && <p role="alert" className="text-sm text-red-600">{csvError}</p>}
           <div className="flex gap-2">
-            <Button size="sm" onClick={importCsv} loading={importing} disabled={!csv.trim()}>Import terms</Button>
-            <Button size="sm" variant="ghost" onClick={() => setCsvOpen(false)}>Cancel</Button>
+            <button type="button" className={buttonCls('primary', 'px-3 py-1.5')} onClick={importCsv} disabled={importing || !csv.trim()}>
+              Import terms
+            </button>
+            <button type="button" className={buttonCls('ghost', 'px-3 py-1.5')} onClick={() => setCsvOpen(false)}>
+              Cancel
+            </button>
           </div>
         </div>
       )}
@@ -238,7 +242,7 @@ export function LexiconEditor({
         <>
           <div className="flex flex-wrap items-end gap-2 mb-3">
             <div className="flex flex-col gap-1">
-              <label htmlFor="new-lang" className="text-xs font-medium text-[#3D3650]">Add a translation language</label>
+              <label htmlFor="new-lang" className="text-[13px] font-medium text-[#170B2E]">Add a translation language</label>
               <input
                 id="new-lang"
                 value={newLang}
@@ -248,32 +252,34 @@ export function LexiconEditor({
                 className={`${ctl} w-28`}
               />
             </div>
-            <Button size="sm" variant="ghost" onClick={addLanguage}>Add language</Button>
-            {languages.length > 0 && <span className="text-xs text-[#3D3650] pb-1.5">Columns: {languages.join(', ')}</span>}
+            <button type="button" className={buttonCls('secondary', 'px-3 py-1.5')} onClick={addLanguage}>
+              Add language
+            </button>
+            {languages.length > 0 && <span className="text-xs text-[#6B6478] pb-1.5">Columns: {languages.join(', ')}</span>}
           </div>
 
           {rows.length === 0 ? (
-            <p className="text-sm text-[#3D3650] py-6 text-center">No terms yet. Add a term or import a CSV.</p>
+            <p className="rounded-lg border border-dashed border-[#E4DEEE] py-8 text-center text-sm text-[#6B6478]">No terms yet. Add a term or import a CSV.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg border border-[#ECE8F2] bg-white">
               <table className="w-full text-sm" aria-label="Lexicon terms">
                 <thead>
-                  <tr className="border-b border-[#E7DFF5] text-left text-xs text-[#3D3650]">
-                    <th className="px-2 py-2 font-medium">Term</th>
-                    <th className="px-2 py-2 font-medium">Rule</th>
+                  <tr className="border-b border-[#ECE8F2] text-left text-xs uppercase tracking-wide text-[#6B6478]">
+                    <th className="px-3 py-2.5 font-medium">Term</th>
+                    <th className="px-3 py-2.5 font-medium">Rule</th>
                     {languages.map((l) => (
-                      <th key={l} className="px-2 py-2 font-medium font-mono">{l}</th>
+                      <th key={l} className="px-3 py-2.5 font-medium font-mono">{l}</th>
                     ))}
-                    <th className="px-2 py-2 font-medium">Pronunciation</th>
-                    <th className="px-2 py-2 font-medium">Match case</th>
-                    <th className="px-2 py-2"><span className="sr-only">Actions</span></th>
+                    <th className="px-3 py-2.5 font-medium">Pronunciation</th>
+                    <th className="px-3 py-2.5 font-medium">Match case</th>
+                    <th className="px-3 py-2.5"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r, i) => {
                     const name = r.term.trim() || `row ${i + 1}`;
                     return (
-                      <tr key={r.key} className="border-b border-[#E7DFF5]/60 last:border-0">
+                      <tr key={r.key} className="border-b border-[#F2EFF6] last:border-0">
                         <td className={cell}>
                           <input aria-label={`Term ${i + 1}`} className={`${ctl} min-w-[140px]`} value={r.term} onChange={(e) => update(r.key, { term: e.target.value })} />
                         </td>
@@ -310,14 +316,14 @@ export function LexiconEditor({
                             aria-label={`Match case for ${name}`}
                             checked={r.caseSensitive}
                             onChange={(e) => update(r.key, { caseSensitive: e.target.checked })}
-                            className="accent-[#7F40E8] mt-2"
+                            className="mt-2 accent-[#6D28D9]"
                           />
                         </td>
                         <td className={cell}>
                           <button
                             onClick={() => removeRow(r)}
                             aria-label={`Remove ${name}`}
-                            className="p-1.5 rounded-md text-[#3D3650] hover:text-red-600 hover:bg-red-500/5"
+                            className="rounded-md p-1.5 text-[#6B6478] hover:bg-red-50 hover:text-red-600"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -329,11 +335,13 @@ export function LexiconEditor({
               </table>
             </div>
           )}
-          <p className="text-xs text-[#3D3650] mt-3">
+          <p className="mt-3 text-xs text-[#6B6478]">
             {TERM_KINDS.map((k) => `${k.label}: ${k.hint}`).join(' ')}
           </p>
           <div className="flex flex-wrap items-center gap-3 mt-4">
-            <Button onClick={save} loading={saving}>Save terms</Button>
+            <button type="button" className={buttonCls('primary')} onClick={save} disabled={saving}>
+              Save terms
+            </button>
             {saved && <span role="status" className="text-sm text-emerald-700">Terms saved</span>}
             {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           </div>

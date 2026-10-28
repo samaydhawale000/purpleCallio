@@ -114,7 +114,8 @@ const handleCredential = useCallback(
       window.google.accounts.id.renderButton(el, {
         theme: 'outline',
         size: 'large',
-        width: 280,
+        // Fill the container; Google caps the button at 400px.
+        width: Math.min(400, Math.max(240, el.parentElement?.clientWidth || 280)),
         text: 'continue_with',
         shape: 'rectangular',
         logo_alignment: 'left',

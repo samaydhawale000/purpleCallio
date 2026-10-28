@@ -1,7 +1,6 @@
 'use client';
 
 import { FormEvent, ReactNode, useState } from 'react';
-import { Button } from '../../../components/ui/Button';
 import {
   AGENT_DESCRIPTION_MAX_LENGTH,
   AGENT_NAME_MAX_LENGTH,
@@ -16,7 +15,7 @@ import {
   validateAgentForm,
   voicesFor,
 } from '../../../lib/ai';
-import { Select, TextArea, TextInput } from './fields';
+import { ActionButton, Select, TextArea, TextInput } from './fields';
 
 interface Props {
   initial: AgentFormValues;
@@ -81,9 +80,9 @@ export function AgentForm({ initial, submitLabel, onSubmit, header, disabled, pr
   const showProvider = providerOptions.length > 1;
 
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-4">
+    <form onSubmit={submit} noValidate className="flex flex-col gap-5">
       {serverErrors.length > 0 && (
-        <div role="alert" className="rounded-xl border border-red-500/30 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
           {serverErrors.map((m) => (
             <p key={m}>{m}</p>
           ))}
@@ -197,7 +196,7 @@ export function AgentForm({ initial, submitLabel, onSubmit, header, disabled, pr
         />
       </div>
       <div>
-        <Button type="submit" loading={saving} disabled={disabled}>{submitLabel}</Button>
+        <ActionButton type="submit" loading={saving} disabled={disabled}>{submitLabel}</ActionButton>
       </div>
     </form>
   );

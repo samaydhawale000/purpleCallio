@@ -29,7 +29,13 @@ export interface UseTranslationReturn {
   repeatRequests: Ref<TranslationRepeatRequest[]>;
   /** Resolves with `ready`, or `null` on failure (see `state.error`). */
   enable(options?: TranslationOptions): Promise<TranslationReady | null>;
-  disable(): void;
+  /**
+   * Turns translation off. With `meeting.translation` that is for the whole
+   * call; `{ share: false }` leaves only this participant (e.g. on hang-up).
+   */
+  disable(options?: { share?: boolean }): void;
+  /** "Join translation": retries audio the browser blocked (`state.audioBlocked`). Call from a click. */
+  resumeAudio(): Promise<boolean>;
   setMode(mode: TranslationMode): void;
   setLanguages(languages: { speak?: string; hear?: string }): void;
   setOriginalVolume(volume: number): void;
@@ -74,7 +80,8 @@ export function useTranslation(options: UseTranslationOptions): UseTranslationRe
     phrases,
     repeatRequests,
     enable: (o) => client.enable(o).catch(() => null),
-    disable: () => client.disable(),
+    disable: (o) => client.disable(o),
+    resumeAudio: () => client.resumeAudio(),
     setMode: (m) => client.setMode(m),
     setLanguages: (l) => client.setLanguages(l),
     setOriginalVolume: (v) => client.setOriginalVolume(v),

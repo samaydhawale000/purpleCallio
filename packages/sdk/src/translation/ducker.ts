@@ -1,5 +1,5 @@
 /**
- * Smoothly lowers the original remote audio while translated speech plays
+ * Smoothly lowers the original remote audio while it is being translated
  * and restores it afterwards. Each element's own volume before ducking is
  * remembered and restored exactly.
  */
@@ -17,6 +17,16 @@ export class Ducker {
 
   get ducked(): boolean {
     return this._ducked;
+  }
+
+  /** Level the elements are ducked to (meaningful while `ducked`). */
+  get duckLevel(): number {
+    return this.level;
+  }
+
+  /** An element appeared since the last `duck()` (e.g. registered later). */
+  hasUntracked(): boolean {
+    return this.getElements().some((el) => !this.baseline.has(el));
   }
 
   setElements(getElements: () => HTMLMediaElement[]): void {

@@ -1,7 +1,7 @@
 'use client';
 
 import type { AdminFeature } from '../../../lib/admin-billing';
-import { Checkbox, inputCls } from './ui';
+import { Checkbox } from './ui';
 
 export function FeatureChecklist({
   features,
@@ -13,7 +13,7 @@ export function FeatureChecklist({
   onChange: (keys: string[]) => void;
 }) {
   if (features.length === 0) {
-    return <p className="text-sm text-[#3D3650]">No features in the registry yet. Add them in the Features tab.</p>;
+    return <p className="text-sm text-[#6B6478]">No features in the registry yet. Add them in the Features tab.</p>;
   }
   const groups = new Map<string, AdminFeature[]>();
   for (const f of features) {
@@ -27,7 +27,7 @@ export function FeatureChecklist({
     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
       {[...groups.entries()].map(([group, items]) => (
         <div key={group}>
-          <p className="text-[11px] font-mono uppercase tracking-widest text-[#3D3650] mb-2">{group}</p>
+          <p className="mb-2 text-[13px] font-medium text-[#170B2E]">{group}</p>
           <div className="space-y-2">
             {items.map((f) => (
               <Checkbox
@@ -37,7 +37,7 @@ export function FeatureChecklist({
                 label={
                   <>
                     {f.name}
-                    {!f.isActive && <span className="ml-1 text-[10px] text-amber-700">(inactive)</span>}
+                    {!f.isActive && <span className="ml-1 text-xs text-amber-700">(inactive)</span>}
                   </>
                 }
                 hint={f.description ?? undefined}
@@ -48,7 +48,7 @@ export function FeatureChecklist({
       ))}
       {orphaned.length > 0 && (
         <div>
-          <p className="text-[11px] font-mono uppercase tracking-widest text-amber-700 mb-2">Not in registry</p>
+          <p className="mb-2 text-[13px] font-medium text-amber-700">Not in registry</p>
           {orphaned.map((k) => (
             <Checkbox key={k} checked onChange={() => toggle(k, false)} label={<span className="font-mono">{k}</span>} />
           ))}

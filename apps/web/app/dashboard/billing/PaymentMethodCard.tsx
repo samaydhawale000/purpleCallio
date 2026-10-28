@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CreditCard, Trash2 } from 'lucide-react';
-import { Badge } from '../../components/ui/Badge';
+import { Pill } from '../_ui';
 import { billingErrorMessage, removePaymentMethod, type SavedPaymentMethod } from '../../lib/billing';
 import { ConfirmDialog } from './BillingShell';
 
@@ -40,42 +39,39 @@ export default function PaymentMethodCard({ paymentMethods, onChanged, showToast
   };
 
   return (
-    <section id="payment-methods" className="rounded-2xl border border-[#E7DFF5] bg-white p-6 scroll-mt-20" data-testid="payment-methods">
-      <h2 className="text-sm font-semibold text-[#170B2E]">Payment methods</h2>
-      <p className="text-xs text-[#3D3650] mt-0.5">
+    <section id="payment-methods" className="scroll-mt-20 rounded-xl bg-[#F7F6FA] p-5" data-testid="payment-methods">
+      <h2 className="text-[15px] font-semibold text-[#170B2E]">Payment methods</h2>
+      <p className="mt-0.5 text-[13px] text-[#6B6478]">
         Choose a payment method (card, UPI, netbanking) at credit checkout. Saved payment methods are not charged automatically.
       </p>
 
       {paymentMethods.length === 0 ? (
-        <p className="mt-4 text-sm text-[#3D3650]">No saved cards.</p>
+        <p className="mt-4 text-sm text-[#6B6478]">No saved cards.</p>
       ) : (
-        <ul className="mt-4 divide-y divide-[#E7DFF5] border border-[#E7DFF5] rounded-xl">
+        <ul className="mt-4 divide-y divide-[#F2EFF6] rounded-xl border border-[#ECE8F2] bg-white">
           {paymentMethods.map((pm) => (
             <li key={pm.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'rgba(127,64,232,0.1)' }}>
-                  <CreditCard size={16} className="text-[#6425C4]" />
-                </div>
                 <div>
                   <p className="text-sm font-medium text-[#170B2E]">
                     {(pm.brand ?? 'Card').toString().toUpperCase()} {pm.last4 ? `•••• ${pm.last4}` : ''}
                   </p>
-                  <p className="text-xs text-[#3D3650]">
+                  <p className="text-xs text-[#6B6478]">
                     {pm.expMonth && pm.expYear ? `Expires ${String(pm.expMonth).padStart(2, '0')}/${pm.expYear}` : 'Saved card'}
                   </p>
                   {pm.legacy && (
-                    <Badge variant="default" className="mt-1">
-                      Saved under previous billing — not charged automatically
-                    </Badge>
+                    <div className="mt-1">
+                      <Pill>Saved under previous billing — not charged automatically</Pill>
+                    </div>
                   )}
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setRemoving(pm)}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-700"
+                className="text-[13px] font-medium text-red-600 hover:text-red-700"
               >
-                <Trash2 size={13} /> Remove
+                Remove
               </button>
             </li>
           ))}

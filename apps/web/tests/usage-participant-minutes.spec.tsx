@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
 const { router, api } = vi.hoisted(() => ({
@@ -69,7 +69,7 @@ beforeEach(() => {
         },
       };
     }
-    if (url.startsWith('/dashboard/usage/chart')) return { data: [] };
+    if (url.startsWith('/dashboard/usage/daily')) return { data: [] };
     if (url.startsWith('/billing/call-usage')) {
       return { data: { data: [call], total: 1, page: 1, pageSize: 10, pageCount: 1 } };
     }
@@ -95,26 +95,17 @@ describe('Usage page — call analytics in participant-minutes', () => {
     expect(videoCell.textContent).not.toContain('10 min');
     expect(screen.getByTestId('call-audio').textContent).toBe('0s');
     expect(screen.getByTestId('call-screen').textContent).toBe('0s');
-    expect(screen.getByText(/Usage is shown in participant-minutes/)).toBeTruthy();
-    // Money is gone: credits per call and credit rates per participant-minute.
+    // Credits per call and credit rates per participant-minute; no money.
     expect(screen.getByTestId('call-credits').textContent).toBe('40');
-    expect(screen.getByText('1 video participant-minute = 2 credits')).toBeTruthy();
+    expect(await screen.findByText(/Usage is shown in participant-minutes/)).toBeTruthy();
+    expect(screen.getByText(/2 credits video/)).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/₹|free tier|free allowance|spending limit/i);
   });
 
-  it('expanded row still shows wall-clock duration, participant count and the rated participant-minutes', async () => {
+  it('opens the call in the Calls page when a billed call is selected', async () => {
     render(<UsagePage />);
 
     fireEvent.click(await screen.findByText(/call-abcdef1/));
-
-    const detail = await screen.findByTestId('call-usage-detail');
-    expect(detail.textContent).toContain('10m 00s wall-clock');
-    expect(detail.textContent).toContain('Participants: 2');
-    expect(within(detail).getByText('20m 00s participant time')).toBeTruthy();
-
-    await waitFor(() => expect(screen.getByTestId('segment-participant-minutes')).toBeTruthy());
-    expect(screen.getByTestId('segment-participant-minutes').textContent).toBe('Video 20m 00s');
-    expect(screen.getByText(/10m 00s wall-clock · 2 participants/)).toBeTruthy();
-    expect(screen.getByTestId('segment-total-credits').textContent).toBe('40 credits');
+    expect(router.push).toHaveBeenCalledWith('/dashboard/calls?call=call-abcdef123456789');
   });
 });

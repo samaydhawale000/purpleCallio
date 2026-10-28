@@ -3,10 +3,10 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { getBillingSettings, updateBillingSettings, type TopUpExpiryPolicy } from '../../../lib/admin-billing';
-import { Button } from '../../../components/ui/Button';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
 import { useCanWrite } from '../../../lib/admin-access';
-import { ErrorText, Field, inputCls, Panel, Spinner, useAdminErrorHandler, useResource } from './ui';
+import { buttonCls } from '../../../dashboard/_ui';
+import { Button, ErrorText, Field, inputCls, Panel, Spinner, useAdminErrorHandler, useResource } from './ui';
 
 interface Form {
   taxPercent: string;
@@ -83,9 +83,9 @@ export function SettingsTab() {
   const setThreshold = (i: number, v: string) => setForm({ ...form, thresholds: form.thresholds.map((t, j) => (i === j ? v : t)) });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+    <form onSubmit={submit} className="flex flex-col gap-8" noValidate>
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
-      <fieldset disabled={!canWrite} className="flex flex-col gap-6 min-w-0">
+      <fieldset disabled={!canWrite} className="flex min-w-0 flex-col gap-8">
       <Panel title="Tax">
         <Field label="GST (%)" hint="Added at checkout on top of plan and top-up prices (after any customer discount)." className="max-w-xs">
           <input type="number" min={0} max={100} className={inputCls} value={form.taxPercent} onChange={(e) => setForm({ ...form, taxPercent: e.target.value })} />
@@ -105,12 +105,12 @@ export function SettingsTab() {
                 value={t}
                 onChange={(e) => setThreshold(i, e.target.value)}
               />
-              <span className="text-xs text-[#3D3650]">%</span>
+              <span className="text-[13px] text-[#6B6478]">%</span>
               {canWrite && (
               <button
                 type="button"
                 aria-label={`Remove threshold ${i + 1}`}
-                className="text-[#3D3650] hover:text-red-600"
+                className="rounded p-0.5 text-[#6B6478] hover:text-red-600"
                 onClick={() => setForm({ ...form, thresholds: form.thresholds.filter((_, j) => j !== i) })}
               >
                 <X size={14} />
@@ -122,7 +122,7 @@ export function SettingsTab() {
           <button
             type="button"
             onClick={() => setForm({ ...form, thresholds: [...form.thresholds, ''] })}
-            className="inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded-md border border-dashed border-[#D6C4EE] text-[#6425C4]"
+            className={buttonCls('ghost', 'px-2.5 py-1.5 text-[13px]')}
           >
             <Plus size={12} /> Add threshold
           </button>

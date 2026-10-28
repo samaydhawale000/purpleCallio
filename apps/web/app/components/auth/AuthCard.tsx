@@ -102,7 +102,7 @@ export function AuthCard({
   const wide = phase === 'profile';
 
   return (
-    <div className={`relative w-full transition-[max-width] duration-300 ${wide ? 'max-w-lg' : 'max-w-sm'}`}>
+    <div className={`relative w-full transition-[max-width] duration-300 ${wide ? 'max-w-lg' : 'max-w-md'}`}>
       {/* Mobile brand */}
       <div className={`text-center lg:hidden ${wide ? 'mb-5' : 'mb-8'}`}>
         <Link href="/" className="inline-flex">
@@ -112,8 +112,8 @@ export function AuthCard({
       </div>
 
       <div
-        className={`rounded-2xl border border-[#E7DFF5] ${wide ? 'p-5 sm:p-8' : 'p-8'}`}
-        style={{ background: '#FFFFFF', boxShadow: '0 24px 60px rgba(127,64,232,0.1)' }}
+        className={`rounded-2xl border border-[#EDE6F8] bg-white ${wide ? 'p-5 sm:p-8' : 'px-8 py-10 sm:px-9'}`}
+        style={{ boxShadow: '0 20px 50px rgba(110,60,200,0.08)' }}
       >
         <AnimatePresence mode="wait" initial={false}>
           {phase === 'profile' && user ? (
@@ -132,19 +132,19 @@ export function AuthCard({
             </m.div>
           ) : phase === 'signin' ? (
             <m.div key="signin" {...fade}>
-              <div className="flex flex-col items-center gap-2 text-center mb-6">
-                <Image src={logo} alt="PurpleCallio" width={176} height={42} className="mb-2 h-auto w-40 object-contain" />
-                <h2 className="text-lg font-bold text-[#170B2E]">{title}</h2>
-                <p className="text-sm text-[#3D3650]">{subtitle}</p>
+              <div className="mb-8 flex flex-col items-center text-center">
+                <Image src={logo} alt="PurpleCallio" width={176} height={42} className="mb-6 h-auto w-48 object-contain" />
+                <h2 className="text-[28px] font-bold tracking-tight text-[#170B2E]">{title}</h2>
+                <p className="mt-2 text-sm text-[#6B6478]">{subtitle}</p>
               </div>
 
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-5">
                 <GoogleSignInButton />
 
                 <div className="flex items-center gap-3 my-1">
-                  <div className="flex-1" style={{ height: '1px', background: '#E7DFF5' }} />
-                  <span className="text-xs text-[#3D3650] uppercase tracking-widest">or</span>
-                  <div className="flex-1" style={{ height: '1px', background: '#E7DFF5' }} />
+                  <div className="h-px flex-1 bg-[#ECE6F6]" />
+                  <span className="text-xs uppercase tracking-widest text-[#9C95A8]">or</span>
+                  <div className="h-px flex-1 bg-[#ECE6F6]" />
                 </div>
 
                 {footer}

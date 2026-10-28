@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Info } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import {
   BILLING_INTERVALS,
   createPlan,
@@ -24,11 +24,11 @@ import {
 } from '../../../lib/admin-billing';
 import type { BillingInterval, PlanCtaAction, PlanStatus, PlanType } from '../../../lib/billing';
 import { formatCredits, formatDate, formatMoney, intervalLabel } from '../../../lib/billing';
-import { Button } from '../../../components/ui/Button';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
+import { buttonCls, Pill } from '../../../dashboard/_ui';
 import { FeatureChecklist } from './PlanFields';
 import { useCanWrite } from '../../../lib/admin-access';
-import { Checkbox, ErrorText, Field, inputCls, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler } from './ui';
+import { Button, Checkbox, ErrorText, Field, inputCls, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler } from './ui';
 
 export const VERSIONING_NOTE =
   'Changing price, credits, media caps or features creates a new version. Existing subscribers keep the terms they purchased.';
@@ -238,34 +238,31 @@ export function PlanEditor({ planId }: { planId: string | null }) {
   const isCustomInterval = form.billingInterval === 'CUSTOM';
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+    <form onSubmit={submit} className="flex flex-col gap-8" noValidate>
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
       <div>
-        <Link href="/admin/billing?tab=plans" className="inline-flex items-center gap-1 text-sm text-[#3D3650] hover:text-[#170B2E] mb-3">
+        <Link href="/admin/billing?tab=plans" className="mb-4 inline-flex items-center gap-1 text-[13px] text-[#6B6478] hover:text-[#170B2E]">
           <ArrowLeft size={14} /> Back to plans
         </Link>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold text-[#170B2E]">{planId ? `Edit plan — ${plan?.name}` : 'New plan'}</h1>
+          <h1 className="text-[22px] font-semibold tracking-tight text-[#170B2E]">{planId ? `Edit plan — ${plan?.name}` : 'New plan'}</h1>
           {plan && <StatusBadge status={plan.status} />}
-          {plan?.version && <span className="text-xs text-[#3D3650]">Current version v{plan.version.version}</span>}
+          {plan?.version && <span className="text-[13px] text-[#6B6478]">Current version v{plan.version.version}</span>}
         </div>
         {plan && (
-          <p className="text-sm text-[#3D3650] mt-1">
+          <p className="mt-1 text-sm text-[#6B6478]">
             {plan.activeSubscribers} active subscriber{plan.activeSubscribers === 1 ? '' : 's'}
             {plan.assignedUser && <> · Private plan for {plan.assignedUser.email}</>}
           </p>
         )}
       </div>
 
-      <div className="flex gap-2 items-start rounded-xl border border-[#D6C4EE] bg-[#F8F4FD] p-4 text-sm text-[#3D3650]">
-        <Info size={16} className="text-[#6425C4] shrink-0 mt-0.5" />
-        <p>{VERSIONING_NOTE}</p>
-      </div>
+      <p className="rounded-lg bg-[#F1EBFC] px-4 py-3 text-sm text-[#4C1D95]">{VERSIONING_NOTE}</p>
       {plan?.status === 'ARCHIVED' && (
         <p className="text-sm text-amber-700">This plan is archived. Set its status to Active or Inactive to restore and edit it.</p>
       )}
 
-      <fieldset disabled={!canWrite} className="flex flex-col gap-6 min-w-0">
+      <fieldset disabled={!canWrite} className="flex min-w-0 flex-col gap-8">
       <Panel title="General">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Name">
@@ -280,7 +277,7 @@ export function PlanEditor({ planId }: { planId: string | null }) {
           </Field>
           <Field label="Slug" hint="Lowercase letters, numbers and dashes. Used in URLs.">
             <input
-              className={`${inputCls} font-mono`}
+              className={inputCls}
               value={form.slug}
               onChange={(e) => {
                 setSlugTouched(true);
@@ -354,7 +351,7 @@ export function PlanEditor({ planId }: { planId: string | null }) {
           <Field label="Total included credits" className="sm:col-span-3 sm:max-w-xs">
             <input type="number" min={0} className={inputCls} value={form.includedCredits} onChange={(e) => set('includedCredits', e.target.value)} />
           </Field>
-          <p className="sm:col-span-3 text-xs text-[#3D3650]">
+          <p className="sm:col-span-3 text-xs text-[#6B6478]">
             Optional per-media caps within the total. Leave blank for no cap — all media types then share the total.
           </p>
           <Field label="Audio cap">
@@ -375,11 +372,11 @@ export function PlanEditor({ planId }: { planId: string | null }) {
       </fieldset>
 
       {canWrite && (
-      <div className="flex flex-wrap items-center gap-3 sticky bottom-0 bg-white/90 backdrop-blur py-3 border-t border-[#E7DFF5]">
+      <div className="sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-[#ECE8F2] bg-white py-3">
         <Button type="submit" loading={saving}>
           {planId ? 'Save plan' : 'Create plan'}
         </Button>
-        <Link href="/admin/billing?tab=plans" className="text-sm text-[#3D3650] hover:text-[#170B2E]">
+        <Link href="/admin/billing?tab=plans" className={buttonCls('secondary')}>
           Cancel
         </Link>
         <ErrorText>{error}</ErrorText>
@@ -387,13 +384,17 @@ export function PlanEditor({ planId }: { planId: string | null }) {
       )}
 
       {plan && plan.versions.length > 0 && (
-        <Panel title="Version history" subtitle="Versions are immutable. Subscribers stay on the version they purchased.">
+        <Panel title="Version history" subtitle="Versions are immutable. Subscribers stay on the version they purchased." flush>
           <Table headers={['Version', 'Price', 'Credits', 'Features', 'Created']}>
             {plan.versions.map((v) => (
               <tr key={v.id} className={rowCls}>
                 <td className={tdCls}>
                   v{v.version}
-                  {plan.version?.id === v.id && <span className="ml-2 text-[10px] text-emerald-700">current</span>}
+                  {plan.version?.id === v.id && (
+                    <span className="ml-2">
+                      <Pill tone="success">Current</Pill>
+                    </span>
+                  )}
                 </td>
                 <td className={tdCls}>{formatMoney(v.pricePaise, v.currency)} / {intervalLabel(v)}</td>
                 <td className={tdCls}>{formatCredits(v.includedCredits)}</td>

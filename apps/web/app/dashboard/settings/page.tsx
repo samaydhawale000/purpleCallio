@@ -1,22 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  User,
-  Mail,
-  Shield,
-  Lock,
-  LogOut,
-  Check,
-  Phone,
-  Laptop,
-} from 'lucide-react';
 import { useAuthStore, toAuthUser } from '../../store/auth.store';
 import { useRequireAuth } from '../../hooks/useRequireAuth';
 import { api } from '../../lib/api';
-import { Button } from '../../components/ui/Button';
-import { Badge } from '../../components/ui/Badge';
 import {
   AboutFields,
   CompanyFields,
@@ -25,8 +13,8 @@ import {
   UsageFields,
   useProfileForm,
 } from '../../components/auth/profileForm';
-import { countryByCode } from '../../lib/onboarding';
 import type { AuthUser } from '../../store/auth.store';
+import { Loading, PageHeader, Panel, Section, buttonCls } from '../_ui';
 
 interface Me {
   userId: string;
@@ -77,115 +65,26 @@ export default function SettingsPage() {
     fetchMe();
   }, [isReady, token, fetchMe, router]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <svg className="animate-spin h-6 w-6 text-[#7F40E8]" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          <span className="text-sm text-[#3D3650]">Loading settings…</span>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <Loading label="Loading settings…" />;
 
-  const avatar = me?.avatarUrl || user?.avatarUrl || '';
-  const name = user?.name || me?.name || '';
+  const email = me?.email ?? user?.email ?? me?.userId;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-[#170B2E]">Settings</h1>
-        <p className="text-sm text-[#3D3650] mt-1">
-          Manage your account and preferences.
+    <>
+      <PageHeader title="Settings" description="Your account and company details." />
+
+      <Section title="Profile" className="max-w-3xl">
+        <Panel>
+          {user && <ProfileSettingsForm key={user.userId} user={user} onSaved={setUser} />}
+        </Panel>
+      </Section>
+
+      <Section title="Security" className="max-w-3xl">
+        <p id="security" className="text-sm text-[#6B6478]">
+          Signed in with Google as <span className="text-[#170B2E]">{email}</span>
         </p>
-      </div>
-
-      {/* ── Profile ── */}
-      <section id="profile" className="rounded-2xl border border-[#E7DFF5] p-6" style={{ background: '#FFFFFF' }}>
-        <div className="flex items-center gap-2 mb-1">
-          <User size={16} style={{ color: '#7F40E8' }} />
-          <p className="text-base font-semibold text-[#170B2E]">Profile</p>
-        </div>
-        <p className="text-sm text-[#3D3650] mb-6">Your account, company and usage details.</p>
-
-        <div className="flex flex-wrap items-center gap-4 mb-6">
-          {avatar ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={avatar}
-              alt="Profile"
-              className="w-16 h-16 rounded-2xl object-cover shrink-0"
-            />
-          ) : (
-            <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold text-white shrink-0"
-              style={{ background: 'linear-gradient(135deg, #7F40E8, #410686)' }}
-            >
-              {(name || 'U')[0].toUpperCase()}
-            </div>
-          )}
-<div>
-            <p className="text-sm font-medium text-[#170B2E]">{name || 'Your Account'}</p>
-            <p className="text-xs text-[#3D3650]">{me?.email ?? user?.email ?? me?.userId}</p>
-          </div>
-          <Badge variant="success" className="ml-auto">
-            <Mail size={12} /> Google Verified
-          </Badge>
-        </div>
-
-        {user && <ProfileSettingsForm key={user.userId} user={user} onSaved={setUser} />}
-      </section>
-
-      {/* ── Security ── */}
-      <section id="security" className="rounded-2xl border border-[#E7DFF5] p-6" style={{ background: '#FFFFFF' }}>
-        <div className="flex items-center gap-2 mb-1">
-          <Shield size={16} style={{ color: '#34D399' }} />
-          <p className="text-base font-semibold text-[#170B2E]">Security</p>
-        </div>
-        <p className="text-sm text-[#3D3650] mb-6">Authentication &amp; account security.</p>
-
-        <div className="divide-y divide-[#E7DFF5] rounded-xl border border-[#E7DFF5]">
-          <SettingRow
-            icon={Shield}
-            title="Google Account Connected"
-            desc="Signed in with Google OAuth"
-            right={<Badge variant="success">Connected</Badge>}
-          />
-          <SettingRow
-            icon={Lock}
-            title="Two-Factor Authentication"
-            desc="Will be available soon"
-            right={<Badge variant="default">Future</Badge>}
-          />
-        </div>
-
-        <p className="text-sm font-semibold text-[#170B2E] mt-6 mb-3">Recent Login Sessions</p>
-        <div className="divide-y divide-[#E7DFF5] rounded-xl border border-[#E7DFF5]">
-          <SessionRow
-            icon={Laptop}
-            device="Chrome · macOS"
-            location={countryByCode(user?.country)?.name ?? '—'}
-            time="Current session"
-            active
-          />
-          <SessionRow
-            icon={Phone}
-            device="Google App · Android"
-            location="New Delhi, India"
-            time="2 days ago"
-          />
-        </div>
-
-        <div className="flex flex-wrap gap-3 mt-6">
-          <Button variant="secondary">
-            <LogOut size={15} /> Sign Out of All Devices
-          </Button>
-        </div>
-      </section>
-    </div>
+      </Section>
+    </>
   );
 }
 
@@ -226,7 +125,7 @@ function ProfileSettingsForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      <fieldset disabled={saving} className="flex flex-col gap-6 min-w-0">
+      <fieldset disabled={saving} className="flex min-w-0 flex-col gap-8">
         <SettingsGroup title="Personal information">
           <AboutFields form={form} />
         </SettingsGroup>
@@ -239,87 +138,21 @@ function ProfileSettingsForm({
 
         <FormError message={error} />
 
-        <div className="flex items-center gap-3">
-          <Button type="submit" loading={saving}>
-            {saving ? 'Saving...' : saved ? <><Check size={15} /> Saved</> : 'Save changes'}
-          </Button>
+        <div>
+          <button type="submit" className={buttonCls('primary')} disabled={saving}>
+            {saving ? 'Saving...' : saved ? 'Saved' : 'Save changes'}
+          </button>
         </div>
       </fieldset>
     </form>
   );
 }
 
-function SettingsGroup({ title, children }: { title: string; children: React.ReactNode }) {
+function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-[11px] font-mono uppercase tracking-widest text-[#3D3650] border-b border-[#E7DFF5] pb-2">
-        {title}
-      </p>
+      <h3 className="text-[13px] font-medium text-[#6B6478]">{title}</h3>
       {children}
-    </div>
-  );
-}
-
-function SettingRow({
-  icon: Icon,
-  title,
-  desc,
-  right,
-}: {
-  icon: any;
-  title: string;
-  desc: string;
-  right: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3.5">
-      <div className="flex items-center gap-3">
-        <div
-          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-          style={{ background: 'rgba(127,64,232,0.1)', border: '1px solid rgba(127,64,232,0.2)' }}
-        >
-          <Icon size={16} style={{ color: '#7F40E8' }} />
-        </div>
-        <div>
-          <p className="text-sm font-medium text-[#170B2E]">{title}</p>
-          <p className="text-xs text-[#3D3650] mt-0.5">{desc}</p>
-        </div>
-      </div>
-      {right}
-    </div>
-  );
-}
-
-function SessionRow({
-  icon: Icon,
-  device,
-  location,
-  time,
-  active,
-}: {
-  icon: any;
-  device: string;
-  location: string;
-  time: string;
-  active?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3.5">
-      <div className="flex items-center gap-3">
-        <div
-          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-          style={{ background: active ? 'rgba(16,185,129,0.1)' : 'rgba(127,64,232,0.1)', border: `1px solid ${active ? 'rgba(16,185,129,0.2)' : 'rgba(127,64,232,0.2)'}` }}
-        >
-          <Icon size={16} style={{ color: active ? '#34D399' : '#7F40E8' }} />
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium text-[#170B2E]">{device}</p>
-            {active && <Badge variant="success">Active</Badge>}
-          </div>
-          <p className="text-xs text-[#3D3650] mt-0.5">{location} · {time}</p>
-        </div>
-      </div>
     </div>
   );
 }

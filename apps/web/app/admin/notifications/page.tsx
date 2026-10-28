@@ -3,5 +3,10 @@
 import { NotificationsPanel } from '../../components/notifications/NotificationsPanel';
 
 export default function AdminNotificationsPage() {
-  return <NotificationsPanel area="ADMIN" />;
+  // The panel brings its own title and tabs (shared with /dashboard).
+  return (
+    <div className="max-w-4xl">
+      <NotificationsPanel area="ADMIN" />
+    </div>
+  );
 }

@@ -2,6 +2,7 @@
 
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { PageHeader } from '../../dashboard/_ui';
 import { Spinner } from './_components/ui';
 import { OverviewTab } from './_components/OverviewTab';
 import { PlansTab } from './_components/PlansTab';
@@ -35,35 +36,30 @@ function BillingConsole() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-[#170B2E]">Prepaid Billing</h1>
-        <p className="text-sm text-[#3D3650] mt-1">
-          Published credit prices, credit usage rates, payments and billing settings. Historical billing records are retained read-only for audit purposes. Pricing changes are audit-logged.
-        </p>
-      </div>
+    <div>
+      <PageHeader
+        title="Prepaid Billing"
+        description="Published credit prices, credit usage rates, payments and billing settings. Historical billing records are retained read-only for audit purposes. Pricing changes are audit-logged."
+      />
 
-      <div className="border-b border-[#E7DFF5] -mx-1 overflow-x-auto">
-        <div role="tablist" className="flex gap-1 px-1 min-w-max">
-          {BILLING_TABS.map((t) => {
-            const active = t.key === tab;
-            return (
-              <button
-                key={t.key}
-                role="tab"
-                aria-selected={active}
-                onClick={() => select(t.key)}
-                className={`px-3 py-2.5 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${
-                  active
-                    ? 'border-[#7F40E8] text-[#170B2E] font-medium'
-                    : 'border-transparent text-[#3D3650] hover:text-[#170B2E]'
-                }`}
-              >
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+      <div role="tablist" className="mb-8 flex gap-6 overflow-x-auto border-b border-[#ECE8F2]">
+        {BILLING_TABS.map((t) => {
+          const active = t.key === tab;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => select(t.key)}
+              className={`-mb-px whitespace-nowrap border-b-2 pb-2.5 text-sm transition-colors ${
+                active ? 'border-[#7F40E8] font-medium text-[#170B2E]' : 'border-transparent text-[#6B6478] hover:text-[#170B2E]'
+              }`}
+            >
+              {t.label}
+            </button>
+          );
+        })}
       </div>
 
       <div role="tabpanel">

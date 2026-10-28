@@ -24,7 +24,11 @@ import {
    type ConnectivityFailureReason,
    type MediaPath,
 } from "../webrtc/connectivity";
-import { TranslationClient } from "../translation/translation-client";
+import {
+   TranslationClient,
+   translationError,
+} from "../translation/translation-client";
+import type { TranslationSwitchChange } from "../translation/types";
 
 /** Poll interval for path classification and media-flow checks. */
 const STATS_POLL_MS = 1_000;
@@ -159,7 +163,8 @@ export class PurpleCallioMeeting {
          return Promise.resolve();
       }
       this.connection.set("leaving");
-      this.translationClient?.disable();
+      // Hanging up leaves translation for you only, not the call's switch.
+      this.translationClient?.disable({ share: false });
       this.screenShareCtrl.stop();
       this.cleanupMedia();
       this.transport?.emit("leave-call", { callId: this.config.callId });
@@ -176,8 +181,12 @@ export class PurpleCallioMeeting {
    /**
     * Live Translate for this call: `meeting.translation.enable({ speak,
     * hear, mode, originalVolume })`. Uses this call's session token, the
-    * call's own microphone and ducks every element registered with
-    * `registerAudioElement()`. Created on first access; disabled on leave().
+    * call's own microphone and holds down every element registered with
+    * `registerAudioElement()` while the other side is translated for you.
+    * One switch per call: `enable()` / `disable()` turn it on or off for
+    * both participants, and this client follows the other side's switch
+    * (unless `followTranslation: false`). Created on first access; disabled
+    * on leave().
     */
    get translation(): TranslationClient {
       if (!this.translationClient) {
@@ -185,10 +194,53 @@ export class PurpleCallioMeeting {
             serverUrl: this.config.signalUrl,
             token: this.config.token,
             stream: () => this.localStream,
-            remoteAudio: () => this.audioElements,
+            remoteAudio: this.remoteAudioTarget,
+            shareSwitch: (change) => this.shareTranslationSwitch(change),
          });
       }
       return this.translationClient;
+   }
+
+   private readonly remoteAudioTarget = () => this.audioElements;
+
+   /** PATCH /calls/:id/translation: the call-wide switch both sides follow. */
+   private async shareTranslationSwitch(
+      change: TranslationSwitchChange,
+   ): Promise<void> {
+      const role =
+         this.participantRole ??
+         (this.translationClient?.getState().role === "receiver"
+            ? "RECEIVER"
+            : "CALLER");
+      const [own, peer] =
+         role === "RECEIVER"
+            ? (["receiverLanguage", "callerLanguage"] as const)
+            : (["callerLanguage", "receiverLanguage"] as const);
+      const body: Record<string, string> = { mode: change.mode };
+      if (change.speak) body[own] = change.speak;
+      if (change.peerLanguage) body[peer] = change.peerLanguage;
+      const res = await this.apiFetch(
+         `/calls/${encodeURIComponent(this.config.callId)}/translation`,
+         {
+            method: "PATCH",
+            headers: {
+               "Content-Type": "application/json",
+               Authorization: `Bearer ${this.config.token}`,
+            },
+            body: JSON.stringify(body),
+         },
+      );
+      if (res.ok) return;
+      const err = (await res.json().catch(() => ({}))) as {
+         code?: unknown;
+         message?: unknown;
+      };
+      throw translationError(
+         typeof err.code === "string" ? err.code : "TRANSLATION_SWITCH_FAILED",
+         typeof err.message === "string"
+            ? err.message
+            : "Could not change translation for the call",
+      );
    }
 
    camera = {
@@ -278,6 +330,8 @@ export class PurpleCallioMeeting {
 
    registerAudioElement(element: HTMLMediaElement): () => void {
       this.audioElements.add(element);
+      // Hold it down too if the other side is already being translated.
+      this.translationClient?.setRemoteAudio(this.remoteAudioTarget);
       const setter = (
          element as HTMLMediaElement & {
             setSinkId?: (id: string) => Promise<void>;
@@ -1037,6 +1091,13 @@ export class PurpleCallioMeeting {
             this.transport?.disconnect();
             this.transport = null;
             this.connection.set("disconnected");
+         }),
+      );
+      offs.push(
+         raw("translation.changed", (p) => {
+            this.emit("translation.changed", p);
+            if (this.config.followTranslation !== false)
+               this.translation.followCall(p.mode);
          }),
       );
       offs.push(

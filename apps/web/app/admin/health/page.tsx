@@ -1,18 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../../lib/api';
 import {
-  Bell,
-  CircleAlert,
-  CircleCheck,
-  Database,
-  RefreshCw,
-  Server,
-  PhoneCall,
-  Radio,
-  Router,
-} from 'lucide-react';
+  DetailList,
+  ErrorNote,
+  Loading,
+  PageHeader,
+  Panel,
+  Pill,
+  Section,
+  Stat,
+  Table,
+  fmtNumber,
+} from '../../dashboard/_ui';
 
 type HealthData = {
   node: { status: string; uptime: number };
@@ -129,314 +130,267 @@ export default function AdminHealthPage() {
     return () => clearInterval(id);
   }, []);
 
+  const header = (
+    <PageHeader title="System health" description={`Live infrastructure status · refreshes every ${POLL_MS / 1000}s`} />
+  );
+
   if (loading) {
-    return <div className="text-[#3D3650] text-sm py-20 text-center">Loading health…</div>;
+    return (
+      <>
+        {header}
+        <Loading label="Loading health…" />
+      </>
+    );
   }
 
   if (error || !health) {
     return (
-      <div className="py-20 text-center">
-        <p className="text-red-600 text-sm">{error}</p>
-      </div>
+      <>
+        {header}
+        <ErrorNote message={error || 'Failed to load'} />
+      </>
     );
   }
 
-  const components = [
-    { name: 'Node Server', status: health.node.status, icon: CircleCheck },
-    { name: 'Database', status: health.database.status, icon: Database },
+  const m = monitoring;
+
+  const services: { name: string; status: string; ok: boolean; detail: ReactNode }[] = [
+    { name: 'Node server', status: health.node.status, ok: health.node.status === 'healthy', detail: '—' },
+    { name: 'Database', status: health.database.status, ok: health.database.status === 'healthy', detail: '—' },
     {
-      name: 'TURN Server',
+      name: 'TURN server',
       status: health.turn.status,
-      icon: RefreshCw,
+      ok: health.turn.status === 'healthy',
       detail: health.turn.configured
         ? `Credential generation: ${health.turn.credentialGeneration}`
         : 'Not configured',
     },
   ];
-
-  const m = monitoring;
+  if (m) {
+    services.push({
+      name: 'OCI Monitoring',
+      status: m.server.oci.connected ? 'connected' : 'unavailable',
+      ok: m.server.oci.connected,
+      detail: m.server.oci.error ?? '—',
+    });
+  }
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-[#170B2E]">System Health</h1>
-        <p className="text-[#3D3650] text-sm mt-1">
-          Live infrastructure status · refreshes every {POLL_MS / 1000}s
-        </p>
-      </header>
+    <>
+      {header}
 
-      {/* Active Calls is the single most important operational number —
-          full width, front and center, above everything else. */}
-      {m && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <HeroStat icon={PhoneCall} label="Active Calls" value={String(m.calls.active)} />
-          <HeroStat icon={Radio} label="Concurrent Users" value={String(m.calls.concurrentUsers)} />
-        </div>
-      )}
+      {/* Active calls is the single most important operational number, so
+          the live counters lead the page. */}
+      <Section>
+        <Panel>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-3 lg:grid-cols-5">
+            {m && <Stat label="Active calls" value={fmtNumber(m.calls.active)} />}
+            {m && <Stat label="Concurrent users" value={fmtNumber(m.calls.concurrentUsers)} />}
+            <Stat label="WebSocket clients" value={fmtNumber(health.websocket.clients)} />
+            <Stat label="Active call rooms" value={fmtNumber(health.websocket.rooms ?? 0)} />
+            {/* The NestJS process's own heap, distinct from host RAM below. */}
+            <Stat label="Node heap memory" value={`${health.memory.usage} / ${health.memory.total}`} unit="MB" />
+          </div>
+        </Panel>
+      </Section>
 
-      {/* Four monitoring cards: Infrastructure / Calls / WebRTC / TURN.
-          Every row is either a real measured/calculated number, or an
+      <Section title="Alerts">
+        {alerts.length === 0 ? (
+          <Panel>
+            <p className="text-sm text-emerald-700">All systems operational. No active alerts.</p>
+          </Panel>
+        ) : (
+          <Table
+            rows={alerts}
+            rowKey={(a) => a.id}
+            columns={[
+              {
+                key: 'severity',
+                label: 'Severity',
+                render: (a) => (
+                  <Pill tone={/crit|high|error/i.test(a.severity) ? 'danger' : 'warning'}>{a.severity}</Pill>
+                ),
+              },
+              { key: 'type', label: 'Type', className: 'text-[#6B6478]', render: (a) => a.type },
+              { key: 'message', label: 'Message', className: 'whitespace-normal', render: (a) => a.message },
+            ]}
+          />
+        )}
+      </Section>
+
+      <Section title="Services">
+        <Table
+          rows={services}
+          rowKey={(s) => s.name}
+          columns={[
+            { key: 'name', label: 'Service', className: 'font-medium', render: (s) => s.name },
+            { key: 'status', label: 'Status', render: (s) => <Pill tone={s.ok ? 'success' : 'danger'}>{s.status}</Pill> },
+            { key: 'detail', label: 'Detail', className: 'whitespace-normal text-[#6B6478]', render: (s) => s.detail },
+          ]}
+        />
+      </Section>
+
+      {/* Every row is either a real measured/calculated number, or an
           explicit "Not available" — never a fabricated 0. See
           admin.service.ts getMonitoring() for what backs each one. */}
       {m && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <StatCard icon={Server} title="Server">
-            <div className="flex items-center justify-between text-sm mb-1">
-              <span className="text-[#3D3650]">OCI Monitoring</span>
-              <span
-                className={`inline-flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 rounded-full border ${
-                  m.server.oci.connected
-                    ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30'
-                    : 'bg-slate-500/10 text-[#3D3650] border-slate-600/40'
-                }`}
-                title={m.server.oci.error ?? undefined}
-              >
-                {m.server.oci.connected ? 'connected' : 'unavailable'}
-              </span>
-            </div>
-            <StatRow
-              label="CPU"
-              na={!m.server.cpu.available}
-              value={fmtPct(m.server.cpu.value)}
-              suffix={m.server.cpu.capacity ? ` / ${m.server.cpu.capacity.limit}% safe limit` : undefined}
-              note={!m.server.cpu.available ? m.server.cpu.source.toUpperCase() + ' monitoring not connected' : undefined}
-            />
-            <StatRow
-              label="Memory"
-              na={!m.server.memory.available}
-              value={
-                m.server.memory.capacity && m.server.memory.value != null
-                  ? `${fmtGB((m.server.memory.value / 100) * m.server.memory.capacity.limit)} / ${m.server.memory.capacity.limit} GB`
-                  : fmtPct(m.server.memory.value)
-              }
-              note={!m.server.memory.available ? m.server.memory.source.toUpperCase() + ' monitoring not connected' : undefined}
-            />
-            <StatRow
-              label="Network RX"
-              na={!m.server.network.available}
-              value={fmtMbps(m.server.network.rxMbps)}
-              suffix={m.server.network.capacityMbps ? ` / ${m.server.network.capacityMbps} Mbps` : undefined}
-            />
-            <StatRow
-              label="Network TX"
-              na={!m.server.network.available}
-              value={fmtMbps(m.server.network.txMbps)}
-              suffix={m.server.network.capacityMbps ? ` / ${m.server.network.capacityMbps} Mbps` : undefined}
-            />
-            <StatRow label="Disk read" na={!m.server.disk.available} value={fmtMBps(m.server.disk.readMBps)} />
-            <StatRow label="Disk write" na={!m.server.disk.available} value={fmtMBps(m.server.disk.writeMBps)} />
-            <StatRow
-              label="Disk storage"
-              na
-              value=""
-              note="not exposed by oci_computeagent (needs the oci_blockstore namespace)"
-            />
-            <StatRow label="Uptime" na={!m.server.uptime.available} value={formatUptime(m.server.uptime.value)} />
-          </StatCard>
+        <div className="grid gap-x-6 lg:grid-cols-2">
+          <Section title="Server">
+            <Panel>
+              <DetailList
+                items={[
+                  {
+                    label: 'CPU',
+                    value: metric(m.server.cpu.available, fmtPct(m.server.cpu.value), {
+                      suffix: m.server.cpu.capacity ? ` / ${m.server.cpu.capacity.limit}% safe limit` : undefined,
+                      note: !m.server.cpu.available ? m.server.cpu.source.toUpperCase() + ' monitoring not connected' : undefined,
+                    }),
+                  },
+                  {
+                    label: 'Memory',
+                    value: metric(
+                      m.server.memory.available,
+                      m.server.memory.capacity && m.server.memory.value != null
+                        ? `${fmtGB((m.server.memory.value / 100) * m.server.memory.capacity.limit)} / ${m.server.memory.capacity.limit} GB`
+                        : fmtPct(m.server.memory.value),
+                      {
+                        note: !m.server.memory.available
+                          ? m.server.memory.source.toUpperCase() + ' monitoring not connected'
+                          : undefined,
+                      },
+                    ),
+                  },
+                  {
+                    label: 'Network RX',
+                    value: metric(m.server.network.available, fmtMbps(m.server.network.rxMbps), {
+                      suffix: m.server.network.capacityMbps ? ` / ${m.server.network.capacityMbps} Mbps` : undefined,
+                    }),
+                  },
+                  {
+                    label: 'Network TX',
+                    value: metric(m.server.network.available, fmtMbps(m.server.network.txMbps), {
+                      suffix: m.server.network.capacityMbps ? ` / ${m.server.network.capacityMbps} Mbps` : undefined,
+                    }),
+                  },
+                  { label: 'Disk read', value: metric(m.server.disk.available, fmtMBps(m.server.disk.readMBps)) },
+                  { label: 'Disk write', value: metric(m.server.disk.available, fmtMBps(m.server.disk.writeMBps)) },
+                  {
+                    label: 'Disk storage',
+                    value: metric(false, '', {
+                      note: 'not exposed by oci_computeagent (needs the oci_blockstore namespace)',
+                    }),
+                  },
+                  { label: 'Uptime', value: metric(m.server.uptime.available, formatUptime(m.server.uptime.value)) },
+                ]}
+              />
+            </Panel>
+          </Section>
 
-          <StatCard icon={PhoneCall} title="Calls">
-            <StatRow label="Active calls" value={String(m.calls.active)} />
-            <StatRow label="Calls today" value={m.calls.today.toLocaleString()} />
-            <StatRow label="Calls this month" value={m.calls.month.toLocaleString()} />
-            <StatRow label="Call minutes (month)" value={m.calls.minutesMonth.toLocaleString()} />
-            <StatRow label="Avg duration" value={formatDuration(m.calls.avgDurationSeconds)} />
-          </StatCard>
+          <Section title="Calls">
+            <Panel>
+              <DetailList
+                items={[
+                  { label: 'Calls today', value: m.calls.today.toLocaleString() },
+                  { label: 'Calls this month', value: m.calls.month.toLocaleString() },
+                  { label: 'Call minutes (month)', value: m.calls.minutesMonth.toLocaleString() },
+                  { label: 'Avg duration', value: formatDuration(m.calls.avgDurationSeconds) },
+                ]}
+              />
+            </Panel>
+          </Section>
 
-          <StatCard icon={Router} title="WebRTC">
-            <StatRow label="P2P calls" na={m.webrtc.p2pPercent == null} value={String(m.webrtc.p2pCalls)} />
-            <StatRow label="TURN calls" na={m.webrtc.p2pPercent == null} value={String(m.webrtc.turnCalls)} />
-            <StatRow label="P2P %" na={m.webrtc.p2pPercent == null} value={fmtPct(m.webrtc.p2pPercent)} />
-            <StatRow label="TURN %" na={m.webrtc.turnPercent == null} value={fmtPct(m.webrtc.turnPercent)} />
-            <StatRow
-              label="ICE success"
-              na={m.webrtc.iceSuccessRate == null}
-              value={fmtPct(m.webrtc.iceSuccessRate)}
-            />
-            <StatRow
-              label="ICE failures"
-              na={m.webrtc.iceFailureRate == null}
-              value={fmtPct(m.webrtc.iceFailureRate)}
-            />
-            <StatRow
-              label="Path unconfirmed"
-              na={m.webrtc.unknownCalls == null}
-              value={String(m.webrtc.unknownCalls ?? '')}
-              note="Only one side reported; not counted as P2P or TURN"
-            />
-            <StatRow
-              label="Setup p50 / p95"
-              na={m.webrtc.setupMsP50 == null}
-              value={`${fmtMs(m.webrtc.setupMsP50)} / ${fmtMs(m.webrtc.setupMsP95)}`}
-            />
-            <StatRow
-              label="Media verified"
-              na={m.webrtc.mediaVerifiedPercent == null}
-              value={fmtPct(m.webrtc.mediaVerifiedPercent ?? null)}
-            />
-            <StatRow
-              label="ICE restarts → recovered"
-              na={!m.webrtc.iceRestartCalls}
-              value={`${m.webrtc.iceRestartCalls ?? 0} calls · ${fmtPct(m.webrtc.iceRestartRecoveryRate ?? null)}`}
-            />
-            {m.webrtc.failureReasons &&
-              Object.keys(m.webrtc.failureReasons).length > 0 && (
-                <StatRow
-                  label="Failure reasons"
-                  value={Object.entries(m.webrtc.failureReasons)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([reason, count]) => `${reason} ${count}`)
-                    .join(' · ')}
-                />
+          <Section title="WebRTC">
+            <Panel>
+              <DetailList
+                items={[
+                  { label: 'P2P calls', value: metric(m.webrtc.p2pPercent != null, String(m.webrtc.p2pCalls)) },
+                  { label: 'TURN calls', value: metric(m.webrtc.p2pPercent != null, String(m.webrtc.turnCalls)) },
+                  { label: 'P2P %', value: metric(m.webrtc.p2pPercent != null, fmtPct(m.webrtc.p2pPercent)) },
+                  { label: 'TURN %', value: metric(m.webrtc.turnPercent != null, fmtPct(m.webrtc.turnPercent)) },
+                  { label: 'ICE success', value: metric(m.webrtc.iceSuccessRate != null, fmtPct(m.webrtc.iceSuccessRate)) },
+                  { label: 'ICE failures', value: metric(m.webrtc.iceFailureRate != null, fmtPct(m.webrtc.iceFailureRate)) },
+                  {
+                    label: 'Path unconfirmed',
+                    value: metric(m.webrtc.unknownCalls != null, String(m.webrtc.unknownCalls ?? ''), {
+                      note: 'Only one side reported; not counted as P2P or TURN',
+                    }),
+                  },
+                  {
+                    label: 'Setup p50 / p95',
+                    value: metric(m.webrtc.setupMsP50 != null, `${fmtMs(m.webrtc.setupMsP50)} / ${fmtMs(m.webrtc.setupMsP95)}`),
+                  },
+                  {
+                    label: 'Media verified',
+                    value: metric(m.webrtc.mediaVerifiedPercent != null, fmtPct(m.webrtc.mediaVerifiedPercent ?? null)),
+                  },
+                  {
+                    label: 'ICE restarts → recovered',
+                    value: metric(
+                      !!m.webrtc.iceRestartCalls,
+                      `${m.webrtc.iceRestartCalls ?? 0} calls · ${fmtPct(m.webrtc.iceRestartRecoveryRate ?? null)}`,
+                    ),
+                  },
+                  ...(m.webrtc.failureReasons && Object.keys(m.webrtc.failureReasons).length > 0
+                    ? [
+                        {
+                          label: 'Failure reasons',
+                          value: Object.entries(m.webrtc.failureReasons)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([reason, count]) => `${reason} ${count}`)
+                            .join(' · '),
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+              {!m.webrtc.available && (
+                <p className="mt-2 text-xs text-[#6B6478]">
+                  No calls have reported a transport or ICE outcome yet this month.
+                </p>
               )}
-            {!m.webrtc.available && (
-              <p className="text-[11px] text-[#3D3650] mt-1">
-                No calls have reported a transport or ICE outcome yet this month.
-              </p>
-            )}
-          </StatCard>
+            </Panel>
+          </Section>
 
-          <StatCard icon={RefreshCw} title="TURN">
-            <StatRow label="Active sessions" na={!m.turn.available} value={String(m.turn.activeSessions ?? '')} />
-            <StatRow label="Bandwidth" na={!m.turn.available} value={fmtMbps(m.turn.bandwidthMbps)} />
-            <StatRow label="Bytes received" na={!m.turn.available} value={fmtBytes(m.turn.bytesReceived)} />
-            <StatRow label="Bytes sent" na={!m.turn.available} value={fmtBytes(m.turn.bytesSent)} />
-            {!m.turn.available && (
-              <p className="text-[11px] text-[#3D3650] mt-1">
-                {m.turn.configured
-                  ? "coturn's REST admin/stats API isn't enabled yet."
-                  : 'TURN is not configured.'}
-              </p>
-            )}
-          </StatCard>
+          <Section title="TURN">
+            <Panel>
+              <DetailList
+                items={[
+                  { label: 'Active sessions', value: metric(m.turn.available, String(m.turn.activeSessions ?? '')) },
+                  { label: 'Bandwidth', value: metric(m.turn.available, fmtMbps(m.turn.bandwidthMbps)) },
+                  { label: 'Bytes received', value: metric(m.turn.available, fmtBytes(m.turn.bytesReceived)) },
+                  { label: 'Bytes sent', value: metric(m.turn.available, fmtBytes(m.turn.bytesSent)) },
+                ]}
+              />
+              {!m.turn.available && (
+                <p className="mt-2 text-xs text-[#6B6478]">
+                  {m.turn.configured
+                    ? "coturn's REST admin/stats API isn't enabled yet."
+                    : 'TURN is not configured.'}
+                </p>
+              )}
+            </Panel>
+          </Section>
         </div>
       )}
-
-      {/* Alerts */}
-      <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-        <p className="flex items-center gap-2 text-sm font-semibold text-[#170B2E] mb-3"><Bell size={16} /> Alerts</p>
-        {alerts.length === 0 ? (
-          <p className="text-sm text-emerald-700">All systems operational. No active alerts.</p>
-        ) : (
-          <div className="space-y-2">
-            {alerts.map((a) => (
-              <div key={a.id} className="flex items-center gap-2 text-sm text-amber-700">
-                <CircleAlert size={16} />
-                <span>{a.message}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Components */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {components.map((c) => (
-          <div key={c.name} className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-            <div className="mb-2 text-[#6425C4]"><c.icon size={22} /></div>
-            <p className="text-[#170B2E] font-medium">{c.name}</p>
-            <span
-              className={`inline-block mt-2 px-2.5 py-0.5 rounded-full text-[11px] font-mono border ${
-                c.status === 'healthy'
-                  ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30'
-                  : 'bg-red-500/10 text-red-600 border-red-500/30'
-              }`}
-            >
-              {c.status}
-            </span>
-            {c.detail && <p className="text-[11px] text-[#3D3650] mt-1.5">{c.detail}</p>}
-          </div>
-        ))}
-      </div>
-
-      {/* Node-process metrics not folded into the cards above — this is the
-          NestJS process's own heap, distinct from (not-yet-available) host
-          RAM in the Server card. */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <MetricCard label="Node Heap Memory" value={`${health.memory.usage} / ${health.memory.total} MB`} />
-        <MetricCard label="WebSocket Clients" value={String(health.websocket.clients)} />
-        <MetricCard label="Active Call Rooms" value={String(health.websocket.rooms ?? 0)} />
-      </div>
-    </div>
+    </>
   );
 }
 
-function HeroStat({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ComponentType<{ size?: number }>;
-  label: string;
-  value: string;
-}) {
+/** A monitoring value, or an explicit "Not available" (never a fabricated 0). */
+function metric(available: boolean, value: string, opts: { suffix?: string; note?: string } = {}): ReactNode {
+  if (!available) {
+    return (
+      <span>
+        <span className="text-[#6B6478]">Not available</span>
+        {opts.note && <span className="block text-xs text-[#9C95A8]">{opts.note}</span>}
+      </span>
+    );
+  }
   return (
-    <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-      <div className="flex items-center gap-2 text-[#6425C4] mb-2">
-        <Icon size={18} />
-        <p className="text-xs text-[#3D3650] uppercase tracking-wide">{label}</p>
-      </div>
-      <p className="text-4xl font-bold text-[#170B2E]">{value}</p>
-    </div>
-  );
-}
-
-function StatCard({
-  icon: Icon,
-  title,
-  children,
-}: {
-  icon: React.ComponentType<{ size?: number }>;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-      <div className="flex items-center gap-2 text-[#6425C4] mb-4">
-        <Icon size={18} />
-        <p className="text-sm font-semibold text-[#170B2E]">{title}</p>
-      </div>
-      <div className="space-y-2.5">{children}</div>
-    </div>
-  );
-}
-
-function StatRow({
-  label,
-  value,
-  suffix,
-  na,
-  note,
-}: {
-  label: string;
-  value: string;
-  suffix?: string;
-  na?: boolean;
-  note?: string;
-}) {
-  return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-[#3D3650]">{label}</span>
-      {na ? (
-        <span className="text-right">
-          <span className="text-[#3D3650] font-mono text-xs">Not available</span>
-          {note && <span className="block text-[10px] text-slate-700">{note}</span>}
-        </span>
-      ) : (
-        <span className="text-[#170B2E] font-mono">
-          {value}
-          {suffix && <span className="text-[#3D3650]">{suffix}</span>}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-      <p className="text-xs text-[#3D3650]">{label}</p>
-      <p className="text-2xl font-bold text-[#170B2E] mt-1">{value}</p>
-    </div>
+    <span className="tabular-nums">
+      {value}
+      {opts.suffix && <span className="text-[#6B6478]">{opts.suffix}</span>}
+    </span>
   );
 }
 

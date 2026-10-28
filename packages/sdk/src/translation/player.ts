@@ -34,10 +34,13 @@ export class TranslatedAudioPlayer {
   private nextTime = 0;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private announced = false;
+  private blocked = false;
 
   constructor(
     private readonly ctx: AudioContext,
     private readonly onPlaying: PlayingListener,
+    /** The browser refused (true) or allowed (false) the hidden element to play. */
+    private readonly onBlocked: (blocked: boolean) => void = () => undefined,
   ) {
     const doc = typeof document !== 'undefined' ? document : null;
     if (doc && typeof ctx.createMediaStreamDestination === 'function') {
@@ -49,12 +52,32 @@ export class TranslatedAudioPlayer {
       el.style.display = 'none';
       el.srcObject = dest.stream;
       doc.body?.appendChild(el);
-      void el.play?.()?.catch?.(() => undefined);
       this.destination = dest;
       this.element = el;
       this.output = dest;
+      void this.resumeOutput();
     } else {
       this.output = ctx.destination;
+    }
+  }
+
+  get outputBlocked(): boolean {
+    return this.blocked;
+  }
+
+  /** (Re)starts the hidden element; succeeds from a user gesture if autoplay blocked it. */
+  async resumeOutput(): Promise<void> {
+    const el = this.element;
+    if (!el?.play) return;
+    let blocked = false;
+    try {
+      await el.play();
+    } catch (e) {
+      blocked = (e as { name?: string })?.name === 'NotAllowedError';
+    }
+    if (this.blocked !== blocked) {
+      this.blocked = blocked;
+      this.onBlocked(blocked);
     }
   }
 

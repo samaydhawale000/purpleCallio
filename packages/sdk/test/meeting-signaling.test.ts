@@ -550,6 +550,40 @@ describe('PurpleCallioMeeting signaling flow', () => {
     await vi.waitFor(() => expect(gateway.count('answer', 'RECEIVER')).toBe(1));
   });
 
+  it('follows the call translation switch and re-emits translation.changed', async () => {
+    await startGateway();
+    const caller = makeMeeting('caller-token');
+    await caller.join();
+    const follow = vi.spyOn(caller.translation, 'followCall').mockImplementation(() => undefined);
+    const changed = vi.fn();
+    caller.on('translation.changed', changed);
+
+    const state = { callId: CALL_ID, mode: 'voice', callerLanguage: 'en', receiverLanguage: 'hi' };
+    gateway.broadcast('translation.changed', state);
+    await vi.waitFor(() => expect(follow).toHaveBeenCalledWith('voice'));
+    expect(changed).toHaveBeenCalledWith(state);
+  });
+
+  it('followTranslation: false only re-emits translation.changed', async () => {
+    await startGateway();
+    const caller = new PurpleCallioMeeting({
+      token: 'caller-token',
+      callId: CALL_ID,
+      signalUrl: gateway.url,
+      iceServers: [],
+      overrideIceServers: true,
+      followTranslation: false,
+    });
+    meetings.push(caller);
+    await caller.join();
+    const follow = vi.spyOn(caller.translation, 'followCall');
+    const changed = vi.fn();
+    caller.on('translation.changed', changed);
+    gateway.broadcast('translation.changed', { callId: CALL_ID, mode: 'voice', callerLanguage: null, receiverLanguage: null });
+    await vi.waitFor(() => expect(changed).toHaveBeenCalled());
+    expect(follow).not.toHaveBeenCalled();
+  });
+
   it('rejects join() and ends in `error` when authentication fails', async () => {
     await startGateway();
     const meeting = makeMeeting('bad-token');
@@ -623,6 +657,30 @@ describe('PurpleCallioMeeting WebRTC telemetry', () => {
     vi.unstubAllGlobals();
     if (originalNavigator) Object.defineProperty(globalThis, 'navigator', originalNavigator);
     else Reflect.deleteProperty(globalThis, 'navigator');
+  });
+
+  it('shares the translation switch with PATCH /calls/:id/translation', async () => {
+    await setup({ apiUrl: 'https://api.example/api/' });
+    (meeting as any).participantRole = 'RECEIVER';
+    await (meeting as any).shareTranslationSwitch({ mode: 'voice', speak: 'hi', hear: 'hi', peerLanguage: 'en', peerPresent: false });
+    const [url, init] = fetchMock.mock.calls.at(-1)!;
+    expect(url).toBe('https://api.example/api/calls/call%2F1/translation');
+    expect(init.method).toBe('PATCH');
+    expect(init.headers.Authorization).toBe('Bearer session-token');
+    expect(JSON.parse(init.body)).toEqual({ mode: 'voice', receiverLanguage: 'hi', callerLanguage: 'en' });
+  });
+
+  it('turns a refused translation switch into a coded error', async () => {
+    await setup({ apiUrl: 'https://api.example/api' });
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 402,
+      json: async () => ({ code: 'TRANSLATION_INSUFFICIENT_CREDITS', message: 'Add credits' }),
+    });
+    await expect((meeting as any).shareTranslationSwitch({ mode: 'voice', peerPresent: true })).rejects.toMatchObject({
+      code: 'TRANSLATION_INSUFFICIENT_CREDITS',
+      message: 'Add credits',
+    });
   });
 
   it('reports P2P transport and ICE success once when ICE connects', async () => {

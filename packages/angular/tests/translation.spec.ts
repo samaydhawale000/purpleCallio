@@ -40,6 +40,10 @@ describe('PurpleCallioTranslationService', () => {
     expect(c.enable).toHaveBeenCalledWith({ speak: 'en', hear: 'mr' });
     svc.setOriginalVolume(0.1);
     expect(c.setOriginalVolume).toHaveBeenCalledWith(0.1);
+    await svc.resumeAudio();
+    expect(c.resumeAudio).toHaveBeenCalled();
+    svc.disable({ share: false });
+    expect(c.disable).toHaveBeenCalledWith({ share: false });
     svc.ngOnDestroy();
     expect(c.disable).toHaveBeenCalled();
     expect(c.listenerCount()).toBe(0);

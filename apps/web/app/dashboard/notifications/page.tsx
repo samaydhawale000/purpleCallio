@@ -6,5 +6,10 @@ import { NotificationsPanel } from '../../components/notifications/Notifications
 export default function NotificationsPage() {
   const { isAuthed } = useRequireAuth();
   if (!isAuthed) return null;
-  return <NotificationsPanel area="CUSTOMER" />;
+  // The panel brings its own title and tabs (shared with /admin).
+  return (
+    <div className="max-w-4xl">
+      <NotificationsPanel area="CUSTOMER" />
+    </div>
+  );
 }

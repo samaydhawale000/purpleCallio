@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '../../../store/auth.store';
 import { useRequireAuth } from '../../../hooks/useRequireAuth';
 import { api } from '../../../lib/api';
@@ -14,6 +14,18 @@ import { formatCredits } from '../../../lib/billing';
 import { formatMinutes } from '../../../lib/duration';
 import { CustomerBillingPanel } from '../../billing/_components/CustomerBillingPanel';
 import { useCanWrite } from '../../../lib/admin-access';
+import {
+  DetailList,
+  ErrorNote,
+  Loading,
+  PageHeader,
+  Panel,
+  Pill,
+  Section,
+  Stat,
+  buttonCls,
+  inputCls,
+} from '../../../dashboard/_ui';
 
 interface CustomerDetail {
   id: string;
@@ -141,224 +153,192 @@ export default function AdminCustomerDetailPage() {
     }
   };
 
+  const backLink = (
+    <Link
+      href="/admin/customers"
+      className="mb-4 inline-flex items-center gap-1 text-[13px] text-[#6B6478] hover:text-[#170B2E]"
+    >
+      <ArrowLeft size={14} /> Back to customers
+    </Link>
+  );
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="animate-spin h-6 w-6 text-[#7F40E8]" />
-      </div>
+      <>
+        {backLink}
+        <Loading label="Loading customer…" />
+      </>
     );
   }
 
   if (error || !customer) {
     return (
-      <div className="py-20 text-center">
-        <p className="text-red-600 text-sm">{error || 'Customer not found'}</p>
-      </div>
+      <>
+        {backLink}
+        <ErrorNote message={error || 'Customer not found'} />
+      </>
     );
   }
 
   const discount = customer.discount.discount;
+  const statusTone = customer.status === 'ACTIVE' ? 'success' : customer.status === 'SUSPENDED' ? 'danger' : 'neutral';
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <Link href="/admin/customers" className="inline-flex items-center gap-1 text-sm text-[#3D3650] hover:text-[#170B2E] mb-3">
-          <ArrowLeft size={14} /> Back to customers
-        </Link>
-        <h1 className="text-2xl font-bold text-[#170B2E]">{customer.name || 'Unnamed'}</h1>
-        <p className="text-sm text-[#3D3650] mt-1">{customer.email}</p>
-      </div>
+    <>
+      {backLink}
+      <PageHeader
+        title={customer.name || 'Unnamed'}
+        description={`${customer.email} · Customer since ${new Date(customer.createdAt).toLocaleDateString('en-IN')}`}
+        actions={<Pill tone={statusTone}>{customer.status}</Pill>}
+      />
 
-      {/* Overview */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="rounded-2xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-          <p className="text-xs text-[#3D3650] mb-2">Usage this period</p>
-          <p className="text-lg font-bold text-[#170B2E]">{formatCredits(customer.usage.credits.total)} credits</p>
-          <p className="text-sm text-[#3D3650] mt-1">
-            {formatMinutes(customer.usage.usage.audioMinutes)} audio · {formatMinutes(customer.usage.usage.videoMinutes)} video ·{' '}
-            {formatMinutes(customer.usage.usage.screenShareMinutes)} screen-share participant time
-          </p>
-        </div>
-        <div className="rounded-2xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
-          <p className="text-xs text-[#3D3650] mb-2">Account status</p>
-          <p className="text-sm font-medium text-[#170B2E]">{customer.status}</p>
-          <p className="text-sm text-[#3D3650] mt-1">
-            Customer since {new Date(customer.createdAt).toLocaleDateString('en-IN')}
-          </p>
-        </div>
-      </div>
+      <Section title="Usage this period">
+        <Panel>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-4">
+            <Stat label="Credits" value={formatCredits(customer.usage.credits.total)} />
+            <Stat label="Audio" value={formatMinutes(customer.usage.usage.audioMinutes)} />
+            <Stat label="Video" value={formatMinutes(customer.usage.usage.videoMinutes)} />
+            <Stat label="Screen share" value={formatMinutes(customer.usage.usage.screenShareMinutes)} />
+          </div>
+          <p className="mt-4 text-xs text-[#6B6478]">Times are participant time.</p>
+        </Panel>
+      </Section>
 
       {/* Plan, credits, payments */}
-      <CustomerBillingPanel customerId={customerId} onChanged={load} />
-
-      {/* Account profile (from onboarding) */}
-      <div className="rounded-2xl border border-[#E7DFF5] p-6" style={{ background: '#FFFFFF' }}>
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-semibold text-[#170B2E]">Account profile</p>
-          <span
-            className={`text-[11px] px-2 py-1 rounded ${customer.profileCompleted ? 'text-emerald-700 border border-emerald-500/30' : 'text-amber-700 border border-amber-500/40'}`}
-          >
-            {customer.profileCompleted ? 'Profile complete' : 'Profile incomplete'}
-          </span>
-        </div>
-        <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 text-sm">
-          {[
-            ['Name', customer.name],
-            ['Email', customer.email],
-            ['Phone', customer.phone],
-            ['Company', customer.companyName],
-            ['Job title', customer.jobTitle],
-            ['Country', countryByCode(customer.country)?.name ?? customer.country],
-            ['Website', customer.companyWebsite],
-            ['Expected usage', usageRangeLabel(customer.expectedUsageRange)],
-            ['Primary use case', useCaseLabel(customer.primaryUseCase)],
-          ].map(([label, value]) => (
-            <div key={label as string}>
-              <dt className="text-xs text-[#3D3650] mb-0.5">{label}</dt>
-              <dd className="text-[#170B2E] break-words">
-                {label === 'Website' && value ? (
-                  <a href={value as string} target="_blank" rel="noopener noreferrer" className="text-[#7F40E8] hover:underline">
-                    {value}
-                  </a>
-                ) : (
-                  value || <span className="text-[#3D3650]">—</span>
-                )}
-              </dd>
-            </div>
-          ))}
-        </dl>
+      <div className="mb-10">
+        <CustomerBillingPanel customerId={customerId} onChanged={load} />
       </div>
 
+      {/* Account profile (from onboarding) */}
+      <Section
+        title="Account profile"
+        actions={
+          <Pill tone={customer.profileCompleted ? 'success' : 'warning'}>
+            {customer.profileCompleted ? 'Profile complete' : 'Profile incomplete'}
+          </Pill>
+        }
+      >
+        <Panel>
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              ['Name', customer.name],
+              ['Email', customer.email],
+              ['Phone', customer.phone],
+              ['Company', customer.companyName],
+              ['Job title', customer.jobTitle],
+              ['Country', countryByCode(customer.country)?.name ?? customer.country],
+              ['Website', customer.companyWebsite],
+              ['Expected usage', usageRangeLabel(customer.expectedUsageRange)],
+              ['Primary use case', useCaseLabel(customer.primaryUseCase)],
+            ].map(([label, value]) => (
+              <div key={label as string}>
+                <dt className="mb-0.5 text-[13px] text-[#6B6478]">{label}</dt>
+                <dd className="break-words text-[#170B2E]">
+                  {label === 'Website' && value ? (
+                    <a href={value as string} target="_blank" rel="noopener noreferrer" className="text-[#5B21B6] hover:underline">
+                      {value}
+                    </a>
+                  ) : (
+                    value || <span className="text-[#9C95A8]">—</span>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </Panel>
+      </Section>
+
       {/* Discount */}
-      <div className="rounded-2xl border border-[#E7DFF5] p-6" style={{ background: '#FFFFFF' }}>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="text-sm font-semibold text-[#170B2E]">Customer discount</p>
-            <p className="text-xs text-[#3D3650] mt-0.5">Applies to plan, renewal and top-up prices before GST.</p>
-          </div>
-          {canWrite && !editing && (
-            <div className="flex gap-2">
-              <button
-                onClick={startEditing}
-                className="text-xs px-3 py-1.5 rounded-lg border border-[#D6C4EE] text-[#3D3650] hover:border-[#7F40E8]"
-              >
+      <Section
+        title="Customer discount"
+        description="Applies to plan, renewal and top-up prices before GST."
+        actions={
+          canWrite && !editing ? (
+            <>
+              <button type="button" onClick={startEditing} className={buttonCls('secondary')}>
                 {discount?.active ? 'Edit Discount' : 'Add Discount'}
               </button>
               {discount?.active && (
-                <button
-                  onClick={disableDiscount}
-                  disabled={saving}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-red-300 text-red-600 hover:border-red-500 disabled:opacity-50"
-                >
+                <button type="button" onClick={disableDiscount} disabled={saving} className={buttonCls('danger')}>
                   Disable Discount
                 </button>
               )}
+            </>
+          ) : undefined
+        }
+      >
+        <Panel>
+          {!editing &&
+            (discount?.active ? (
+              <div className="grid gap-6 md:grid-cols-[200px_1fr]">
+                <Stat label="Current discount" value={`${discount.percentage}%`} hint={<Pill tone="success">Active</Pill>} />
+                <DetailList
+                  items={[
+                    { label: 'Effective from', value: new Date(discount.effectiveFrom).toLocaleDateString('en-IN') },
+                    {
+                      label: 'Effective until',
+                      value: discount.effectiveUntil ? new Date(discount.effectiveUntil).toLocaleDateString('en-IN') : 'No end date',
+                    },
+                    ...(discount.reason ? [{ label: 'Reason', value: discount.reason }] : []),
+                  ]}
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-[#6B6478]">No discount — this customer pays standard plan and top-up prices.</p>
+            ))}
+
+          {editing && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-[#170B2E]">Discount (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={percentage}
+                    onChange={(e) => setPercentage(Math.round(Number(e.target.value) || 0))}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-[#170B2E]">Effective from</label>
+                  <input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-[#170B2E]">Effective until (optional)</label>
+                  <input type="date" value={effectiveUntil} onChange={(e) => setEffectiveUntil(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-[#170B2E]">Reason</label>
+                  <input
+                    type="text"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="Enterprise volume agreement"
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-[#6B6478]">
+                The discount applies to plan, renewal and top-up prices before GST. It never changes credit rates.
+              </p>
+
+              {formError && <ErrorNote message={formError} />}
+
+              <div className="flex gap-2">
+                <button type="button" onClick={saveDiscount} disabled={saving} className={buttonCls('primary')}>
+                  {saving ? 'Saving…' : 'Save Discount'}
+                </button>
+                <button type="button" onClick={() => setEditing(false)} disabled={saving} className={buttonCls('secondary')}>
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
-        </div>
-
-        {!editing && (
-          discount?.active ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-xs text-[#3D3650] mb-0.5">Current discount</p>
-                <p className="text-2xl font-bold text-[#170B2E]">{discount.percentage}%</p>
-              </div>
-              <div>
-                <p className="text-xs text-[#3D3650] mb-0.5">Status</p>
-                <span className="inline-block text-xs px-2 py-1 rounded border border-emerald-500/30 text-emerald-700">Active</span>
-              </div>
-              <div>
-                <p className="text-xs text-[#3D3650] mb-0.5">Effective from</p>
-                <p className="text-[#3D3650]">{new Date(discount.effectiveFrom).toLocaleDateString('en-IN')}</p>
-              </div>
-              <div>
-                <p className="text-xs text-[#3D3650] mb-0.5">Effective until</p>
-                <p className="text-[#3D3650]">
-                  {discount.effectiveUntil ? new Date(discount.effectiveUntil).toLocaleDateString('en-IN') : 'No end date'}
-                </p>
-              </div>
-              {discount.reason && (
-                <div className="sm:col-span-2">
-                  <p className="text-xs text-[#3D3650] mb-0.5">Reason</p>
-                  <p className="text-[#3D3650]">{discount.reason}</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-[#3D3650]">No discount — this customer pays standard plan and top-up prices.</p>
-          )
-        )}
-
-        {editing && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs text-[#3D3650] mb-1">Discount (%)</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={percentage}
-                  onChange={(e) => setPercentage(Math.round(Number(e.target.value) || 0))}
-                  className="w-full rounded-lg border border-[#E7DFF5] bg-[#FFFFFF] px-3 py-2 text-sm text-[#170B2E] focus:border-[#7F40E8] outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-[#3D3650] mb-1">Effective from</label>
-                <input
-                  type="date"
-                  value={effectiveFrom}
-                  onChange={(e) => setEffectiveFrom(e.target.value)}
-                  className="w-full rounded-lg border border-[#E7DFF5] bg-[#FFFFFF] px-3 py-2 text-sm text-[#170B2E] focus:border-[#7F40E8] outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-[#3D3650] mb-1">Effective until (optional)</label>
-                <input
-                  type="date"
-                  value={effectiveUntil}
-                  onChange={(e) => setEffectiveUntil(e.target.value)}
-                  className="w-full rounded-lg border border-[#E7DFF5] bg-[#FFFFFF] px-3 py-2 text-sm text-[#170B2E] focus:border-[#7F40E8] outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-[#3D3650] mb-1">Reason</label>
-                <input
-                  type="text"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="Enterprise volume agreement"
-                  className="w-full rounded-lg border border-[#E7DFF5] bg-[#FFFFFF] px-3 py-2 text-sm text-[#170B2E] focus:border-[#7F40E8] outline-none"
-                />
-              </div>
-            </div>
-
-            <p className="text-xs text-[#3D3650]">
-              The discount applies to plan, renewal and top-up prices before GST. It never changes credit rates.
-            </p>
-
-            {formError && <p className="text-sm text-red-600">{formError}</p>}
-
-            <div className="flex gap-2">
-              <button
-                onClick={saveDiscount}
-                disabled={saving}
-                className="text-sm px-4 py-2 rounded-lg bg-[#7F40E8] text-white hover:bg-[#6425C4] disabled:opacity-50"
-              >
-                {saving ? 'Saving…' : 'Save Discount'}
-              </button>
-              <button
-                onClick={() => setEditing(false)}
-                disabled={saving}
-                className="text-sm px-4 py-2 rounded-lg border border-[#E7DFF5] text-[#3D3650]"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+        </Panel>
+      </Section>
+    </>
   );
 }

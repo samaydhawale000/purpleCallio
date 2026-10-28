@@ -10,12 +10,10 @@ import {
   type AdminPaymentRow,
 } from '../../../lib/admin-billing';
 import { formatDate, formatMoney, formatMoneyExact, PURPOSE_LABEL } from '../../../lib/billing';
-import { Button } from '../../../components/ui/Button';
-import { Pagination } from '../../../components/ui/Pagination';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
 import { SearchBox } from './SubscriptionsTab';
 import { useCanWrite } from '../../../lib/admin-access';
-import { ErrorText, Field, inputCls, Modal, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
+import { Button, ErrorText, Field, inputCls, Modal, Pagination, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
 export function PaymentsTab({ userId }: { userId?: string }) {
   const [page, setPage] = useState(1);
@@ -31,7 +29,7 @@ export function PaymentsTab({ userId }: { userId?: string }) {
   );
 
   return (
-    <Panel title="Payments" subtitle="Every checkout attempt and auto-renew charge. Each period is paid at its start.">
+    <Panel title="Payments" subtitle="Every checkout attempt and auto-renew charge. Each period is paid at its start." flush>
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
       <div className="flex flex-wrap gap-3 items-center mb-4">
         <SearchBox
@@ -69,7 +67,7 @@ export function PaymentsTab({ userId }: { userId?: string }) {
                 <td className={`${tdCls} whitespace-nowrap`}>{formatDate(p.paidAt ?? p.createdAt)}</td>
                 <td className={tdCls}>
                   {p.user ? (
-                    <Link href={`/admin/customers/${p.user.id}`} className="text-[#170B2E] hover:text-[#6425C4]">
+                    <Link href={`/admin/customers/${p.user.id}`} className="hover:text-[#5B21B6] hover:underline">
                       {p.user.email}
                     </Link>
                   ) : (
@@ -78,18 +76,18 @@ export function PaymentsTab({ userId }: { userId?: string }) {
                 </td>
                 <td className={tdCls}>{PURPOSE_LABEL[p.purpose] ?? p.purpose}</td>
                 <td className={`${tdCls} max-w-[220px]`}>{p.description ?? '—'}</td>
-                <td className={`${tdCls} whitespace-nowrap text-[#170B2E] font-medium`}>{formatMoneyExact(p.amount, p.currency)}</td>
+                <td className={`${tdCls} whitespace-nowrap font-medium tabular-nums`}>{formatMoneyExact(p.amount, p.currency)}</td>
                 <td className={tdCls}><StatusBadge status={p.paymentStatus} /></td>
-                <td className={`${tdCls} font-mono text-xs`}>{p.receipt ?? (p.receiptNumber ? `#${p.receiptNumber}` : '—')}</td>
+                <td className={`${tdCls} whitespace-nowrap text-[13px] tabular-nums`}>{p.receipt ?? (p.receiptNumber ? `#${p.receiptNumber}` : '—')}</td>
                 <td className={tdCls}>{p.paymentMethod ?? p.attempts?.[0]?.method ?? '—'}</td>
-                <td className={`${tdCls} text-[11px] max-w-[200px]`}>
+                <td className={`${tdCls} max-w-[200px] text-xs`}>
                   {p.failureReason && <div className="text-red-600">{p.failureReason}</div>}
                   {p.refundedPaise > 0 && <div className="text-amber-700">Refunded {formatMoney(p.refundedPaise, p.currency)}</div>}
-                  {!p.failureReason && !p.refundedPaise && '—'}
+                  {!p.failureReason && !p.refundedPaise && <span className="text-[#9C95A8]">—</span>}
                 </td>
                 <td className={tdCls}>
                   {canWrite && p.paymentStatus === 'PAID' && (
-                    <button className="text-xs font-medium text-red-600 hover:text-red-800" onClick={() => setRefunding(p)}>
+                    <button type="button" className="text-[13px] font-medium text-red-600 hover:underline" onClick={() => setRefunding(p)}>
                       Refund
                     </button>
                   )}
@@ -142,12 +140,12 @@ export function RefundDialog({ payment, onClose, onDone }: { payment: AdminPayme
   return (
     <Modal title="Refund payment" onClose={onClose}>
       <form onSubmit={submit} className="space-y-4" noValidate>
-        <div className="rounded-xl border border-[#E7DFF5] bg-[#F8F4FD] p-4 text-sm space-y-1">
-          <p className="text-[#170B2E] font-medium">{payment.description ?? PURPOSE_LABEL[payment.purpose]}</p>
-          <p className="text-[#3D3650]">{payment.user?.email}</p>
+        <div className="space-y-1 rounded-lg bg-[#F7F6FA] p-4 text-sm">
+          <p className="font-medium text-[#170B2E]">{payment.description ?? PURPOSE_LABEL[payment.purpose]}</p>
+          <p className="text-[#6B6478]">{payment.user?.email}</p>
           <p className="text-[#170B2E]">Refund amount: <strong>{formatMoneyExact(remaining, payment.currency)}</strong></p>
         </div>
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="rounded-lg bg-red-50 p-4 text-sm text-red-800">
           This issues a full refund through the payment provider. Credits from this payment that are still unused are removed.
           If the payment bought a plan, that plan ends immediately and the customer moves to the Free plan. This cannot be undone.
         </div>
@@ -155,7 +153,7 @@ export function RefundDialog({ payment, onClose, onDone }: { payment: AdminPayme
           <textarea className={inputCls} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
         </Field>
         <label className="flex items-start gap-2 text-sm text-[#170B2E] cursor-pointer">
-          <input type="checkbox" className="mt-0.5 accent-[#7F40E8]" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
+          <input type="checkbox" className="mt-0.5 accent-[#6D28D9]" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
           I understand this reverses the remaining credits and ends a refunded plan.
         </label>
         <ErrorText>{error}</ErrorText>

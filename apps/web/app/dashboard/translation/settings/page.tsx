@@ -1,8 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { Button } from '../../../components/ui/Button';
-import { Input } from '../../../components/ui/Input';
+import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
 import {
   INDUSTRIES,
   Lexicon,
@@ -13,6 +11,7 @@ import {
   translationErrorText,
   updateSettings,
 } from '../../../lib/translation';
+import { buttonCls, inputCls } from '../../_ui';
 import { Form, buildSettingsPatch, toForm } from '../_components/settings-form';
 import { CostEstimator } from '../_components/CostEstimator';
 import {
@@ -77,9 +76,9 @@ export default function TranslationSettingsPage() {
   const healthcare = form?.industry === 'healthcare';
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
+    <div className="max-w-4xl">
       <PageHeader
-        title="Live Translate settings"
+        title="Settings"
         subtitle="Defaults for every translated call in this project. Calls can override some of them through the API."
         actions={projects && projects.length > 0 ? <ProjectPicker projects={projects} value={projectId} onChange={setProjectId} /> : undefined}
       />
@@ -98,9 +97,8 @@ export default function TranslationSettingsPage() {
       ) : (
         <form onSubmit={submit} noValidate className="flex flex-col gap-6">
           <Card title="Call context" subtitle="Helps translation pick the right vocabulary.">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="industry" className="text-sm font-medium text-[#3D3650]">Industry</label>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field id="industry" label="Industry">
                 <select
                   id="industry"
                   className={selectCls}
@@ -113,52 +111,61 @@ export default function TranslationSettingsPage() {
                 >
                   <option value="">Not set</option>
                   {INDUSTRIES.map((i) => (
-                    <option key={i.id} value={i.id}>{i.label}</option>
+                    <option key={i.id} value={i.id}>
+                      {i.label}
+                    </option>
                   ))}
                 </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="default-lexicon" className="text-sm font-medium text-[#3D3650]">Default lexicon (PurpleLex)</label>
+              </Field>
+              <Field
+                id="default-lexicon"
+                label="Default lexicon (PurpleLex)"
+                hint={
+                  <>
+                    Used when a call doesn&apos;t pass its own <code className="font-mono">lexiconId</code>.
+                  </>
+                }
+              >
                 <select id="default-lexicon" className={selectCls} value={form.defaultLexiconId} onChange={(e) => set('defaultLexiconId', e.target.value)}>
                   <option value="">None</option>
                   {lexicons.map((l) => (
-                    <option key={l.id} value={l.id}>{l.name}</option>
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
                   ))}
                 </select>
-                <p className="text-xs text-[#3D3650]">Used when a call doesn&apos;t pass its own <code className="font-mono">lexiconId</code>.</p>
-              </div>
+              </Field>
             </div>
           </Card>
 
-          <Card title="Replay of original audio" subtitle="MeaningGuard">
+          <Card title="Replay" subtitle="Let listeners hear exactly what was said.">
             <Toggle
               id="replay"
               label="Let listeners replay the speaker's original audio"
               checked={form.replayEnabled}
               onChange={(v) => set('replayEnabled', v)}
             />
-            <p className="text-xs text-[#3D3650] mt-2 max-w-2xl">
-              Off by default. When on, the last phrases of original audio are kept in memory during the call so a listener can hear
-              exactly what was said when a translation may not be accurate. Audio is never stored after the call. Both participants
-              see a <strong>&quot;Replay enabled&quot;</strong> indicator while it is on.
+            <p className="mt-2 max-w-2xl text-xs text-[#6B6478]">
+              Off by default. Recent original audio is kept in memory during the call only and never stored afterwards. Both
+              participants see a <strong className="font-medium text-[#170B2E]">&quot;Replay enabled&quot;</strong> indicator while it is on.
             </p>
           </Card>
 
-          <Card title="Post-Call Suite" subtitle="Transcript, summary in each participant's language, action items and conversation signals.">
-            <div className="flex flex-col gap-4">
-              <Toggle
-                id="post-call"
-                label="Store transcripts and build a report after each translated call"
-                checked={form.postCallReportEnabled}
-                onChange={(v) => set('postCallReportEnabled', v)}
-              />
-              <p className="text-xs text-[#3D3650] -mt-2 max-w-2xl">
-                Opt-in. Each report uses credits. Personal details are redacted before storage, and transcripts are deleted after the
-                retention period.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="retention" className="text-sm font-medium text-[#3D3650]">Transcript retention</label>
+          <Card title="Post-call reports" subtitle="Transcript, summary in each participant's language and action items.">
+            <div className="flex flex-col gap-5">
+              <div>
+                <Toggle
+                  id="post-call"
+                  label="Store transcripts and build a report after each translated call"
+                  checked={form.postCallReportEnabled}
+                  onChange={(v) => set('postCallReportEnabled', v)}
+                />
+                <p className="mt-1 max-w-2xl text-xs text-[#6B6478]">
+                  Each report uses credits. Personal details are redacted before storage, and transcripts are deleted after the retention period.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field id="retention" label="Transcript retention">
                   <select
                     id="retention"
                     className={selectCls}
@@ -166,11 +173,15 @@ export default function TranslationSettingsPage() {
                     value={form.transcriptRetentionDays}
                     onChange={(e) => set('transcriptRetentionDays', e.target.value)}
                   >
-                    {[...new Set([...RETENTION_DAYS, Number(form.transcriptRetentionDays)])].sort((a, b) => a - b).map((d) => (
-                      <option key={d} value={d}>{d} days</option>
-                    ))}
+                    {[...new Set([...RETENTION_DAYS, Number(form.transcriptRetentionDays)])]
+                      .sort((a, b) => a - b)
+                      .map((d) => (
+                        <option key={d} value={d}>
+                          {d} days
+                        </option>
+                      ))}
                   </select>
-                </div>
+                </Field>
               </div>
               <div>
                 <Toggle
@@ -180,53 +191,64 @@ export default function TranslationSettingsPage() {
                   disabled={!form.postCallReportEnabled || healthcare}
                   onChange={(v) => set('sentimentEnabled', v)}
                 />
-                <p className="text-xs text-[#3D3650] mt-1 max-w-2xl">
+                <p className="mt-1 max-w-2xl text-xs text-[#6B6478]">
                   {healthcare
                     ? 'Tone analysis is always off for healthcare projects, to avoid inferring anything about a patient’s state.'
-                    : 'Reports describe a “possible tone” per topic with quotes. It is a hint, not a judgement about anyone.'}
+                    : 'Adds a one-word “possible tone” per speaker. It is a hint, not a judgement about anyone.'}
                 </p>
               </div>
             </div>
           </Card>
 
-          <Card title="CostGuard" subtitle="Limits are checked during the call. The call itself is never ended — only translation steps down.">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Input
-                label="Per-call limit (minutes)"
-                type="number"
-                min={1}
-                max={600}
-                placeholder="Platform default"
-                value={form.defaultMaxMinutes}
-                onChange={(e) => set('defaultMaxMinutes', e.target.value)}
-                helper="Translated minutes per call (1–600)."
-              />
-              <Input
-                label="Daily budget (credits)"
-                type="number"
-                min={1}
-                placeholder="No limit"
-                value={form.dailyBudgetCredits}
-                onChange={(e) => set('dailyBudgetCredits', e.target.value)}
-              />
-              <Input
-                label="Monthly budget (credits)"
-                type="number"
-                min={1}
-                placeholder="No limit"
-                value={form.monthlyBudgetCredits}
-                onChange={(e) => set('monthlyBudgetCredits', e.target.value)}
-              />
-              <Input
-                label="Alert thresholds (%)"
-                placeholder="50, 80, 100"
-                value={form.alertThresholds}
-                onChange={(e) => set('alertThresholds', e.target.value)}
-                helper="You get a notification and webhook when a budget crosses each one."
-              />
+          <Card title="Budget limits" subtitle="Checked during the call. The call itself is never ended, only translation steps down.">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field id="max-minutes" label="Per-call limit (minutes)" hint="Translated minutes per call (1–600).">
+                <input
+                  id="max-minutes"
+                  type="number"
+                  min={1}
+                  max={600}
+                  className={inputCls}
+                  placeholder="Platform default"
+                  value={form.defaultMaxMinutes}
+                  onChange={(e) => set('defaultMaxMinutes', e.target.value)}
+                />
+              </Field>
+              <Field id="alert-thresholds" label="Alert thresholds (%)" hint="You get a notification and webhook when a budget crosses each one.">
+                <input
+                  id="alert-thresholds"
+                  className={inputCls}
+                  placeholder="50, 80, 100"
+                  value={form.alertThresholds}
+                  onChange={(e) => set('alertThresholds', e.target.value)}
+                />
+              </Field>
+              <Field id="daily-budget" label="Daily budget (credits)">
+                <input
+                  id="daily-budget"
+                  type="number"
+                  min={1}
+                  className={inputCls}
+                  placeholder="No limit"
+                  value={form.dailyBudgetCredits}
+                  onChange={(e) => set('dailyBudgetCredits', e.target.value)}
+                />
+              </Field>
+              <Field id="monthly-budget" label="Monthly budget (credits)">
+                <input
+                  id="monthly-budget"
+                  type="number"
+                  min={1}
+                  className={inputCls}
+                  placeholder="No limit"
+                  value={form.monthlyBudgetCredits}
+                  onChange={(e) => set('monthlyBudgetCredits', e.target.value)}
+                />
+              </Field>
             </div>
-            <fieldset className="mt-5">
-              <legend className="text-sm font-medium text-[#3D3650] mb-2">When a limit is reached</legend>
+            <div className="mt-5 border-t border-[#ECE8F2] pt-5">
+            <fieldset>
+              <legend className="mb-2 text-[13px] font-medium text-[#170B2E]">When a limit is reached</legend>
               <div className="flex flex-col gap-2">
                 <Radio
                   name="onLimit"
@@ -236,19 +258,46 @@ export default function TranslationSettingsPage() {
                 />
                 <Radio name="onLimit" checked={form.onLimit === 'off'} onChange={() => set('onLimit', 'off')} label="Turn translation off" />
               </div>
-              <p className="text-xs text-[#3D3650] mt-2">Participants are warned at 90% and told when translation changes.</p>
+              <p className="mt-2 text-xs text-[#6B6478]">Participants are warned at 90% and told when translation changes.</p>
             </fieldset>
+            </div>
           </Card>
 
           <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit" loading={saving}>Save settings</Button>
-            {saved && <span role="status" className="text-sm text-emerald-700">Settings saved</span>}
-            {saveError && <p role="alert" className="text-sm text-red-600">{saveError}</p>}
+            <button type="submit" className={buttonCls('primary')} disabled={saving}>
+              Save settings
+            </button>
+            {saved && (
+              <span role="status" className="text-sm text-emerald-700">
+                Settings saved
+              </span>
+            )}
+            {saveError && (
+              <p role="alert" className="text-sm text-red-600">
+                {saveError}
+              </p>
+            )}
           </div>
         </form>
       )}
 
-      {projects && projects.length > 0 && <CostEstimator defaultMinutes={form?.defaultMaxMinutes} />}
+      {projects && projects.length > 0 && (
+        <div className="mt-10">
+          <CostEstimator defaultMinutes={form?.defaultMaxMinutes} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Field({ id, label, hint, children }: { id: string; label: string; hint?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-[13px] font-medium text-[#170B2E]">
+        {label}
+      </label>
+      {children}
+      {hint && <p className="text-xs text-[#6B6478]">{hint}</p>}
     </div>
   );
 }
@@ -275,7 +324,7 @@ function Toggle({
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 accent-[#7F40E8]"
+        className="h-4 w-4 accent-[#6D28D9]"
       />
       <span className="text-sm font-medium text-[#170B2E]">{label}</span>
     </label>
@@ -285,9 +334,8 @@ function Toggle({
 function Radio({ name, label, checked, onChange }: { name: string; label: string; checked: boolean; onChange: () => void }) {
   return (
     <label className="flex items-center gap-2.5 text-sm text-[#170B2E]">
-      <input type="radio" name={name} checked={checked} onChange={onChange} className="accent-[#7F40E8]" />
+      <input type="radio" name={name} checked={checked} onChange={onChange} className="accent-[#6D28D9]" />
       {label}
     </label>
   );
 }
-

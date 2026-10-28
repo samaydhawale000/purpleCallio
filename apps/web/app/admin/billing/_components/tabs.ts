@@ -20,13 +20,3 @@ export const BILLING_TABS: { key: BillingTab; label: string }[] = [
   { key: 'payments', label: 'Payments' },
   { key: 'settings', label: 'Settings' },
 ];
-
-/** Sidebar sub-navigation under Admin → Billing. */
-export const BILLING_NAV: { label: string; tab: BillingTab }[] = [
-  { label: 'Credit Pricing', tab: 'credit-pricing' },
-  { label: 'Legacy billing records', tab: 'subscriptions' },
-  { label: 'Payments', tab: 'payments' },
-  { label: 'Credits', tab: 'credit-rates' },
-  { label: 'Live Translate', tab: 'translation' },
-  { label: 'Billing Settings', tab: 'settings' },
-];

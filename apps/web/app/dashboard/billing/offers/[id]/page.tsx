@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Check, MessageSquare, Sparkles } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useRequireAuth } from '../../../../hooks/useRequireAuth';
-import { Badge } from '../../../../components/ui/Badge';
-import { Button } from '../../../../components/ui/Button';
+import { Pill, buttonCls, type Tone } from '../../../_ui';
 import {
   billingErrorMessage,
   formatCredits,
@@ -21,11 +20,11 @@ import {
 } from '../../../../lib/billing';
 import { BillingHeader, ErrorBanner, PageLoader, SectionCard, useAuthErrorHandler } from '../../BillingShell';
 
-const STATUS: Record<CustomPlanOffer['status'], { label: string; variant: 'purple' | 'success' | 'default' | 'error' }> = {
-  SENT: { label: 'Ready to accept', variant: 'purple' },
-  ACCEPTED: { label: 'Accepted', variant: 'success' },
-  WITHDRAWN: { label: 'Withdrawn', variant: 'default' },
-  EXPIRED: { label: 'Expired', variant: 'error' },
+const STATUS: Record<CustomPlanOffer['status'], { label: string; tone: Tone }> = {
+  SENT: { label: 'Ready to accept', tone: 'accent' },
+  ACCEPTED: { label: 'Accepted', tone: 'success' },
+  WITHDRAWN: { label: 'Withdrawn', tone: 'neutral' },
+  EXPIRED: { label: 'Expired', tone: 'danger' },
 };
 
 const humanize = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
@@ -71,7 +70,7 @@ export default function OfferPage() {
   const header = (
     <div className="flex flex-col gap-4">
       <BillingHeader title="Custom plan offer" subtitle="A plan prepared for you by our team." />
-      <Link href="/dashboard/billing" className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E] w-fit">
+      <Link href="/dashboard/billing" className="inline-flex w-fit items-center gap-1 text-[13px] text-[#6B6478] hover:text-[#170B2E]">
         <ArrowLeft size={14} /> Back to billing
       </Link>
     </div>
@@ -104,37 +103,34 @@ export default function OfferPage() {
       {header}
       <SectionCard className="max-w-3xl">
         <div className="flex flex-wrap items-center gap-2" data-testid="offer-detail">
-          <Sparkles size={18} className="text-[#6425C4]" />
-          <h2 className="text-xl font-bold text-[#170B2E]">{offer.plan.name}</h2>
-          <Badge variant="purple">Custom plan</Badge>
-          <Badge variant={status.variant}>{status.label}</Badge>
+          <h2 className="text-xl font-semibold text-[#170B2E]">{offer.plan.name}</h2>
+          <Pill tone="accent">Custom plan</Pill>
+          <Pill tone={status.tone}>{status.label}</Pill>
         </div>
-        {offer.plan.description && <p className="text-sm text-[#3D3650] mt-1">{offer.plan.description}</p>}
+        {offer.plan.description && <p className="text-sm text-[#6B6478] mt-1">{offer.plan.description}</p>}
 
         {v && (
           <>
-            <p className="text-2xl font-bold text-[#170B2E] mt-4">
-              {formatMoney(v.pricePaise, v.currency)} <span className="text-sm font-normal text-[#3D3650]">/ {intervalLabel(v)} + GST</span>
+            <p className="mt-4 text-2xl font-semibold text-[#170B2E]">
+              {formatMoney(v.pricePaise, v.currency)} <span className="text-sm font-normal text-[#6B6478]">/ {intervalLabel(v)} + GST</span>
             </p>
-            <p className="text-sm text-[#3D3650]">{formatCredits(v.includedCredits)} credits included</p>
-            <ul className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-sm text-[#3D3650]">
+            <p className="text-sm text-[#6B6478]">{formatCredits(v.includedCredits)} credits included</p>
+            <ul className="mt-4 grid list-disc grid-cols-1 gap-1.5 pl-5 text-sm text-[#6B6478] marker:text-[#C4BCD2] sm:grid-cols-2">
               {v.features.map((f) => (
-                <li key={f} className="flex items-center gap-1.5">
-                  <Check size={13} className="text-emerald-600" /> {featureName(f)}
-                </li>
+                <li key={f}>{featureName(f)}</li>
               ))}
             </ul>
           </>
         )}
 
         {offer.message && (
-          <div className="mt-5 rounded-xl border border-[#E7DFF5] p-4 text-sm text-[#3D3650] whitespace-pre-wrap" style={{ background: '#F8F4FD' }}>
+          <div className="mt-5 whitespace-pre-wrap rounded-lg border border-[#ECE8F2] bg-white p-4 text-sm text-[#6B6478]">
             <p className="text-xs font-semibold text-[#170B2E] mb-1">Message from our team</p>
             {offer.message}
           </div>
         )}
 
-        <p className="mt-4 text-xs text-[#3D3650]">
+        <p className="mt-4 text-xs text-[#6B6478]">
           {offer.status === 'ACCEPTED'
             ? `Accepted on ${formatDate(offer.acceptedAt)}.`
             : offer.expiresAt
@@ -144,19 +140,22 @@ export default function OfferPage() {
         </p>
 
         <div className="mt-5 flex flex-wrap gap-2">
-          <Button disabled={!canAccept} onClick={() => router.push(`/dashboard/billing/checkout?offer=${encodeURIComponent(offer.id)}`)}>
+          <button
+            type="button"
+            className={buttonCls('primary')}
+            disabled={!canAccept}
+            onClick={() => router.push(`/dashboard/billing/checkout?offer=${encodeURIComponent(offer.id)}`)}
+          >
             Accept &amp; pay
-          </Button>
+          </button>
           {ticketId && (
-            <Link href={`/dashboard/support/${ticketId}`}>
-              <Button variant="secondary">
-                <MessageSquare size={14} /> Open conversation
-              </Button>
+            <Link href={`/dashboard/support/${ticketId}`} className={buttonCls('secondary')}>
+              Open conversation
             </Link>
           )}
         </div>
         {!canAccept && offer.status !== 'ACCEPTED' && (
-          <p className="mt-2 text-xs text-[#3D3650]">This offer can no longer be accepted. Ask our team for a new one in your conversation.</p>
+          <p className="mt-2 text-xs text-[#6B6478]">This offer can no longer be accepted. Ask our team for a new one in your conversation.</p>
         )}
       </SectionCard>
     </div>

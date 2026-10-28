@@ -3,16 +3,9 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import {
-  ArrowLeft,
-  CheckCircle2,
-  Clock,
-  Loader2,
-  ShieldCheck,
-  XCircle,
-} from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock, Loader2, XCircle } from 'lucide-react';
 import { useRequireAuth } from '../../../hooks/useRequireAuth';
-import { Button } from '../../../components/ui/Button';
+import { buttonCls } from '../../_ui';
 import {
   billingErrorMessage,
   formatCredits,
@@ -134,7 +127,7 @@ function CheckoutContent() {
     request?.kind === 'topup' ||
     request?.kind === 'creditAmount';
   const title = 'Buy credits';
-  const back = '/dashboard/billing/credits#topups';
+  const back = '/dashboard/billing?add=1';
 
   const header = (
     <div className="flex flex-col gap-4">
@@ -145,7 +138,7 @@ function CheckoutContent() {
       {phase.kind === 'review' && (
         <Link
           href={back}
-          className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E] w-fit"
+          className="inline-flex w-fit items-center gap-1 text-[13px] text-[#6B6478] hover:text-[#170B2E]"
         >
           <ArrowLeft size={14} /> Back
         </Link>
@@ -204,13 +197,11 @@ function CheckoutContent() {
             </p>
           )}
           <div className="flex flex-wrap justify-center gap-2 pt-3">
-            <Link href="/dashboard/billing">
-              <Button size="sm">Go to billing</Button>
+            <Link href="/dashboard/billing" className={buttonCls('primary')}>
+              Go to billing
             </Link>
-            <Link href="/dashboard/billing/payments">
-              <Button size="sm" variant="secondary">
-                View receipt
-              </Button>
+            <Link href="/dashboard/billing/payments" className={buttonCls('secondary')}>
+              View receipt
             </Link>
           </div>
         </ResultCard>
@@ -234,13 +225,11 @@ function CheckoutContent() {
             </p>
           )}
           <div className="flex flex-wrap justify-center gap-2 pt-3">
-            <Button size="sm" onClick={() => setPhase({ kind: 'review' })}>
+            <button type="button" className={buttonCls('primary')} onClick={() => setPhase({ kind: 'review' })}>
               Try again
-            </Button>
-            <Link href={back}>
-              <Button size="sm" variant="secondary">
-                Back
-              </Button>
+            </button>
+            <Link href={back} className={buttonCls('secondary')}>
+              Back
             </Link>
           </div>
         </ResultCard>
@@ -254,7 +243,7 @@ function CheckoutContent() {
         {header}
         <ResultCard
           tone="info"
-          icon={<Clock size={28} className="text-[#7F40E8]" />}
+          icon={<Clock size={28} className="text-[#6D28D9]" />}
           title="We’re confirming your payment…"
         >
           <p>
@@ -263,10 +252,8 @@ function CheckoutContent() {
             pay again.
           </p>
           <div className="flex justify-center pt-3">
-            <Link href="/dashboard/billing/payments">
-              <Button size="sm" variant="secondary">
-                View payments
-              </Button>
+            <Link href="/dashboard/billing/payments" className={buttonCls('secondary')}>
+              View payments
             </Link>
           </div>
         </ResultCard>
@@ -281,35 +268,31 @@ function CheckoutContent() {
     <div className="flex flex-col gap-6">
       {header}
       {notice && (
-        <div
-          role="status"
-          className="rounded-lg border border-[#E7DFF5] px-4 py-3 text-sm text-[#3D3650]"
-          style={{ background: '#F8F4FD' }}
-        >
+        <div role="status" className="rounded-lg bg-[#F1EBFC] px-4 py-3 text-sm text-[#4C1D95]">
           {notice}
         </div>
       )}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 max-w-5xl">
         <section
-          className="lg:col-span-3 rounded-2xl border border-[#E7DFF5] bg-white p-6"
+          className="rounded-xl bg-[#F7F6FA] p-5 lg:col-span-3"
           data-testid="checkout-summary"
         >
-          <p className="text-xs uppercase tracking-wider text-[#3D3650]">
+          <p className="text-xs uppercase tracking-wider text-[#6B6478]">
             Credit top-up
           </p>
-          <h2 className="text-xl font-bold text-[#170B2E] mt-1">
+          <h2 className="mt-1 text-xl font-semibold text-[#170B2E]">
             {s.name ?? quote.description}
           </h2>
           <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <div>
-              <dt className="text-xs text-[#3D3650]">Credits</dt>
+              <dt className="text-xs text-[#6B6478]">Credits</dt>
               <dd className="text-[#170B2E]">
                 {formatCredits(s.includedCredits ?? s.credits ?? quote.credits)}
               </dd>
             </div>
             {isTopUp && s.creditPricePaise != null && (
               <div>
-                <dt className="text-xs text-[#3D3650]">
+                <dt className="text-xs text-[#6B6478]">
                   Published credit price
                 </dt>
                 <dd className="text-[#170B2E]">
@@ -320,7 +303,7 @@ function CheckoutContent() {
             )}
             {isTopUp && s.creditAllocationPaise != null && (
               <div>
-                <dt className="text-xs text-[#3D3650]">
+                <dt className="text-xs text-[#6B6478]">
                   Amount allocated to credits
                 </dt>
                 <dd className="text-[#170B2E]">
@@ -330,12 +313,12 @@ function CheckoutContent() {
             )}
             {isTopUp && s.expiryAt && (
               <div>
-                <dt className="text-xs text-[#3D3650]">Credit lot expires</dt>
+                <dt className="text-xs text-[#6B6478]">Credit lot expires</dt>
                 <dd className="text-[#170B2E]">{formatDate(s.expiryAt)}</dd>
               </div>
             )}
           </dl>
-          <p className="mt-5 text-xs text-[#3D3650]">
+          <p className="mt-5 text-xs text-[#6B6478]">
             {isTopUp && (s.unallocatedRemainderPaise ?? 0) > 0
               ? `${formatMoneyExact(s.unallocatedRemainderPaise!, quote.currency)} is not allocated to a whole credit and is not carried forward. `
               : ''}
@@ -346,7 +329,7 @@ function CheckoutContent() {
         </section>
 
         <section
-          className="lg:col-span-2 rounded-2xl border border-[#E7DFF5] bg-white p-6 h-fit"
+          className="h-fit rounded-xl bg-[#F7F6FA] p-5 lg:col-span-2"
           data-testid="checkout-totals"
         >
           <h2 className="text-sm font-semibold text-[#170B2E] mb-3">
@@ -367,35 +350,31 @@ function CheckoutContent() {
               label={`GST (${quote.taxPercent}%)`}
               value={formatMoneyExact(quote.taxPaise, quote.currency)}
             />
-            <div className="flex items-center justify-between border-t border-[#E7DFF5] pt-2 text-base font-bold text-[#170B2E]">
+            <div className="flex items-center justify-between border-t border-[#E4DEEE] pt-2 text-base font-semibold text-[#170B2E]">
               <span>Total</span>
               <span data-testid="checkout-total">
                 {formatMoneyExact(quote.totalPaise, quote.currency)}
               </span>
             </div>
           </div>
-          <Button
-            className="w-full mt-5"
-            size="lg"
+          <button
+            type="button"
+            className={buttonCls('primary', 'mt-5 w-full py-2.5')}
             onClick={pay}
-            loading={processing}
             disabled={processing}
           >
+            {processing && <Loader2 size={15} className="animate-spin" />}
             {processing
               ? 'Processing payment…'
               : `Pay ${formatMoneyExact(quote.totalPaise, quote.currency)}`}
-          </Button>
-          <p className="mt-3 text-[11px] text-[#3D3650] flex items-start gap-1.5">
-            <ShieldCheck
-              size={13}
-              className="shrink-0 mt-0.5 text-emerald-600"
-            />
+          </button>
+          <p className="mt-3 text-xs text-[#6B6478]">
             One-time payment by card, UPI or netbanking. Nothing else is charged
             later.
           </p>
           {processing && (
             <p
-              className="mt-2 text-[11px] text-[#3D3650] inline-flex items-center gap-1.5"
+              className="mt-2 inline-flex items-center gap-1.5 text-xs text-[#6B6478]"
               role="status"
             >
               <Loader2 size={12} className="animate-spin" /> Complete the
@@ -410,7 +389,7 @@ function CheckoutContent() {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 text-[#3D3650]">
+    <div className="flex items-center justify-between gap-3 text-[#6B6478]">
       <span>{label}</span>
       <span className="font-medium text-[#170B2E] whitespace-nowrap">
         {value}
@@ -430,21 +409,14 @@ function ResultCard({
   title: string;
   children: React.ReactNode;
 }) {
-  const border =
-    tone === 'success'
-      ? 'rgba(16,185,129,0.3)'
-      : tone === 'error'
-        ? 'rgba(239,68,68,0.3)'
-        : '#E7DFF5';
   return (
     <section
       role={tone === 'error' ? 'alert' : 'status'}
-      className="max-w-lg mx-auto w-full rounded-2xl border bg-white p-8 text-center flex flex-col items-center gap-2"
-      style={{ borderColor: border }}
+      className="mx-auto flex w-full max-w-lg flex-col items-center gap-2 rounded-xl bg-[#F7F6FA] p-8 text-center"
     >
       {icon}
-      <h2 className="text-lg font-bold text-[#170B2E]">{title}</h2>
-      <div className="text-sm text-[#3D3650] space-y-1">{children}</div>
+      <h2 className="text-lg font-semibold text-[#170B2E]">{title}</h2>
+      <div className="space-y-1 text-sm text-[#6B6478]">{children}</div>
     </section>
   );
 }

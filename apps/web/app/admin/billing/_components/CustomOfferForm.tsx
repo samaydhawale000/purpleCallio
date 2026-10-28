@@ -12,9 +12,8 @@ import {
   type CustomPlanDetail,
 } from '../../../lib/admin-billing';
 import type { BillingInterval } from '../../../lib/billing';
-import { Button } from '../../../components/ui/Button';
 import { FeatureChecklist } from './PlanFields';
-import { ErrorText, Field, inputCls, useAdminErrorHandler } from './ui';
+import { Button, ErrorText, Field, inputCls, useAdminErrorHandler } from './ui';
 
 /** Validates the offer form; returns the payload or an error message. */
 export function buildOfferInput(f: {
@@ -113,7 +112,7 @@ export function CustomOfferForm({
 
   return (
     <form onSubmit={submit} className="space-y-5" noValidate>
-      <p className="text-sm text-[#3D3650] rounded-xl border border-[#D6C4EE] bg-[#F8F4FD] p-3">
+      <p className="rounded-lg bg-[#F1EBFC] px-4 py-3 text-sm text-[#4C1D95]">
         This creates a private plan for this customer only and posts the offer into the conversation. Nothing changes on
         their account until they accept and pay — the plan activates only after payment is confirmed. Sending a new offer
         withdraws any open one.
@@ -146,7 +145,7 @@ export function CustomOfferForm({
         </Field>
       </div>
       <div>
-        <p className="text-xs font-medium text-[#3D3650] mb-2">Optional per-media caps within the total (blank = no cap)</p>
+        <p className="mb-2 text-[13px] font-medium text-[#170B2E]">Optional per-media caps within the total (blank = no cap)</p>
         <div className="grid grid-cols-3 gap-4">
           <Field label="Audio cap">
             <input type="number" min={0} className={inputCls} value={f.audio} onChange={(e) => set('audio', e.target.value)} />
@@ -160,7 +159,7 @@ export function CustomOfferForm({
         </div>
       </div>
       <div>
-        <p className="text-xs font-medium text-[#3D3650] mb-2">Features</p>
+        <p className="mb-2 text-[13px] font-medium text-[#170B2E]">Features</p>
         <FeatureChecklist features={features} selected={f.features} onChange={(keys) => set('features', keys)} />
       </div>
       <Field label="Message to customer (optional)" hint="Included in the conversation with the offer.">

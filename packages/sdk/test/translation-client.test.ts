@@ -309,7 +309,8 @@ describe('TranslationClient', () => {
     client.on('ended', ended);
     socket.server('audio', pcmBytes(), { phraseId: 'receiver-1' });
     vi.advanceTimersByTime(200);
-    expect(remote.volume).toBeCloseTo(0.2);
+    // Muted by default while translated speech plays.
+    expect(remote.volume).toBe(0);
     client.disable();
     expect(socket.events('end')).toHaveLength(1);
     expect(socket.disconnected).toBe(1);
@@ -338,6 +339,141 @@ describe('TranslationClient', () => {
     socket.server('ended', { reason: 'call_ended' });
     expect(ended).toHaveBeenCalledWith({ reason: 'call_ended' });
     expect(client.getState().status).toBe('ended');
+  });
+});
+
+describe('TranslationClient: holding the original voice', () => {
+  // You hear English; the peer speaks Marathi, so their speech is translated for you.
+  const translated = { you: { speak: 'en', hear: 'en' }, peer: { speak: 'mr', hear: 'mr' } };
+
+  it('keeps the peer muted for as long as they are translated in voice mode, not just during playback', async () => {
+    const { remote } = await enabled({}, translated);
+    vi.advanceTimersByTime(200);
+    // Nothing is playing yet: their live voice is already held.
+    expect(remote.volume).toBe(0);
+  });
+
+  it('lets the peer through at full volume in captions mode, when they leave, or when nothing needs translating', async () => {
+    const { socket, client, remote } = await enabled({}, translated);
+    vi.advanceTimersByTime(200);
+    client.setMode('captions');
+    vi.advanceTimersByTime(200);
+    expect(remote.volume).toBeCloseTo(1);
+
+    client.setMode('voice');
+    vi.advanceTimersByTime(200);
+    expect(remote.volume).toBe(0);
+    socket.server('peer', { connected: false });
+    vi.advanceTimersByTime(200);
+    expect(remote.volume).toBeCloseTo(1);
+
+    socket.server('peer', { connected: true, speak: 'en', hear: 'en' });
+    vi.advanceTimersByTime(200);
+    expect(remote.volume).toBeCloseTo(1);
+  });
+
+  it('holds at originalVolume so the real voice can stay quietly underneath', async () => {
+    const { client, remote } = await enabled({}, translated);
+    client.setOriginalVolume(0.25);
+    vi.advanceTimersByTime(200);
+    expect(remote.volume).toBeCloseTo(0.25);
+  });
+
+  it('also holds an audio element registered after translation started', async () => {
+    installAudioFakes();
+    const elements = new Set<HTMLMediaElement>([{ volume: 1 } as HTMLMediaElement]);
+    const target = () => elements;
+    const client = new TranslationClient({ serverUrl: 'https://api.example.com', token: 'bj_session_x', remoteAudio: target, socketFactory: fakeSocketFactory });
+    const p = client.enable();
+    await flush();
+    FakeSocket.instances[0].server('ready', { ...READY, ...translated });
+    await p;
+    const late = { volume: 1 } as HTMLMediaElement;
+    elements.add(late);
+    client.setRemoteAudio(target);
+    vi.advanceTimersByTime(200);
+    expect(late.volume).toBe(0);
+  });
+});
+
+describe('TranslationClient: one switch per call', () => {
+  it('shares turning on (after ready) and off, with your languages and the peer language', async () => {
+    const shareSwitch = vi.fn(async () => undefined);
+    const { client } = await enabled({ shareSwitch, peerLanguage: 'mr' }, { peer: null, you: { speak: 'en', hear: 'en' } }, { speak: 'en', hear: 'en' });
+    await flush();
+    expect(shareSwitch).toHaveBeenCalledWith({ mode: 'voice', speak: 'en', hear: 'en', peerLanguage: 'mr', peerPresent: false });
+
+    client.enable({ mode: 'voice' });
+    await flush();
+    expect(shareSwitch).toHaveBeenCalledTimes(1);
+
+    client.disable();
+    await flush();
+    expect(shareSwitch).toHaveBeenLastCalledWith({ mode: 'off', peerPresent: false });
+
+    // Hanging up leaves only you.
+    client.enable();
+    await flush();
+    FakeSocket.instances.at(-1)!.server('ready', READY);
+    await flush();
+    const before = shareSwitch.mock.calls.length;
+    client.disable({ share: false });
+    await flush();
+    expect(shareSwitch.mock.calls.length).toBe(before);
+  });
+
+  it('keeps the peer languages when they are already in translation', async () => {
+    const shareSwitch = vi.fn(async () => undefined);
+    await enabled({ shareSwitch, peerLanguage: 'mr' });
+    await flush();
+    expect(shareSwitch.mock.calls[0][0]).toMatchObject({ peerPresent: true });
+    expect(shareSwitch.mock.calls[0][0]).not.toHaveProperty('peerLanguage');
+  });
+
+  it('surfaces a refused switch as an error and keeps translating', async () => {
+    const err = Object.assign(new Error('no credits'), { code: 'TRANSLATION_INSUFFICIENT_CREDITS' });
+    const { client } = await enabled({ shareSwitch: vi.fn(async () => Promise.reject(err)) });
+    const onError = vi.fn();
+    client.on('error', onError);
+    await flush();
+    expect(client.getState().error?.code).toBe('TRANSLATION_INSUFFICIENT_CREDITS');
+    expect(client.getState().status).toBe('ready');
+  });
+
+  it("follows the other side's switch without sharing it back", async () => {
+    installAudioFakes();
+    const shareSwitch = vi.fn(async () => undefined);
+    const { client } = makeClient({ shareSwitch });
+    const ended = vi.fn();
+    client.on('ended', ended);
+
+    client.followCall('voice');
+    await flush();
+    FakeSocket.instances[0].server('ready', READY);
+    await flush();
+    expect(client.getState().status).toBe('ready');
+
+    client.followCall('captions'); // already in: the relay applies the call's mode
+    expect(FakeSocket.instances).toHaveLength(1);
+
+    client.followCall('off');
+    expect(FakeSocket.instances[0].events('end')).toHaveLength(1);
+    expect(ended).toHaveBeenCalledWith({ reason: 'switched_off' });
+    await flush();
+    expect(shareSwitch).not.toHaveBeenCalled();
+  });
+
+  it('reports blocked audio and retries it from enable()', async () => {
+    const { client, ctx } = await enabled();
+    (ctx as any).state = 'suspended';
+    (ctx as any).onstatechange();
+    expect(client.getState().audioBlocked).toBe(true);
+    ctx.resume = async () => {
+      (ctx as any).state = 'running';
+    };
+    client.enable();
+    await flush();
+    expect(client.getState().audioBlocked).toBe(false);
   });
 });
 

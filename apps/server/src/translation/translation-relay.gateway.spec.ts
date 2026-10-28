@@ -364,6 +364,16 @@ describe('TranslationRelayGateway', () => {
       expect(sessions.end.mock.calls[0][1]).toMatchObject({ reason: 'inactive' });
     });
 
+    it('a call-wide language update keeps a hear language the participant picked', async () => {
+      const { caller, receiver } = await both();
+      receiver.trigger('settings', { hear: 'ta' });
+      await flush();
+      await gateway.applyCallUpdate('call_1', { callerLanguage: 'ta', receiverLanguage: 'mr' });
+      expect(receiver.payloads('ready').at(-1).you).toEqual({ speak: 'mr', hear: 'ta' });
+      // The caller never picked one, so hear follows speak.
+      expect(caller.payloads('ready').at(-1).you).toEqual({ speak: 'ta', hear: 'ta' });
+    });
+
     it('rejects invalid settings', async () => {
       const { caller } = await both();
       caller.trigger('settings', { hear: 'auto' });

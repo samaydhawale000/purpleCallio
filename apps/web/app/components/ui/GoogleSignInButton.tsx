@@ -14,8 +14,8 @@ export function GoogleSignInButton() {
   }, [clientId, gsiReady, renderButton]);
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div ref={ref} className="flex justify-center min-h-[40px]" />
+    <div className="flex w-full flex-col items-center gap-3">
+      <div ref={ref} className="flex min-h-[44px] w-full justify-center" />
       {loading && (
         <p className="text-sm text-[#3D3650]">Signing you in…</p>
       )}

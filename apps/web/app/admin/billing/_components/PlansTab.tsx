@@ -13,12 +13,9 @@ import {
   type AdminPlan,
 } from '../../../lib/admin-billing';
 import { formatCredits, formatDate, formatMoney, intervalLabel } from '../../../lib/billing';
-import { Button } from '../../../components/ui/Button';
-import { Badge } from '../../../components/ui/Badge';
-import { Pagination } from '../../../components/ui/Pagination';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
 import { useCanWrite } from '../../../lib/admin-access';
-import { ErrorText, linkBtn, Modal, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
+import { Badge, Button, ErrorText, linkBtn, Modal, Pagination, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
 export function planPriceLabel(p: Pick<AdminPlan, 'customPricing' | 'version'>) {
   if (p.customPricing || !p.version) return 'Custom pricing';
@@ -57,6 +54,7 @@ export function PlansTab() {
       <Panel
         title="Plans"
         subtitle="Plans are never deleted. Archive a plan to retire it — existing subscribers keep the terms they purchased."
+        flush
         actions={
           canWrite && (
             <Button size="sm" onClick={() => router.push('/admin/billing/plans/new')}>
@@ -72,22 +70,26 @@ export function PlansTab() {
           {plans.map((p) => (
             <tr key={p.id} className={rowCls}>
               <td className={tdCls}>
-                <Link href={`/admin/billing/plans/${p.id}`} className="font-medium text-[#170B2E] hover:text-[#6425C4]">
+                <Link href={`/admin/billing/plans/${p.id}`} className="font-medium text-[#170B2E] hover:text-[#5B21B6]">
                   {p.name}
                 </Link>
-                <div className="text-[11px] text-[#6B6478] font-mono">{p.slug}</div>
-                {p.isPopular && <Badge variant="purple" className="mt-1">Popular</Badge>}
+                <div className="text-xs text-[#6B6478]">{p.slug}</div>
+                {p.isPopular && (
+                  <div className="mt-1">
+                    <Badge variant="purple">Popular</Badge>
+                  </div>
+                )}
               </td>
               <td className={tdCls}>{p.type}</td>
               <td className={tdCls}><StatusBadge status={p.status} /></td>
-              <td className={`${tdCls} whitespace-nowrap text-[#170B2E]`}>{planPriceLabel(p)}</td>
+              <td className={`${tdCls} whitespace-nowrap`}>{planPriceLabel(p)}</td>
               <td className={tdCls}>{p.version ? formatCredits(p.version.includedCredits) : '—'}</td>
               <td className={tdCls}>
                 {p.isPublic ? 'Public' : 'Private'}
                 {!p.isPublic && p.assignedUser && (
-                  <div className="text-[11px]">
+                  <div className="text-xs text-[#6B6478]">
                     for{' '}
-                    <Link href={`/admin/customers/${p.assignedUser.id}`} className="text-[#6425C4] hover:underline">
+                    <Link href={`/admin/customers/${p.assignedUser.id}`} className="text-[#5B21B6] hover:underline">
                       {p.assignedUser.email}
                     </Link>
                   </div>
@@ -100,7 +102,7 @@ export function PlansTab() {
                   <Link href={`/admin/billing/plans/${p.id}`} className={linkBtn}>{canWrite ? 'Edit' : 'View'}</Link>
                   {canWrite && (
                   <>
-                  <button className={linkBtn} disabled={busy === p.id} onClick={() => run(p.id, () => duplicatePlan(p.id), `Duplicated ${p.name} (inactive copy)`)}>
+                  <button type="button" className={linkBtn} disabled={busy === p.id} onClick={() => run(p.id, () => duplicatePlan(p.id), `Duplicated ${p.name} (inactive copy)`)}>
                     Duplicate
                   </button>
                   {p.status !== 'ARCHIVED' && (
@@ -119,12 +121,12 @@ export function PlansTab() {
                     </button>
                   )}
                   {p.status === 'ARCHIVED' ? (
-                    <button className={linkBtn} disabled={busy === p.id} onClick={() => run(p.id, () => updatePlan(p.id, { status: 'INACTIVE' }), `${p.name} restored as inactive`)}>
+                    <button type="button" className={linkBtn} disabled={busy === p.id} onClick={() => run(p.id, () => updatePlan(p.id, { status: 'INACTIVE' }), `${p.name} restored as inactive`)}>
                       Restore
                     </button>
                   ) : (
                     <button
-                      className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-40"
+                      className="text-[13px] font-medium text-red-600 hover:underline disabled:opacity-40"
                       disabled={busy === p.id}
                       onClick={() => {
                         if (
@@ -141,7 +143,7 @@ export function PlansTab() {
                   )}
                   </>
                   )}
-                  <button className={linkBtn} onClick={() => setSubscribersOf(p)}>
+                  <button type="button" className={linkBtn} onClick={() => setSubscribersOf(p)}>
                     Subscribers
                   </button>
                 </div>
@@ -170,17 +172,17 @@ function SubscribersModal({ plan, onClose }: { plan: AdminPlan; onClose: () => v
             {data.data.map((s) => (
               <tr key={s.id} className={rowCls}>
                 <td className={tdCls}>
-                  <Link href={`/admin/customers/${s.company.id}`} className="text-[#170B2E] hover:text-[#6425C4]">
+                  <Link href={`/admin/customers/${s.company.id}`} className="font-medium text-[#170B2E] hover:text-[#5B21B6]">
                     {s.company.companyName || s.company.name || s.company.email}
                   </Link>
-                  <div className="text-[11px]">{s.company.email}</div>
+                  <div className="text-xs text-[#6B6478]">{s.company.email}</div>
                 </td>
                 <td className={tdCls}><StatusBadge status={s.status} /></td>
                 <td className={tdCls}>{formatMoney(s.pricePaise, s.currency)}</td>
                 <td className={tdCls}>{formatCredits(s.includedCredits)}</td>
                 <td className={tdCls}>
                   {formatDate(s.currentPeriodEnd)}
-                  {s.cancelAtPeriodEnd && <div className="text-[11px] text-amber-700">Cancels at period end</div>}
+                  {s.cancelAtPeriodEnd && <div className="text-xs text-amber-700">Cancels at period end</div>}
                 </td>
               </tr>
             ))}

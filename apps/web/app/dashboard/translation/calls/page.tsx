@@ -3,13 +3,10 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowUpRight } from 'lucide-react';
 import { api } from '../../../lib/api';
-import { Button } from '../../../components/ui/Button';
-import { Input } from '../../../components/ui/Input';
-import { Badge } from '../../../components/ui/Badge';
 import { MODE_LABEL } from '../../../lib/translation';
-import { Card, ErrorBox, Loading, NoProjects, PageHeader, ProjectPicker, TranslationNav, useProjects } from '../_components/shared';
+import { Pill, Table, buttonCls, fmtDateTime, inputCls, type Column } from '../../_ui';
+import { Empty, ErrorBox, Loading, NoProjects, PageHeader, ProjectPicker, TranslationNav, useProjects } from '../_components/shared';
 
 interface CallRow {
   id: string;
@@ -23,7 +20,32 @@ interface CallRow {
 
 const isTranslated = (c: CallRow) => !!c.translationMode && c.translationMode.toUpperCase() !== 'OFF';
 
-/** Recent translated calls with links to their Post-Call Suite reports. */
+const COLUMNS: Column<CallRow>[] = [
+  { key: 'date', label: 'Date', render: (c) => fmtDateTime(c.startedAt ?? c.createdAt) },
+  {
+    key: 'pair',
+    label: 'Languages',
+    render: (c) => (c.callerLanguage && c.receiverLanguage ? `${c.callerLanguage} ⇄ ${c.receiverLanguage}` : '—'),
+  },
+  {
+    key: 'mode',
+    label: 'Mode',
+    render: (c) => <Pill tone="accent">{MODE_LABEL[(c.translationMode ?? '').toLowerCase()] ?? c.translationMode}</Pill>,
+  },
+  { key: 'id', label: 'Call ID', mono: true, className: 'text-[#6B6478]', render: (c) => c.id },
+  {
+    key: 'report',
+    label: '',
+    align: 'right',
+    render: (c) => (
+      <Link href={`/dashboard/translation/calls/${c.id}`} className="text-sm font-medium text-[#5B21B6] hover:underline">
+        View report
+      </Link>
+    ),
+  },
+];
+
+/** Recent translated calls with links to their reports. */
 export default function TranslationCallsPage() {
   const router = useRouter();
   const { projects, projectId, setProjectId, error: projectsError, loading: projectsLoading } = useProjects();
@@ -55,22 +77,40 @@ export default function TranslationCallsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
       <PageHeader
         title="Calls & reports"
-        subtitle="Post-Call Suite reports for translated calls: transcript, summary in each language, action items and signals."
-        actions={projects && projects.length > 0 ? <ProjectPicker projects={projects} value={projectId} onChange={(id) => { setPage(1); setProjectId(id); }} /> : undefined}
+        subtitle="Translated calls and their post-call reports."
+        actions={
+          projects && projects.length > 0 ? (
+            <ProjectPicker
+              projects={projects}
+              value={projectId}
+              onChange={(id) => {
+                setPage(1);
+                setProjectId(id);
+              }}
+            />
+          ) : undefined
+        }
       />
       <TranslationNav />
 
-      <Card title="Open a report by call ID">
-        <form onSubmit={open} className="flex flex-wrap items-end gap-3">
-          <div className="w-80 max-w-full">
-            <Input label="Call ID" placeholder="call_…" value={callId} onChange={(e) => setCallId(e.target.value)} />
-          </div>
-          <Button type="submit" variant="secondary" disabled={!callId.trim()}>Open report</Button>
-        </form>
-      </Card>
+      <form onSubmit={open} className="mb-6 flex flex-wrap items-center gap-2">
+        <label htmlFor="report-call-id" className="text-[13px] text-[#6B6478]">
+          Open a report by call ID
+        </label>
+        <input
+          id="report-call-id"
+          className={`${inputCls} w-64 max-w-full py-1.5`}
+          placeholder="call_…"
+          value={callId}
+          onChange={(e) => setCallId(e.target.value)}
+        />
+        <button type="submit" className={buttonCls('secondary', 'py-1.5')} disabled={!callId.trim()}>
+          Open report
+        </button>
+      </form>
 
       {projectsLoading ? (
         <Loading label="Loading projects…" />
@@ -83,34 +123,35 @@ export default function TranslationCallsPage() {
       ) : !calls ? (
         <Loading label="Loading calls…" />
       ) : (
-        <Card title="Translated calls" subtitle={pageCount > 1 ? `Page ${page} of ${pageCount} of this project's calls` : undefined}>
-          {calls.length === 0 ? (
-            <p className="text-sm text-[#3D3650] py-6 text-center">No translated calls on this page.</p>
-          ) : (
-            <ul className="divide-y divide-[#E7DFF5]">
-              {calls.map((c) => (
-                <li key={c.id} className="flex flex-wrap items-center gap-3 py-3">
-                  <span className="font-mono text-xs text-[#3D3650]">{c.id}</span>
-                  <Badge variant="purple">{MODE_LABEL[(c.translationMode ?? '').toLowerCase()] ?? c.translationMode}</Badge>
-                  {c.callerLanguage && c.receiverLanguage && (
-                    <span className="text-xs text-[#3D3650] font-mono">{c.callerLanguage} ⇄ {c.receiverLanguage}</span>
-                  )}
-                  <span className="text-xs text-[#3D3650]">{new Date(c.startedAt ?? c.createdAt).toLocaleString('en-IN')}</span>
-                  <Link href={`/dashboard/translation/calls/${c.id}`} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-[#6425C4] hover:text-[#170B2E]">
-                    View report <ArrowUpRight size={13} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+        <>
+          <Table
+            columns={COLUMNS}
+            rows={calls}
+            rowKey={(c) => c.id}
+            empty={<Empty title="No translated calls on this page">Calls that used captions or voice translation appear here.</Empty>}
+          />
           {pageCount > 1 && (
-            <div className="flex gap-2 mt-4">
-              <Button size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
-              <Button size="sm" variant="secondary" disabled={page >= pageCount} onClick={() => setPage(page + 1)}>Next</Button>
+            <div className="mt-3 flex items-center justify-between text-[13px] text-[#6B6478]">
+              <span>
+                Page {page} of {pageCount}
+              </span>
+              <div className="flex gap-2">
+                <button type="button" className={buttonCls('secondary', 'px-3 py-1.5')} disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  className={buttonCls('secondary', 'px-3 py-1.5')}
+                  disabled={page >= pageCount}
+                  onClick={() => setPage(page + 1)}
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
-        </Card>
+        </>
       )}
-    </div>
+    </>
   );
 }

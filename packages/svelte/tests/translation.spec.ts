@@ -33,8 +33,12 @@ describe('createTranslation', () => {
     expect(c.setMode).toHaveBeenCalledWith('voice');
     expect(c.replay).toHaveBeenCalledWith('receiver-1', { rate: 0.85 });
     expect(c.requestRepeat).toHaveBeenCalledWith('receiver-1');
+    await tr.resumeAudio();
+    expect(c.resumeAudio).toHaveBeenCalled();
+    tr.disable({ share: false });
+    expect(c.disable).toHaveBeenCalledWith({ share: false });
     tr.destroy();
-    expect(c.disable).toHaveBeenCalledTimes(1);
+    expect(c.disable).toHaveBeenCalledTimes(2);
     expect(c.listenerCount()).toBe(0);
   });
 

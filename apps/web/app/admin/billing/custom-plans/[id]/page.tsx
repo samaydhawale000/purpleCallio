@@ -22,12 +22,12 @@ import {
 import type { CustomPlanRequestStatus } from '../../../../lib/billing';
 import { formatCredits, formatDate, formatMoney, intervalLabel } from '../../../../lib/billing';
 import { countryByCode, usageRangeLabel, useCaseLabel } from '../../../../lib/onboarding';
-import { Button } from '../../../../components/ui/Button';
 import { ToastHost, type ToastState } from '../../../../dashboard/billing/Toast';
 import { useCanWrite } from '../../../../lib/admin-access';
 import { CustomOfferForm } from '../../_components/CustomOfferForm';
 import { CustomPlanSnapshot } from '../../_components/CustomPlanSnapshot';
-import { ErrorText, Field, inputCls, Panel, Spinner, StatusBadge, useAdminErrorHandler } from '../../_components/ui';
+import { buttonCls } from '../../../../dashboard/_ui';
+import { Button, ErrorText, Field, inputCls, linkBtn, Panel, Spinner, StatusBadge, useAdminErrorHandler } from '../../_components/ui';
 
 export default function CustomPlanRequestPage() {
   const { id } = useParams<{ id: string }>();
@@ -96,7 +96,7 @@ export default function CustomPlanRequestPage() {
   };
 
   const back = (
-    <Link href="/admin/billing?tab=custom-plans" className="inline-flex items-center gap-1 text-sm text-[#3D3650] hover:text-[#170B2E]">
+    <Link href="/admin/billing?tab=custom-plans" className="inline-flex items-center gap-1 text-[13px] text-[#6B6478] hover:text-[#170B2E]">
       <ArrowLeft size={14} /> Back to custom plans
     </Link>
   );
@@ -125,30 +125,30 @@ export default function CustomPlanRequestPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
       <div>
         {back}
-        <div className="flex flex-wrap items-center gap-3 mt-3">
-          <h1 className="text-2xl font-bold text-[#170B2E]">Custom plan — {c.companyName || c.name || c.email}</h1>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <h1 className="text-[22px] font-semibold tracking-tight text-[#170B2E]">Custom plan — {c.companyName || c.name || c.email}</h1>
           <StatusBadge status={detail.status} label={CUSTOM_PLAN_STATUS_LABEL[detail.status]} />
         </div>
-        <p className="text-sm text-[#3D3650] mt-1">
+        <p className="mt-1 text-sm text-[#6B6478]">
           Requested {formatDate(detail.requestedAt)}
           {detail.closedAt && <> · Closed {formatDate(detail.closedAt)}</>}
         </p>
-        <div className="mt-3">
+        <div className="mt-4">
           <Link
             href={`/admin/support/${detail.ticket.id}`}
-            className="inline-flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border border-[#D6C4EE] text-[#6425C4] hover:border-[#7F40E8]"
+            className={buttonCls('secondary')}
           >
             <MessageSquare size={15} /> Open conversation ({detail.ticket.ticketNumber})
           </Link>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px] items-start">
-        <div className="flex flex-col gap-6 min-w-0">
+      <div className="grid items-start gap-8 lg:grid-cols-[1fr_320px]">
+        <div className="flex min-w-0 flex-col gap-8">
           <Panel title="Customer profile">
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
               {(
@@ -166,10 +166,10 @@ export default function CustomPlanRequestPage() {
                 ] as [string, string | null | undefined][]
               ).map(([k, v]) => (
                 <div key={k}>
-                  <dt className="text-xs text-[#3D3650]">{k}</dt>
-                  <dd className="text-[#170B2E] break-words">
+                  <dt className="text-[13px] text-[#6B6478]">{k}</dt>
+                  <dd className="break-words text-[#170B2E]">
                     {k === 'Website' && v ? (
-                      <a href={v} target="_blank" rel="noopener noreferrer" className="text-[#7F40E8] hover:underline">{v}</a>
+                      <a href={v} target="_blank" rel="noopener noreferrer" className="text-[#5B21B6] hover:underline">{v}</a>
                     ) : (
                       v || <span className="text-[#6B6478]">—</span>
                     )}
@@ -177,7 +177,7 @@ export default function CustomPlanRequestPage() {
                 </div>
               ))}
             </dl>
-            <Link href={`/admin/customers/${c.id}`} className="inline-block mt-4 text-xs font-medium text-[#6425C4] hover:text-[#170B2E]">
+            <Link href={`/admin/customers/${c.id}`} className="mt-4 inline-block text-[13px] font-medium text-[#5B21B6] hover:underline">
               View customer →
             </Link>
           </Panel>
@@ -188,7 +188,7 @@ export default function CustomPlanRequestPage() {
             actions={canWrite && !offerOpen && <Button size="sm" onClick={() => setOfferOpen(true)}>Create custom offer</Button>}
           >
             {canWrite && offerOpen && (
-              <div className="mb-6 rounded-xl border border-[#E7DFF5] p-4">
+              <div className="mb-6 rounded-lg bg-white p-5">
                 <CustomOfferForm
                   requestId={detail.id}
                   features={features.filter((f) => f.isActive)}
@@ -202,26 +202,26 @@ export default function CustomPlanRequestPage() {
               </div>
             )}
             {detail.offers.length === 0 ? (
-              <p className="text-sm text-[#3D3650]">No offers yet.</p>
+              <p className="text-sm text-[#6B6478]">No offers yet.</p>
             ) : (
               <div className="space-y-3">
                 {detail.offers.map((o) => {
                   const v = o.plan.version;
                   return (
-                    <div key={o.id} className="rounded-xl border border-[#E7DFF5] p-4 text-sm">
+                    <div key={o.id} className="rounded-lg bg-white p-4 text-sm">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-[#170B2E]">{o.plan.name}</span>
                           <StatusBadge status={o.status} />
                         </div>
                         {canWrite && o.status === 'SENT' && (
-                          <button className="text-xs font-medium text-red-600 hover:text-red-800" onClick={() => withdraw(o.id)}>
+                          <button type="button" className="text-[13px] font-medium text-red-600 hover:underline" onClick={() => withdraw(o.id)}>
                             Withdraw
                           </button>
                         )}
                       </div>
                       {v && (
-                        <p className="text-[#3D3650] mt-1">
+                        <p className="mt-1 text-[#6B6478]">
                           {formatMoney(v.pricePaise, v.currency)} / {intervalLabel(v)} · {formatCredits(v.includedCredits)} credits
                           {v.features.length ? ` · ${v.features.length} features` : ''}
                         </p>
@@ -231,7 +231,7 @@ export default function CustomPlanRequestPage() {
                         {o.expiresAt && <> · Expires {formatDate(o.expiresAt)}</>}
                         {o.acceptedAt && <> · Accepted {formatDate(o.acceptedAt)}</>}
                       </p>
-                      {o.message && <p className="text-xs text-[#3D3650] mt-2 whitespace-pre-wrap">{o.message}</p>}
+                      {o.message && <p className="text-xs text-[#6B6478] mt-2 whitespace-pre-wrap">{o.message}</p>}
                     </div>
                   );
                 })}
@@ -240,7 +240,7 @@ export default function CustomPlanRequestPage() {
           </Panel>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-8">
           <Panel title="Request">
             <div className="space-y-4">
               <Field label="Status">
@@ -256,7 +256,7 @@ export default function CustomPlanRequestPage() {
                 </select>
               </Field>
               <div>
-                <span className="block text-xs font-medium text-[#3D3650] mb-1">Assignee</span>
+                <span className="mb-1.5 block text-[13px] font-medium text-[#170B2E]">Assignee</span>
                 <select
                   aria-label="Assignee"
                   className={inputCls}
@@ -272,12 +272,12 @@ export default function CustomPlanRequestPage() {
                 {canWrite && (
                 <div className="flex gap-3 mt-2">
                   {me?.userId && detail.assignedAdmin?.id !== me.userId && (
-                    <button className="text-xs font-medium text-[#6425C4]" disabled={saving} onClick={() => patch({ assignedAdminId: me.userId }, 'Assigned to you')}>
+                    <button type="button" className={linkBtn} disabled={saving} onClick={() => patch({ assignedAdminId: me.userId }, 'Assigned to you')}>
                       Assign to me
                     </button>
                   )}
                   {detail.assignedAdmin && (
-                    <button className="text-xs font-medium text-[#3D3650]" disabled={saving} onClick={() => patch({ assignedAdminId: null }, 'Unassigned')}>
+                    <button type="button" className="text-[13px] font-medium text-[#6B6478] hover:underline" disabled={saving} onClick={() => patch({ assignedAdminId: null }, 'Unassigned')}>
                       Unassign
                     </button>
                   )}

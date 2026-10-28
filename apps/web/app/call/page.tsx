@@ -435,7 +435,11 @@ function CallPageContent() {
       // The remote video element also carries the remote audio track.
       getRemoteElements: () => [remoteAudioRef.current, remoteVideoRef.current],
       getLocalStream: () => localStreamRef.current,
+      callId: urlCallId,
+      apiUrl,
    });
+   const translationRef = useRef(translation);
+   translationRef.current = translation;
 
    useEffect(() => {
       stateRef.current = state;
@@ -1053,6 +1057,10 @@ function CallPageContent() {
          if (d.participantId === selfParticipantIdRef.current) return;
          setRemoteMedia((m) => ({ ...m, screenShare: false }));
       };
+      // Live Translate is one switch per call: follow the other side's.
+      socket.on("translation.changed", (d: { mode?: "off" | "captions" | "voice" }) => {
+         if (d?.mode) translationRef.current.followCall(d.mode);
+      });
       socket.on("camera.enabled", onCameraOn);
       socket.on("camera.disabled", onCameraOff);
       socket.on("microphone.enabled", onMicOn);
@@ -1111,6 +1119,7 @@ function CallPageContent() {
             "microphone.disabled",
             "screenShare.started",
             "screenShare.stopped",
+            "translation.changed",
             "participant.joined",
             "connect",
          ].forEach((e) => socket.off(e));
@@ -1953,6 +1962,18 @@ function CallPageContent() {
                splitView={translationSplitView}
                primary={primary}
             />
+            {translation.state?.audioBlocked && (
+               // Translation was switched on by the other side; the browser
+               // needs a click before it can play the translated voice.
+               <button
+                  type="button"
+                  onClick={translation.resumeAudio}
+                  className="absolute top-4 left-1/2 -translate-x-1/2 z-20 rounded-full px-4 py-2 text-sm font-medium text-white shadow-lg"
+                  style={{ background: primary }}
+               >
+                  Join translation
+               </button>
+            )}
             {showTranslation && (
                <TranslationPanel
                   translation={translation}

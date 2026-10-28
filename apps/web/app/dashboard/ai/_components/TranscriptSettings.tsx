@@ -8,8 +8,8 @@ import {
   TRANSCRIPT_RETENTION_DAYS,
   apiErrorMessages,
 } from '../../../lib/ai';
-import { Button } from '../../../components/ui/Button';
-import { Checkbox, Select } from './fields';
+import { Panel } from '../../_ui';
+import { ActionButton, Checkbox, Select } from './fields';
 
 interface Props {
   agent: AiAgent;
@@ -44,10 +44,10 @@ export function TranscriptSettings({ agent, onSaved, onError }: Props) {
   }
 
   return (
-    <div className="rounded-2xl border border-[#E7DFF5] p-5 flex flex-col gap-4" style={{ background: '#FFFFFF' }}>
+    <Panel className="flex flex-col gap-4">
       <div>
-        <p className="text-sm font-semibold text-[#170B2E]">Transcripts</p>
-        <p className="text-xs text-[#3D3650] mt-0.5">
+        <h2 className="text-[15px] font-semibold text-[#170B2E]">Transcripts</h2>
+        <p className="mt-0.5 text-[13px] text-[#6B6478]">
           Card numbers, API keys and email addresses are redacted before anything is saved.
         </p>
       </div>
@@ -72,10 +72,10 @@ export function TranscriptSettings({ agent, onSaved, onError }: Props) {
         </div>
       )}
       <div>
-        <Button size="sm" onClick={save} loading={saving} disabled={!dirty}>
+        <ActionButton variant="secondary" small onClick={save} loading={saving} disabled={!dirty}>
           Save transcript settings
-        </Button>
+        </ActionButton>
       </div>
-    </div>
+    </Panel>
   );
 }

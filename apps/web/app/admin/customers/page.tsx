@@ -1,25 +1,101 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { api } from '../../lib/api';
-import { Pagination } from '../../components/ui/Pagination';
 import { formatCredits } from '../../lib/billing';
 import { formatMinutes } from '../../lib/duration';
 import { useCanWrite } from '../../lib/admin-access';
+import { Block, Empty, PageHeader, Pager, Pill, Table, buttonCls, fmtDate, fmtNumber, useResource } from '../../dashboard/_ui';
 
 type Customer = { id: string; name: string | null; email: string; companyName: string | null; profileCompleted: boolean; plan: string | null; planType: 'FREE' | 'PAID' | 'CUSTOM' | null; creditBalance: number; status: string; lastActiveAt: string | null; projectCount: number; minutesUsed: number };
+type CustomerPage = { data: Customer[]; total: number; page: number; pageCount: number; pageSize?: number };
 
 export default function AdminCustomersPage() {
   const canWrite = useCanWrite();
-  const [customers, setCustomers] = useState<Customer[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
-  const [page, setPage] = useState(1); const [pageSize, setPageSize] = useState(10); const [total, setTotal] = useState(0); const [pageCount, setPageCount] = useState(1);
-  const load = () => { setLoading(true); api.get(`/admin/customers?page=${page}`).then((res) => { setCustomers(res.data.data ?? []); setTotal(res.data.total ?? 0); setPageCount(res.data.pageCount ?? 1); setPageSize(res.data.pageSize ?? 10); }).catch((e) => setError(e?.response?.data?.message || e?.message || 'Failed to load')).finally(() => setLoading(false)); };
-  useEffect(load, [page]);
-  const update = async (id: string, path: string, body: object) => { await api.patch(`/admin/customers/${id}/${path}`, body); load(); };
-  if (loading) return <div className="text-[#3D3650] text-sm py-20 text-center">Loading customers…</div>;
-  if (error) return <div className="py-20 text-center"><p className="text-red-600 text-sm">{error}</p></div>;
-  return <div className="space-y-6"><header><h1 className="text-2xl font-bold text-[#170B2E]">Customers</h1><p className="text-[#3D3650] text-sm mt-1">{total} registered companies</p></header>
-    <div className="rounded-xl border border-[#E7DFF5] overflow-hidden" style={{ background: '#FFFFFF' }}><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-[#E7DFF5] text-left">{['Company', 'Owner', 'Plan', 'Credits', 'Projects', 'Call Time', 'Last Active', 'Status', 'Actions'].map((label) => <th key={label} className="px-4 py-3 text-xs font-mono uppercase tracking-widest text-[#3D3650]">{label}</th>)}</tr></thead><tbody>{customers.map((c) => <tr key={c.id} className="border-b border-[#E7DFF5]/60"><td className="px-4 py-3 text-[#170B2E] font-medium"><Link href={`/admin/customers/${c.id}`} className="hover:text-[#7F40E8] hover:underline">{c.companyName || c.name || 'Unnamed'}</Link>{!c.profileCompleted && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-700">Profile incomplete</span>}</td><td className="px-4 py-3 text-[#3D3650]">{c.companyName && c.name ? <><span className="text-[#170B2E]">{c.name}</span><br /></> : null}{c.email}</td><td className="px-4 py-3"><span className={`text-[11px] px-2 py-1 rounded ${c.planType && c.planType !== 'FREE' ? 'text-[#6425C4] border border-[#7F40E8]/30' : 'text-[#3D3650] border border-[#E7DFF5]'}`}>{c.plan ?? 'Free'}</span></td><td className="px-4 py-3 text-[#3D3650]">{formatCredits(c.creditBalance)}</td><td className="px-4 py-3 text-[#3D3650]">{c.projectCount}</td><td className="px-4 py-3 text-[#3D3650]">{formatMinutes(c.minutesUsed)}</td><td className="px-4 py-3 text-[#3D3650]">{c.lastActiveAt ? new Date(c.lastActiveAt).toLocaleDateString() : '—'}</td><td className="px-4 py-3 text-[#3D3650]">{c.status}</td><td className="px-4 py-3">{canWrite && <button onClick={() => update(c.id, 'status', { status: c.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED' })} className="text-[11px] px-2.5 py-1 rounded border border-red-500/40 text-red-600">{c.status === 'ACTIVE' ? 'Suspend' : 'Resume'}</button>}</td></tr>)}{customers.length === 0 && <tr><td colSpan={9} className="px-4 py-10 text-center text-[#3D3650]">No customers yet.</td></tr>}</tbody></table></div><div className="px-4 pb-4"><Pagination page={page} pageCount={pageCount} totalItems={total} pageSize={pageSize} onPageChange={setPage} /></div></div>
-  </div>;
+  const [page, setPage] = useState(1);
+  const customers = useResource(
+    () => api.get<CustomerPage>(`/admin/customers?page=${page}`).then((r) => r.data),
+    [page],
+    (e: any) => e?.response?.data?.message || e?.message || 'Failed to load',
+  );
+
+  const update = async (id: string, path: string, body: object) => {
+    await api.patch(`/admin/customers/${id}/${path}`, body);
+    void customers.reload();
+  };
+
+  return (
+    <>
+      <PageHeader
+        title="Customers"
+        description={customers.data ? `${fmtNumber(customers.data.total ?? 0)} registered companies` : 'Registered companies'}
+      />
+      <Block res={customers} loadingLabel="Loading customers…">
+        {(res) => (
+          <>
+            <Table
+              rows={res.data ?? []}
+              rowKey={(c) => c.id}
+              empty={<Empty title="No customers yet." />}
+              columns={[
+                {
+                  key: 'company',
+                  label: 'Company',
+                  render: (c) => (
+                    <span className="inline-flex items-center gap-2">
+                      <Link href={`/admin/customers/${c.id}`} className="font-medium text-[#170B2E] hover:text-[#5B21B6] hover:underline">
+                        {c.companyName || c.name || 'Unnamed'}
+                      </Link>
+                      {!c.profileCompleted && <Pill tone="warning">Profile incomplete</Pill>}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'owner',
+                  label: 'Owner',
+                  render: (c) => (
+                    <div className="leading-tight">
+                      {c.companyName && c.name ? <p className="text-[#170B2E]">{c.name}</p> : null}
+                      <p className="text-[13px] text-[#6B6478]">{c.email}</p>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'plan',
+                  label: 'Plan',
+                  render: (c) => <Pill tone={c.planType && c.planType !== 'FREE' ? 'accent' : 'neutral'}>{c.plan ?? 'Free'}</Pill>,
+                },
+                { key: 'credits', label: 'Credits', align: 'right', render: (c) => formatCredits(c.creditBalance) },
+                { key: 'projects', label: 'Projects', align: 'right', render: (c) => c.projectCount },
+                { key: 'time', label: 'Call time', align: 'right', render: (c) => formatMinutes(c.minutesUsed) },
+                { key: 'active', label: 'Last active', className: 'text-[#6B6478]', render: (c) => fmtDate(c.lastActiveAt) },
+                {
+                  key: 'status',
+                  label: 'Status',
+                  render: (c) => <Pill tone={c.status === 'ACTIVE' ? 'success' : c.status === 'SUSPENDED' ? 'danger' : 'neutral'}>{c.status}</Pill>,
+                },
+                {
+                  key: 'actions',
+                  label: 'Actions',
+                  align: 'right',
+                  render: (c) =>
+                    canWrite && (
+                      <button
+                        type="button"
+                        onClick={() => update(c.id, 'status', { status: c.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED' })}
+                        className={buttonCls(c.status === 'ACTIVE' ? 'danger' : 'secondary', 'px-2.5 py-1 text-xs')}
+                      >
+                        {c.status === 'ACTIVE' ? 'Suspend' : 'Resume'}
+                      </button>
+                    ),
+                },
+              ]}
+            />
+            <Pager page={res.page ?? page} pageCount={res.pageCount ?? 1} total={res.total ?? 0} onChange={setPage} />
+          </>
+        )}
+      </Block>
+    </>
+  );
 }

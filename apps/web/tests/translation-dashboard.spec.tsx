@@ -18,7 +18,6 @@ import OverviewPage from '../app/dashboard/translation/page';
 import SettingsPage from '../app/dashboard/translation/settings/page';
 import LexiconsPage from '../app/dashboard/translation/lexicons/page';
 import ReportPage from '../app/dashboard/translation/calls/[callId]/page';
-import { TranslationUsageSection } from '../app/dashboard/translation/_components/TranslationUsageSection';
 
 const P = '/dashboard/translation/projects/p1';
 const projects = [{ id: 'p1', name: 'Clinic app' }];
@@ -99,24 +98,23 @@ describe('lib/translation helpers', () => {
 });
 
 describe('Live Translate overview', () => {
-  it('shows observability metrics with humanized flags and a pending benchmark state', async () => {
-    routes({ '/projects': projects, [`${P}/metrics`]: metrics });
+  it('shows the headline numbers and a daily minutes chart, without MeaningGuard or benchmark detail', async () => {
+    routes({ '/projects': projects, [`${P}/metrics`]: metrics, '/dashboard/usage/daily': [] });
     render(<OverviewPage />);
 
     expect(await screen.findByTestId('translation-metrics')).toBeTruthy();
     expect(screen.getByTestId('tile-first-audio').textContent).toContain('820 ms');
-    expect(screen.getByTestId('tile-first-audio').textContent).toContain('1.9 s');
-    expect(screen.getByTestId('tile-cost').textContent).toContain('350 credits');
+    expect(screen.getByTestId('tile-cost').textContent).toContain('42,000');
+    expect(screen.getByTestId('tile-cost').textContent).toContain('350 credits per call-minute');
     expect(screen.getByTestId('tile-cost').textContent).toContain('₹3.50');
-    const reasons = screen.getByTestId('guard-reasons');
-    expect(within(reasons).getByText('An amount may not match')).toBeTruthy();
-    expect(reasons.textContent).not.toMatch(/accurate %|confidence/i);
-    expect(screen.getByTestId('benchmarks').textContent).toMatch(/pending Phase 0/i);
+    expect(screen.queryByTestId('guard-reasons')).toBeNull();
+    expect(screen.queryByTestId('benchmarks')).toBeNull();
     expect(api.get).toHaveBeenCalledWith(`${P}/metrics`, { params: expect.objectContaining({ from: expect.any(String), to: expect.any(String) }) });
+    expect(api.get).toHaveBeenCalledWith('/dashboard/usage/daily', { params: { days: 30, projectId: 'p1' } });
   });
 
   it('shows a stable error message when metrics fail', async () => {
-    routes({ '/projects': projects, [`${P}/metrics`]: Object.assign(new Error('x'), { response: { status: 403, data: { code: 'TRANSLATION_NOT_IN_PLAN' } } }) });
+    routes({ '/projects': projects, '/dashboard/usage/daily': [], [`${P}/metrics`]: Object.assign(new Error('x'), { response: { status: 403, data: { code: 'TRANSLATION_NOT_IN_PLAN' } } }) });
     render(<OverviewPage />);
     expect(await screen.findByText('Live Translate is not included in your plan. Upgrade to use it.')).toBeTruthy();
   });
@@ -246,7 +244,7 @@ describe('Call report', () => {
     signals: { talkRatio: { caller: 0.6, receiver: 0.4 }, topics: ['fees'], flaggedMoments: [{ phraseId: 'caller-1' }], replays: 1, repeats: 0, tone: [{ speaker: 'receiver', topic: 'fees', tone: 'hesitant', quotes: ['ठीक आहे'] }] },
   };
 
-  it('shows summary per language, flagged phrases and possible tone', async () => {
+  it('shows summary per language, transcript without flags and possible tone', async () => {
     routes({ '/dashboard/translation/calls/call-1/report': report });
     render(<ReportPage />);
 
@@ -258,9 +256,10 @@ describe('Call report', () => {
     fireEvent.click(within(summary).getByRole('button', { name: 'Show in transcript' }));
 
     const transcript = screen.getByTestId('report-transcript');
-    const flagged = transcript.querySelector('[data-flagged="true"]')!;
-    expect(flagged.textContent).toContain('May not be accurate: An amount may not match');
-    expect(transcript.querySelectorAll('[data-flagged="true"]').length).toBe(1);
+    // MeaningGuard flags are no longer shown to customers.
+    expect(transcript.textContent).toContain('The fee is 500 rupees');
+    expect(transcript.querySelectorAll('[data-flagged="true"]').length).toBe(0);
+    expect(transcript.textContent).not.toMatch(/May not be accurate/);
     expect(screen.getByTestId('possible-tone').textContent).toMatch(/possible tone hesitant/i);
     expect(screen.getByTestId('report-signals').textContent).toContain('Caller 60% · Receiver 40%');
     expect(document.body.textContent).not.toMatch(/\d+% accurate|confidence/i);
@@ -282,29 +281,3 @@ describe('Call report', () => {
   });
 });
 
-describe('Usage page CostGuard breakdown', () => {
-  it('splits credits across call, captions, voice, AI and reports', async () => {
-    routes({
-      '/dashboard/translation/usage': {
-        callMinutes: { minutes: 100, credits: 200 },
-        captions: { minutes: 10, credits: 1200 },
-        voice: { minutes: 20, credits: 18000 },
-        aiAgent: { minutes: 5, credits: 75 },
-        reports: { count: 2, credits: 200 },
-      },
-    });
-    render(<TranslationUsageSection />);
-    const box = await screen.findByTestId('costguard-breakdown');
-    expect(box.textContent).toContain('19,675 credits in total');
-    expect(screen.getByTestId('breakdown-voice').textContent).toContain('18,000 credits');
-    expect(screen.getByTestId('breakdown-reports').textContent).toContain('2 reports');
-    expect(box.textContent).not.toMatch(/₹/);
-  });
-
-  it('renders nothing when the endpoint is unavailable', async () => {
-    routes({});
-    const { container } = render(<TranslationUsageSection />);
-    await waitFor(() => expect(api.get).toHaveBeenCalled());
-    expect(container.textContent).toBe('');
-  });
-});

@@ -14,11 +14,10 @@ import {
   formatMoneyExact,
   PURPOSE_LABEL,
 } from '../../../lib/billing';
-import { Button } from '../../../components/ui/Button';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
 import { RefundDialog } from './PaymentsTab';
 import { useCanWrite } from '../../../lib/admin-access';
-import { Checkbox, ErrorText, Field, inputCls, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
+import { Button, Checkbox, ErrorText, Field, inputCls, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
 const BUCKET_LABEL: Record<string, string> = {
   SUBSCRIPTION: 'Plan credits',
@@ -46,14 +45,14 @@ export function CustomerBillingPanel({ customerId, onChanged }: { customerId: st
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Panel title="Current plan">
-          <p className="text-lg font-bold text-[#170B2E]">
-            {s.planName ?? '—'} <span className="text-xs font-normal text-[#3D3650]">{s.planType}</span>
+          <p className="text-lg font-semibold text-[#170B2E]">
+            {s.planName ?? '—'} <span className="text-xs font-normal text-[#6B6478]">{s.planType}</span>
           </p>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[#3D3650]">
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[#6B6478]">
             <StatusBadge status={s.status} />
             {s.currentPeriodStart && s.currentPeriodEnd && (
               <span>
@@ -62,38 +61,38 @@ export function CustomerBillingPanel({ customerId, onChanged }: { customerId: st
             )}
           </div>
           {s.planType !== 'FREE' && s.pricePaise > 0 && (
-            <p className="text-sm text-[#3D3650] mt-2">
+            <p className="text-sm text-[#6B6478] mt-2">
               Paid {formatMoney(s.pricePaise, s.currency)} for {formatCredits(s.includedCredits)} credits
             </p>
           )}
           {s.cancelAtPeriodEnd && <p className="text-xs text-amber-700 mt-2">Cancelled — plan remains active until {formatDate(s.currentPeriodEnd)}.</p>}
           {data.scheduledPlan && (
-            <p className="text-xs text-[#6425C4] mt-2">Downgrade to {data.scheduledPlan.name} scheduled for {formatDate(s.currentPeriodEnd)}.</p>
+            <p className="text-xs text-[#5B21B6] mt-2">Downgrade to {data.scheduledPlan.name} scheduled for {formatDate(s.currentPeriodEnd)}.</p>
           )}
           {data.pendingCheckout && (
-            <p className="text-xs text-[#3D3650] mt-2">
+            <p className="text-xs text-[#6B6478] mt-2">
               Checkout in progress{data.pendingCheckout.planName ? ` for ${data.pendingCheckout.planName}` : ''} (started {formatDate(data.pendingCheckout.createdAt)}).
             </p>
           )}
           {data.lastEndedPaidSubscription && (
-            <p className="text-xs text-[#3D3650] mt-2">
+            <p className="text-xs text-[#6B6478] mt-2">
               Previous paid plan: {data.lastEndedPaidSubscription.planName} (ended {formatDate(data.lastEndedPaidSubscription.expiredAt ?? data.lastEndedPaidSubscription.currentPeriodEnd)}).
             </p>
           )}
         </Panel>
         <Panel title="Credit balance">
-          <p className="text-lg font-bold text-[#170B2E]">{formatCredits(w.available)} available</p>
-          <p className="text-sm text-[#3D3650] mt-1">
+          <p className="text-lg font-semibold text-[#170B2E]">{formatCredits(w.available)} available</p>
+          <p className="text-sm text-[#6B6478] mt-1">
             {formatCredits(w.balance)} balance{w.reserved ? ` · ${formatCredits(w.reserved)} reserved by active calls` : ''}
           </p>
-          <p className="text-sm text-[#3D3650]">
+          <p className="text-sm text-[#6B6478]">
             {formatCredits(w.used)} used of {formatCredits(w.granted)} this period ({Math.round(w.usedPercent)}%)
           </p>
           {w.buckets.length > 0 && (
             <ul className="mt-3 space-y-1 text-xs">
               {w.buckets.map((b) => (
                 <li key={b.id} className="flex justify-between gap-2">
-                  <span className="text-[#3D3650]">{BUCKET_LABEL[b.source] ?? b.source}</span>
+                  <span className="text-[#6B6478]">{BUCKET_LABEL[b.source] ?? b.source}</span>
                   <span className="text-[#170B2E]">
                     {formatCredits(b.remaining)} / {formatCredits(b.initialAmount)}
                     <span className="text-[#6B6478]"> · {b.expiresAt ? `expires ${formatDate(b.expiresAt)}` : 'no expiry'}</span>
@@ -115,18 +114,18 @@ export function CustomerBillingPanel({ customerId, onChanged }: { customerId: st
         />
       )}
 
-      <Panel title="Recent credit history">
+      <Panel title="Recent credit history" flush>
         <Table headers={['Date', 'Type', 'Amount', 'Balance after', 'Details']} empty={data.creditHistory.data.length === 0 ? 'No credit activity yet.' : undefined}>
           {data.creditHistory.data.map((t) => (
             <tr key={t.id} className={rowCls}>
               <td className={`${tdCls} whitespace-nowrap`}>{formatDate(t.createdAt)}</td>
               <td className={tdCls}>{CREDIT_TX_LABEL[t.type] ?? t.type}</td>
-              <td className={`${tdCls} font-medium ${t.amount < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+              <td className={`${tdCls} font-medium tabular-nums ${t.amount < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
                 {t.amount > 0 ? '+' : ''}
                 {formatCredits(t.amount)}
               </td>
               <td className={tdCls}>{formatCredits(t.balanceAfter)}</td>
-              <td className={`${tdCls} text-[11px]`}>
+              <td className={`${tdCls} text-xs`}>
                 {typeof t.metadata?.reason === 'string' ? t.metadata.reason : t.referenceType ?? '—'}
               </td>
             </tr>
@@ -134,24 +133,24 @@ export function CustomerBillingPanel({ customerId, onChanged }: { customerId: st
         </Table>
       </Panel>
 
-      <Panel title="Payments">
+      <Panel title="Payments" flush>
         <Table headers={['Date', 'Purpose', 'Amount', 'Status', 'Notes', '']} empty={data.payments.length === 0 ? 'No payments yet.' : undefined}>
           {data.payments.map((p) => (
             <tr key={p.id} className={rowCls}>
               <td className={`${tdCls} whitespace-nowrap`}>{formatDate(p.paidAt ?? p.createdAt)}</td>
               <td className={tdCls}>
                 {PURPOSE_LABEL[p.purpose] ?? p.purpose}
-                {p.description && <div className="text-[11px]">{p.description}</div>}
+                {p.description && <div className="text-xs text-[#6B6478]">{p.description}</div>}
               </td>
-              <td className={`${tdCls} text-[#170B2E]`}>{formatMoneyExact(p.amount, p.currency)}</td>
+              <td className={`${tdCls} tabular-nums`}>{formatMoneyExact(p.amount, p.currency)}</td>
               <td className={tdCls}><StatusBadge status={p.paymentStatus} /></td>
-              <td className={`${tdCls} text-[11px]`}>
+              <td className={`${tdCls} text-xs`}>
                 {p.failureReason && <div className="text-red-600">{p.failureReason}</div>}
                 {p.refundedPaise > 0 && <div className="text-amber-700">Refunded {formatMoney(p.refundedPaise, p.currency)}</div>}
               </td>
               <td className={tdCls}>
                 {canWrite && p.paymentStatus === 'PAID' && (
-                  <button className="text-xs font-medium text-red-600 hover:text-red-800" onClick={() => setRefunding({ ...p, user: data.customer })}>
+                  <button type="button" className="text-[13px] font-medium text-red-600 hover:underline" onClick={() => setRefunding({ ...p, user: data.customer })}>
                     Refund
                   </button>
                 )}
@@ -162,8 +161,8 @@ export function CustomerBillingPanel({ customerId, onChanged }: { customerId: st
       </Panel>
 
       {(data.legacy.hasSavedCard || data.legacy.spendingLimitPaise != null || data.legacy.usageInvoices > 0) && (
-        <div className="rounded-xl border border-dashed border-[#E7DFF5] px-4 py-3 text-xs text-[#6B6478]">
-          <span className="font-mono uppercase tracking-widest mr-2">Legacy</span>
+        <p className="text-xs text-[#6B6478]">
+          <span className="mr-1 font-medium text-[#170B2E]">Legacy:</span>
           {[
             data.legacy.hasSavedCard && 'Saved card from previous billing (not charged)',
             data.legacy.spendingLimitPaise != null && `Old monthly limit ${formatMoney(data.legacy.spendingLimitPaise)} (no longer used)`,
@@ -171,7 +170,7 @@ export function CustomerBillingPanel({ customerId, onChanged }: { customerId: st
           ]
             .filter(Boolean)
             .join(' · ')}
-        </div>
+        </p>
       )}
 
       {canWrite && refunding && (

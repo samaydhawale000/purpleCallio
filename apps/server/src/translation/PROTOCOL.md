@@ -51,7 +51,18 @@ of translation when mode is off.)
 
 ### PATCH /calls/:id/translation  (ApiKeyGuard or CallSessionGuard)
 Body `{ mode?, callerLanguage?, receiverLanguage? }` → `{ mode, callerLanguage, receiverLanguage }`.
-Live relays apply it immediately (server emits `mode` / `ready` again).
+Live relays apply it immediately (server emits `mode` / `ready` again). A
+role's `hear` follows its new language only if the participant never picked
+their own.
+
+This is the call's one translation switch: each browser can only translate
+its own mic, so both must be in translation. The call socket broadcasts
+`translation.changed { callId, mode, callerLanguage, receiverLanguage }` to
+the call room on every PATCH, and to a participant joining while it is on;
+the SDK (`meeting.translation`) follows it, and its `enable()` / `disable()`
+send this PATCH with the session token. In voice mode the SDK keeps the other
+participant's original voice at `originalVolume` (default 0, muted) for as
+long as their speech is translated for you.
 
 ### GET /calls/:id/translation-report
 `404 TRANSLATION_REPORT_NOT_FOUND` | `{ status: 'pending'|'ready'|'failed', transcript: Phrase[], summary, signals, creditsCharged, createdAt }`.
