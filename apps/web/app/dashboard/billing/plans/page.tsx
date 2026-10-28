@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { buttonCls } from '../../_ui';
+import { buttonCls } from '../../_ui/styles';
 import { BillingHeader, SectionCard } from '../BillingShell';
 
 export default function PlansPage() {
