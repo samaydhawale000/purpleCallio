@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Copy, Power, Trash2 } from 'lucide-react';
+import { Check, Copy, Power, Trash2 } from 'lucide-react';
 import { api } from '../../../lib/api';
 import {
   AgentFormValues,
@@ -14,11 +14,10 @@ import {
   buildAgentPatch,
   useAiStatus,
 } from '../../../lib/ai';
-import { Badge } from '../../../components/ui/Badge';
-import { Button } from '../../../components/ui/Button';
+import { PageHeader, Panel, Pill, buttonCls } from '../../_ui';
 import { ToastHost, ToastState } from '../../billing/Toast';
 import { AgentForm } from '../_components/AgentForm';
-import { AiDisabledNotice, AiLoading, AiUpgradeCard } from '../_components/AiNotices';
+import { AiDisabledNotice, AiLoading, AiUpgradeCard, BackLink } from '../_components/AiNotices';
 import { ToolsPanel } from '../_components/ToolsPanel';
 import { TranscriptSettings } from '../_components/TranscriptSettings';
 import { VersionHistory } from '../_components/VersionHistory';
@@ -41,27 +40,27 @@ function AgentIdField({ agentId }: { agentId: string }) {
   }
 
   return (
-    <div className="rounded-2xl border border-[#E7DFF5] p-4 flex flex-col gap-2" style={{ background: '#FFFFFF' }}>
-      <span className="text-sm font-medium text-[#170B2E]">Agent ID</span>
+    <Panel className="mb-8 flex flex-col gap-2">
+      <span className="text-[13px] text-[#6B6478]">Agent ID</span>
       <div className="flex flex-wrap items-center gap-2">
         <code
           data-testid="agent-id"
-          className="flex-1 min-w-0 break-all rounded-lg bg-[#F7F4FC] px-3 py-2 font-mono text-sm text-[#170B2E]"
+          className="min-w-0 flex-1 break-all rounded-lg border border-[#ECE8F2] bg-white px-3 py-2 font-mono text-[13px] text-[#170B2E]"
         >
           {agentId}
         </code>
-        <Button variant="secondary" size="sm" onClick={copy}>
+        <button type="button" className={buttonCls('secondary', 'px-3 py-1.5 text-[13px]')} onClick={copy}>
           {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy'}
-        </Button>
+        </button>
       </div>
-      <p className="text-xs text-[#3D3650]">
+      <p className="text-xs text-[#6B6478]">
         Pass this as <code className="font-mono">agentId</code> when your server creates a session with{' '}
         <code className="font-mono">POST /ai/sessions</code>.{' '}
-        <Link href="/docs/ai-agents#server-session" className="text-[#7F40E8] hover:underline">
+        <Link href="/docs/ai-agents#server-session" className="font-medium text-[#5B21B6] hover:underline">
           Integration guide
         </Link>
       </p>
-    </div>
+    </Panel>
   );
 }
 
@@ -140,16 +139,12 @@ export default function AiAgentPage() {
     }
   }
 
-  const back = (
-    <Link href="/dashboard/ai" className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E]">
-      <ArrowLeft size={15} /> AI Agents
-    </Link>
-  );
+  const back = <BackLink href="/dashboard/ai">AI Agents</BackLink>;
 
   if (statusLoading) return <AiLoading label="Loading agent…" />;
   if (!enabled) {
     return (
-      <div className="flex flex-col gap-6">
+      <div>
         {back}
         <AiDisabledNotice />
       </div>
@@ -157,55 +152,57 @@ export default function AiAgentPage() {
   }
   if (notFound) {
     return (
-      <div className="flex flex-col gap-6">
+      <div>
         {back}
-        <p className="text-sm text-[#3D3650]">This agent doesn&apos;t exist or was deleted.</p>
+        <p className="text-sm text-[#6B6478]">This agent doesn&apos;t exist or was deleted.</p>
       </div>
     );
   }
   if (!agent) return <AiLoading label="Loading agent…" />;
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
+    <div className="max-w-5xl">
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
-      <div className="flex flex-col gap-2">
-        {back}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <h1 className="text-2xl font-bold text-[#170B2E] truncate">{agent.name}</h1>
-            <Badge variant={agent.status === 'ACTIVE' ? 'success' : 'default'}>
+      {back}
+      <PageHeader
+        title={
+          <span className="inline-flex min-w-0 items-center gap-2.5">
+            <span className="truncate">{agent.name}</span>
+            <Pill tone={agent.status === 'ACTIVE' ? 'success' : 'neutral'}>
               {agent.status === 'ACTIVE' ? 'Active' : 'Disabled'}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-2">
+            </Pill>
+          </span>
+        }
+        description={agent.description || undefined}
+        actions={
+          <>
             {(agent.status === 'ACTIVE' || paidPlan) && (
-              <Button variant="secondary" size="sm" onClick={toggleStatus} disabled={busy}>
+              <button type="button" className={buttonCls('secondary')} onClick={toggleStatus} disabled={busy}>
                 <Power size={14} /> {agent.status === 'ACTIVE' ? 'Disable' : 'Enable'}
-              </Button>
+              </button>
             )}
-            <Button variant="danger" size="sm" onClick={remove} disabled={busy}>
+            <button type="button" className={buttonCls('danger')} onClick={remove} disabled={busy}>
               <Trash2 size={14} /> Delete
-            </Button>
-          </div>
-        </div>
-        {agent.description && <p className="text-sm text-[#3D3650]">{agent.description}</p>}
-      </div>
+            </button>
+          </>
+        }
+      />
 
       <AgentIdField agentId={agent.id} />
 
       {!paidPlan && <AiUpgradeCard />}
 
-      <div role="tablist" className="flex gap-1 border-b border-[#E7DFF5]">
+      <div role="tablist" className="mb-6 flex gap-6 border-b border-[#ECE8F2]">
         {TABS.map((t) => (
           <button
             key={t.id}
             role="tab"
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2.5 text-sm -mb-px border-b-2 transition-colors ${
+            className={`-mb-px border-b-2 pb-2.5 text-sm transition-colors ${
               tab === t.id
-                ? 'border-[#7F40E8] text-[#170B2E] font-medium'
-                : 'border-transparent text-[#3D3650] hover:text-[#170B2E]'
+                ? 'border-[#7F40E8] font-medium text-[#170B2E]'
+                : 'border-transparent text-[#6B6478] hover:text-[#170B2E]'
             }`}
           >
             {t.label}
@@ -214,8 +211,8 @@ export default function AiAgentPage() {
       </div>
 
       {tab === 'configuration' && (
-        <div className="flex flex-col gap-6">
-          <div className="rounded-2xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
+        <div className="flex flex-col gap-8">
+          <Panel>
             <AgentForm
               // Re-seed the form from the server copy after a save (but not
               // after an enable/disable, which would drop unsaved edits).
@@ -225,7 +222,7 @@ export default function AiAgentPage() {
               onSubmit={save}
               providers={status?.providers}
             />
-          </div>
+          </Panel>
           <TranscriptSettings
             key={`${agent.storeTranscript}:${agent.transcriptRetentionDays}`}
             agent={agent}

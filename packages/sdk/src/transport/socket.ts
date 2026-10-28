@@ -162,6 +162,7 @@ export class SignalingTransport {
     this.listen(socket, 'call.started', (p) => this.events.emit('call.started', p));
     this.listen(socket, 'call.ended', (p) => this.events.emit('call.ended', p));
     this.listen(socket, 'call.expired', (p) => this.events.emit('call.expired', p));
+    this.listen(socket, 'translation.changed', (p) => this.events.emit('translation.changed', p));
     this.listen(socket, 'offer', (p) => this.events.emit('offer', p));
     this.listen(socket, 'answer', (p) => this.events.emit('answer', p));
     this.listen(socket, 'ice-candidate', (p) => this.events.emit('ice-candidate', p));

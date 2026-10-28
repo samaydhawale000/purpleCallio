@@ -474,6 +474,8 @@ export class CallService implements OnModuleInit {
       callerLanguage: updated.callerLanguage,
       receiverLanguage: updated.receiverLanguage,
     };
+    // Both participants' SDKs follow the call's switch, joined or not.
+    this.callGateway.emitTranslationChanged(callId, result);
     if (this.translationRelay) {
       await this.translationRelay
         .applyCallUpdate(callId, {

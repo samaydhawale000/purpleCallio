@@ -13,16 +13,19 @@ import {
   type CreditPricingInput,
 } from "../../../lib/admin-billing";
 import { formatDate, formatMoney } from "../../../lib/billing";
-import { Button } from "../../../components/ui/Button";
 import {
+  Button,
   ErrorText,
   Field,
   inputCls,
+  linkBtn,
   Panel,
   Spinner,
+  Stat,
+  StatRow,
+  StatusBadge,
   Table,
   tdCls,
-  thCls,
   rowCls,
   useAdminErrorHandler,
   useResource,
@@ -232,20 +235,24 @@ export function CreditPricingTab() {
       <Panel
         title="Published credit price"
         subtitle="Amount-based purchases use the rate published here. Eligible customers can configure Auto Top-Up with a Razorpay eMandate, a balance threshold, a purchase amount and a monthly maximum."
+        flush
       >
         {data.active ? (
-          <div className="text-sm text-[#170B2E]">
-            Version {data.active.version} ·{" "}
-            {formatMoney(data.active.creditPricePaise, data.active.currency)}{" "}
-            per credit · minimum{" "}
-            {formatMoney(
-              data.active.minimumPurchasePaise,
-              data.active.currency,
-            )}{" "}
-            · {data.active.purchasedValidityDays} day lot validity
-          </div>
+          <StatRow>
+            <Stat
+              label="Price per credit"
+              value={formatMoney(data.active.creditPricePaise, data.active.currency)}
+              hint={`Version ${data.active.version}`}
+            />
+            <Stat
+              label="Minimum purchase"
+              value={formatMoney(data.active.minimumPurchasePaise, data.active.currency)}
+            />
+            <Stat label="Lot validity" value={`${data.active.purchasedValidityDays} days`} />
+            <Stat label="Effective since" value={formatDate(data.active.effectiveAt)} />
+          </StatRow>
         ) : (
-          <p className="text-sm text-amber-800">
+          <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
             No active rate. Customers cannot use amount based credit checkout
             until an administrator publishes one.
           </p>
@@ -258,7 +265,7 @@ export function CreditPricingTab() {
         >
           <form onSubmit={submit} className="space-y-4">
             {editingDraft && (
-              <p className="rounded-lg bg-[#F8F4FD] p-3 text-sm">
+              <p className="rounded-lg bg-white px-3 py-2.5 text-sm text-[#170B2E]">
                 Editing draft v{editingDraft.version}:{" "}
                 {form.price && Number.isSafeInteger(toMinor(form.price))
                   ? `${formatMoney(toMinor(form.price), form.currency)} per credit`
@@ -319,7 +326,7 @@ export function CreditPricingTab() {
               </Field>
             </div>
             {preview && (
-              <div className="rounded-lg bg-[#F8F4FD] p-3 text-xs">
+              <div className="rounded-lg bg-white px-3 py-2.5 text-[13px] text-[#170B2E]">
                 Preview:{" "}
                 {preview.examples
                   .map(
@@ -327,7 +334,7 @@ export function CreditPricingTab() {
                       `${formatMoney(x.purchaseAmountPaise, form.currency)} → ${x.credits.toLocaleString()} credits`,
                   )
                   .join(" · ")}
-                <p className="mt-1">{preview.rounding}</p>
+                <p className="mt-1 text-[#6B6478]">{preview.rounding}</p>
               </div>
             )}
             <FeedbackMessage feedback={pricingFeedback} />
@@ -354,6 +361,7 @@ export function CreditPricingTab() {
       <Panel
         title="Pricing history"
         subtitle="Published versions remain immutable; drafts can be edited or cancelled."
+        flush
       >
         <Table
           headers={[
@@ -375,26 +383,31 @@ export function CreditPricingTab() {
               </td>
               <td className={tdCls}>{v.purchasedValidityDays} days</td>
               <td className={tdCls}>{formatDate(v.effectiveAt)}</td>
-              <td className={tdCls}>{v.status}</td>
+              <td className={tdCls}>
+                <StatusBadge status={v.status} />
+              </td>
               <td className={tdCls}>{v.publishedById ?? v.createdById}</td>
               <td className={tdCls}>
                 {v.status === "DRAFT" && canWrite && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-3">
                     <button
-                      className="text-xs text-[#6425C4]"
+                      type="button"
+                      className={linkBtn}
                       onClick={() => startEdit(v)}
                     >
                       Edit
                     </button>
                     <button
+                      type="button"
                       disabled={busy}
-                      className="text-xs text-[#6425C4]"
+                      className={linkBtn}
                       onClick={() => publish(v)}
                     >
                       Publish
                     </button>
                     <button
-                      className="text-xs text-red-600"
+                      type="button"
+                      className="text-[13px] font-medium text-red-600 hover:underline"
                       onClick={() => cancel(v)}
                     >
                       Cancel
@@ -469,7 +482,9 @@ export function CreditPricingTab() {
               </Button>
             </div>
           </form>
-          <FeedbackMessage feedback={promoFeedback} />
+          <div className="mt-3">
+            <FeedbackMessage feedback={promoFeedback} />
+          </div>
         </Panel>
       )}
     </div>

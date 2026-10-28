@@ -1,10 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
-import { Button } from '../../../components/ui/Button';
-import { Input } from '../../../components/ui/Input';
-import { Badge } from '../../../components/ui/Badge';
+import { Trash2 } from 'lucide-react';
 import {
   INDUSTRIES,
   Lexicon,
@@ -18,6 +15,7 @@ import {
   listLexicons,
   translationErrorText,
 } from '../../../lib/translation';
+import { buttonCls, inputCls } from '../../_ui';
 import {
   Card,
   Empty,
@@ -110,18 +108,22 @@ export default function LexiconsPage() {
 
   const current = lexicons?.find((l) => l.id === selected) ?? null;
 
+  const newButton = (
+    <button type="button" className={buttonCls('primary')} onClick={() => setShowNew(true)}>
+      New lexicon
+    </button>
+  );
+
   return (
-    <div className="flex flex-col gap-6">
+    <>
       <PageHeader
-        title="PurpleLex lexicons"
+        title="Lexicons"
         subtitle="Names, product terms and approved translations that every translated call must respect."
         actions={
           projects && projects.length > 0 ? (
             <>
               <ProjectPicker projects={projects} value={projectId} onChange={setProjectId} />
-              <Button onClick={() => setShowNew(true)}>
-                <Plus size={15} className="mr-1" /> New lexicon
-              </Button>
+              {newButton}
             </>
           ) : undefined
         }
@@ -139,15 +141,25 @@ export default function LexiconsPage() {
       ) : !lexicons ? (
         <Loading label="Loading lexicons…" />
       ) : (
-        <>
+        <div className="flex flex-col gap-6">
           {error && <ErrorBox>{error}</ErrorBox>}
 
           {showNew && (
             <Card title="New lexicon">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                <Input label="Lexicon name" placeholder="e.g. Clinic terms" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+              <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="new-lex-industry" className="text-sm font-medium text-[#3D3650]">Industry (optional)</label>
+                  <label htmlFor="new-lex-name" className="text-[13px] font-medium text-[#170B2E]">Lexicon name</label>
+                  <input
+                    id="new-lex-name"
+                    className={inputCls}
+                    placeholder="e.g. Clinic terms"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="new-lex-industry" className="text-[13px] font-medium text-[#170B2E]">Industry (optional)</label>
                   <select id="new-lex-industry" className={selectCls} value={industry} onChange={(e) => setIndustry(e.target.value)}>
                     <option value="">Not set</option>
                     {INDUSTRIES.map((i) => (
@@ -156,69 +168,79 @@ export default function LexiconsPage() {
                   </select>
                 </div>
               </div>
-              <div className="flex gap-3">
-                <Button onClick={create} loading={busy === 'create'} disabled={!name.trim()}>Create lexicon</Button>
-                <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
+              <div className="flex gap-2">
+                <button type="button" className={buttonCls('primary')} onClick={create} disabled={busy === 'create' || !name.trim()}>
+                  Create lexicon
+                </button>
+                <button type="button" className={buttonCls('ghost')} onClick={() => setShowNew(false)}>Cancel</button>
               </div>
             </Card>
           )}
 
           {packs.length > 0 && (
-            <Card title="Start from an industry pack" subtitle="A ready-made lexicon you can edit. It is copied into this project.">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {packs.map((p) => (
-                  <div key={p.industry} className="rounded-xl border border-[#E7DFF5] p-4 flex flex-col gap-2">
-                    <p className="text-sm font-semibold text-[#170B2E]">{p.name ?? industryLabel(p.industry)}</p>
-                    {p.description && <p className="text-xs text-[#3D3650]">{p.description}</p>}
-                    {(p.termCount ?? p.terms?.length) != null && (
-                      <p className="text-xs text-[#3D3650]">{p.termCount ?? p.terms?.length} terms</p>
-                    )}
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="self-start"
-                      loading={busy === `pack:${p.industry}`}
-                      onClick={() => fromPack(p)}
-                      aria-label={`Use the ${p.name ?? industryLabel(p.industry)} pack`}
-                    >
-                      Use this pack
-                    </Button>
-                  </div>
-                ))}
-              </div>
+            <Card title="Start from an industry pack" subtitle="A ready-made lexicon copied into this project, which you can then edit.">
+              <ul className="overflow-hidden rounded-lg border border-[#ECE8F2] bg-white">
+                {packs.map((p) => {
+                  const label = p.name ?? industryLabel(p.industry);
+                  const count = p.termCount ?? p.terms?.length;
+                  return (
+                    <li key={p.industry} className="flex flex-wrap items-center gap-3 border-b border-[#F2EFF6] px-4 py-3 last:border-0">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-[#170B2E]">{label}</p>
+                        {(p.description || count != null) && (
+                          <p className="text-xs text-[#6B6478]">
+                            {[p.description, count != null ? `${count} terms` : null].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className={buttonCls('secondary', 'px-3 py-1.5')}
+                        disabled={busy === `pack:${p.industry}`}
+                        onClick={() => fromPack(p)}
+                        aria-label={`Use the ${label} pack`}
+                      >
+                        Use this pack
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             </Card>
           )}
 
           {lexicons.length === 0 ? (
             !showNew && (
-              <Empty title="No lexicons yet" action={<Button onClick={() => setShowNew(true)}><Plus size={15} className="mr-1" /> New lexicon</Button>}>
+              <Empty title="No lexicons yet" action={newButton}>
                 Add brand names to keep as is, terms with approved translations, and pronunciation hints. Pass the lexicon&apos;s ID
                 as <code className="font-mono text-xs">translation.lexiconId</code> or set it as the project default.
               </Empty>
             )
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
+            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[260px_1fr]">
               <Card title="Lexicons">
-                <ul className="flex flex-col gap-1" aria-label="Lexicons">
+                <ul className="flex flex-col gap-0.5" aria-label="Lexicons">
                   {lexicons.map((l) => (
                     <li key={l.id} className="flex items-center gap-1">
                       <button
+                        type="button"
                         onClick={() => setSelected(l.id)}
                         aria-current={selected === l.id ? 'true' : undefined}
-                        className={`flex-1 min-w-0 text-left px-3 py-2 rounded-lg text-sm ${
-                          selected === l.id ? 'bg-[#7F40E8]/10 text-[#6425C4] font-medium' : 'text-[#170B2E] hover:bg-[#F8F4FD]'
+                        className={`min-w-0 flex-1 rounded-lg px-3 py-2 text-left text-sm ${
+                          selected === l.id ? 'bg-white font-medium text-[#5B21B6]' : 'text-[#170B2E] hover:bg-white/60'
                         }`}
                       >
                         <span className="block truncate">{l.name}</span>
-                        <span className="block text-xs text-[#3D3650] font-normal">
+                        <span className="block text-xs font-normal text-[#6B6478]">
                           {lexiconTermCount(l)} terms{l.industry ? ` · ${industryLabel(l.industry)}` : ''}
                         </span>
                       </button>
                       <button
+                        type="button"
                         onClick={() => remove(l)}
                         disabled={busy === `del:${l.id}`}
                         aria-label={`Delete ${l.name}`}
-                        className="p-2 rounded-lg text-[#3D3650] hover:text-red-600 hover:bg-red-500/5 disabled:opacity-50"
+                        className="rounded-lg p-2 text-[#6B6478] hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                       >
                         <Trash2 size={15} />
                       </button>
@@ -237,14 +259,14 @@ export default function LexiconsPage() {
                 />
               ) : (
                 <Card>
-                  <p className="text-sm text-[#3D3650]">Select a lexicon to edit its terms.</p>
-                  <div className="mt-2"><Badge variant="purple">Tip</Badge> <span className="text-xs text-[#3D3650]">You can paste or upload a CSV after opening a lexicon.</span></div>
+                  <p className="text-sm text-[#170B2E]">Select a lexicon to edit its terms.</p>
+                  <p className="mt-1 text-xs text-[#6B6478]">You can paste or upload a CSV after opening a lexicon.</p>
                 </Card>
               )}
             </div>
           )}
-        </>
+        </div>
       )}
-    </div>
+    </>
   );
 }

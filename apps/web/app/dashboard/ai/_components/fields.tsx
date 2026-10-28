@@ -1,17 +1,33 @@
 'use client';
 
-import { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
+import {
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from 'react';
+import { Loader2 } from 'lucide-react';
+import { buttonCls, inputCls, type ButtonVariant } from '../../_ui';
 
-const control =
-  'w-full px-3 py-2.5 rounded-lg text-sm text-[#170B2E] placeholder:text-[#6B6478] bg-white border outline-none transition-all';
-const okBorder = 'border-[#D6C4EE] focus:border-[#7F40E8]/60 focus:shadow-[0_0_0_3px_rgba(127,64,232,0.1)]';
-const errBorder = 'border-red-500/50 focus:border-red-500/70';
+const errCls = 'border-red-300 focus:border-red-400 focus:ring-red-400/15';
+const labelCls = 'text-[13px] font-medium text-[#170B2E]';
+const helperCls = 'text-xs text-[#6B6478]';
 
 interface FieldProps {
   label: string;
   error?: string;
   helper?: ReactNode;
   id: string;
+}
+
+function Messages({ error, helper }: { error?: string; helper?: ReactNode }) {
+  return (
+    <>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      {helper && !error && <div className={helperCls}>{helper}</div>}
+    </>
+  );
 }
 
 export function TextInput({
@@ -24,10 +40,9 @@ export function TextInput({
 }: FieldProps & InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-[#3D3650]">{label}</label>
-      <input id={id} {...props} className={`${control} ${error ? errBorder : okBorder} ${className}`} />
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      {helper && !error && <div className="text-xs text-[#3D3650]">{helper}</div>}
+      <label htmlFor={id} className={labelCls}>{label}</label>
+      <input id={id} {...props} className={`${inputCls} ${error ? errCls : ''} ${className}`} />
+      <Messages error={error} helper={helper} />
     </div>
   );
 }
@@ -42,10 +57,9 @@ export function TextArea({
 }: FieldProps & TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-[#3D3650]">{label}</label>
-      <textarea id={id} {...props} className={`${control} ${error ? errBorder : okBorder} ${className}`} />
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      {helper && !error && <div className="text-xs text-[#3D3650]">{helper}</div>}
+      <label htmlFor={id} className={labelCls}>{label}</label>
+      <textarea id={id} {...props} className={`${inputCls} ${error ? errCls : ''} ${className}`} />
+      <Messages error={error} helper={helper} />
     </div>
   );
 }
@@ -60,12 +74,11 @@ export function Select({
 }: FieldProps & SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-[#3D3650]">{label}</label>
-      <select id={id} {...props} className={`${control} ${error ? errBorder : okBorder}`}>
+      <label htmlFor={id} className={labelCls}>{label}</label>
+      <select id={id} {...props} className={`${inputCls} ${error ? errCls : ''}`}>
         {children}
       </select>
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      {helper && !error && <div className="text-xs text-[#3D3650]">{helper}</div>}
+      <Messages error={error} helper={helper} />
     </div>
   );
 }
@@ -82,17 +95,44 @@ export function Checkbox({
   helper?: string;
 }) {
   return (
-    <label className="flex items-start gap-2.5 cursor-pointer">
+    <label className="flex cursor-pointer items-start gap-2.5">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 accent-[#7F40E8]"
+        className="mt-0.5 accent-[#6D28D9]"
       />
       <span>
         <span className="text-sm text-[#170B2E]">{label}</span>
-        {helper && <span className="block text-xs text-[#3D3650]">{helper}</span>}
+        {helper && <span className={`block ${helperCls}`}>{helper}</span>}
       </span>
     </label>
+  );
+}
+
+/** Kit-styled button with a spinner while `loading`. */
+export function ActionButton({
+  variant = 'primary',
+  loading,
+  small,
+  className = '',
+  children,
+  type = 'button',
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: ButtonVariant;
+  loading?: boolean;
+  small?: boolean;
+}) {
+  return (
+    <button
+      type={type}
+      {...props}
+      disabled={loading || props.disabled}
+      className={buttonCls(variant, `${small ? 'px-3 py-1.5 text-[13px]' : ''} ${className}`)}
+    >
+      {loading && <Loader2 size={14} className="animate-spin" />}
+      {children}
+    </button>
   );
 }

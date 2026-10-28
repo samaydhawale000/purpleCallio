@@ -83,9 +83,9 @@ describe('<TranslationControls />', () => {
     fireEvent.click(screen.getByRole('radio', { name: /translation captions/i }));
     expect(c.setMode).toHaveBeenCalledWith('captions');
 
-    fireEvent.change(screen.getByLabelText('Original voice volume while translation plays'), { target: { value: '40' } });
+    fireEvent.change(screen.getByLabelText('Original voice volume while it is translated'), { target: { value: '40' } });
     expect(c.setOriginalVolume).toHaveBeenCalledWith(0.4);
-    fireEvent.click(screen.getByRole('button', { name: /mute original voice/i }));
+    fireEvent.click(screen.getByRole('button', { name: /mute the original voice/i }));
     expect(c.setOriginalVolume).toHaveBeenLastCalledWith(0);
 
     act(() => c.setState({ limit: { kind: 'stepped_down', scope: 'call', message: 'Switched to captions to stay within the limit', remainingSeconds: 90 } }));
@@ -95,6 +95,15 @@ describe('<TranslationControls />', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: /translation off/i }));
     expect(c.disable).toHaveBeenCalled();
+  });
+
+  it('offers "Join translation" when the browser blocked audio', () => {
+    render(<Harness><TranslationControls /></Harness>);
+    const c = latest();
+    expect(screen.queryByRole('button', { name: 'Join translation' })).toBeNull();
+    act(() => c.setState({ status: 'ready', mode: 'voice', audioBlocked: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Join translation' }));
+    expect(c.resumeAudio).toHaveBeenCalled();
   });
 });
 

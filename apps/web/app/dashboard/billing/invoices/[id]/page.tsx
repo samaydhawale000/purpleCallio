@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
 import { useAuthStore } from '../../../../store/auth.store';
 import { useRequireAuth } from '../../../../hooks/useRequireAuth';
 import { api } from '../../../../lib/api';
-import { Card } from '../../../../components/ui/Card';
-import { Badge } from '../../../../components/ui/Badge';
+import { ErrorNote, Loading, Panel, Pill, buttonCls, type Tone } from '../../../_ui';
 import { formatMinutes } from '../../../../lib/duration';
 
 interface LineItem {
@@ -46,13 +45,15 @@ interface InvoiceDetail {
 
 const paiseToINR = (paise: number) => `₹${(paise / 100).toFixed(2)}`;
 
-const statusVariant: Record<string, 'default' | 'success' | 'warning' | 'error' | 'info'> = {
-  open: 'info',
-  processing: 'info',
+const statusTone: Record<string, Tone> = {
+  open: 'accent',
+  processing: 'accent',
   paid: 'success',
   dunning: 'warning', // shown as "Unpaid"
-  failed: 'error',
+  failed: 'danger',
 };
+
+const backCls = 'inline-flex w-fit items-center gap-1 text-[13px] text-[#6B6478] hover:text-[#170B2E]';
 
 export default function InvoiceDetailPage() {
   const { token, logout } = useAuthStore();
@@ -109,25 +110,16 @@ export default function InvoiceDetailPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="animate-spin h-6 w-6 text-[#7F40E8]" />
-          <span className="text-sm text-[#3D3650]">Loading invoice…</span>
-        </div>
-      </div>
-    );
+    return <Loading label="Loading invoice…" />;
   }
 
   if (error || !invoice) {
     return (
       <div className="flex flex-col gap-4">
-        <Link href="/dashboard/billing/payments" className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E] transition-colors w-fit">
+        <Link href="/dashboard/billing/payments" className={backCls}>
           <ArrowLeft size={14} /> Back to Payments
         </Link>
-        <div className="rounded-lg border border-red-500/30 px-4 py-3 text-sm text-red-600" style={{ background: 'rgba(239,68,68,0.06)' }}>
-          {error ?? 'Invoice not found.'}
-        </div>
+        <ErrorNote message={error ?? 'Invoice not found.'} />
       </div>
     );
   }
@@ -137,59 +129,54 @@ export default function InvoiceDetailPage() {
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
       <div className="flex items-center justify-between">
-        <Link href="/dashboard/billing/payments" className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E] transition-colors">
+        <Link href="/dashboard/billing/payments" className={backCls}>
           <ArrowLeft size={14} /> Back to Payments
         </Link>
-        <button
-          onClick={downloadPdf}
-          disabled={downloading}
-          className="inline-flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg text-white transition-all hover:opacity-90 disabled:opacity-50"
-          style={{ background: 'linear-gradient(135deg, #7F40E8, #410686)' }}
-        >
+        <button type="button" onClick={downloadPdf} disabled={downloading} className={buttonCls('secondary')}>
           <Download size={14} />
           {downloading ? 'Preparing PDF…' : 'Download PDF'}
         </button>
       </div>
 
-      <div className="rounded-lg border border-[#E7DFF5] px-4 py-3 text-xs text-[#3D3650]" style={{ background: '#F8F4FD' }}>
+      <p className="text-[13px] text-[#6B6478]">
         This invoice is from the previous billing model and is kept for your records. PurpleCallio now uses prepaid credit purchases.
-      </div>
+      </p>
 
-      <Card padding glow>
+      <Panel>
         <div className="flex items-start justify-between mb-6">
           <div>
-            <p className="text-xs text-[#3D3650] mb-1">Legacy usage invoice (previous billing model)</p>
-            <p className="text-lg font-bold text-[#170B2E] font-mono">{invoice.invoiceNumber}</p>
+            <p className="mb-1 text-xs text-[#6B6478]">Legacy usage invoice</p>
+            <p className="font-mono text-lg font-semibold text-[#170B2E]">{invoice.invoiceNumber}</p>
           </div>
-          <Badge variant={statusVariant[invoice.status] ?? 'default'}>{invoice.status === 'dunning' ? 'UNPAID' : invoice.status.toUpperCase()}</Badge>
+          <Pill tone={statusTone[invoice.status] ?? 'neutral'}>{invoice.status === 'dunning' ? 'UNPAID' : invoice.status.toUpperCase()}</Pill>
         </div>
 
         <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
           <div>
-            <p className="text-xs text-[#3D3650] mb-0.5">Billing period</p>
-            <p className="text-[#3D3650]">
+            <p className="text-xs text-[#6B6478] mb-0.5">Billing period</p>
+            <p className="text-[#170B2E]">
               {new Date(invoice.cycleStart).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
               {' – '}
               {new Date(invoice.cycleEnd).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
             </p>
           </div>
           <div>
-            <p className="text-xs text-[#3D3650] mb-0.5">Invoice date</p>
-            <p className="text-[#3D3650]">
+            <p className="text-xs text-[#6B6478] mb-0.5">Invoice date</p>
+            <p className="text-[#170B2E]">
               {new Date(invoice.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
             </p>
           </div>
           {invoice.paidAt && (
             <div>
-              <p className="text-xs text-[#3D3650] mb-0.5">Paid on</p>
-              <p className="text-[#3D3650]">
+              <p className="text-xs text-[#6B6478] mb-0.5">Paid on</p>
+              <p className="text-[#170B2E]">
                 {new Date(invoice.paidAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
               </p>
             </div>
           )}
         </div>
 
-        <div className="border-t border-[#E7DFF5] pt-4 mb-4">
+        <div className="border-t border-[#E4DEEE] pt-4 mb-4">
           <p className="text-sm font-semibold text-[#170B2E] mb-3">Usage</p>
           <div className="flex flex-col gap-2 text-sm">
             <Row label={`Audio — ${formatMinutes(invoice.audioMinutes)} participant time`} value={paiseToINR(invoice.audioPaise)} />
@@ -199,7 +186,7 @@ export default function InvoiceDetailPage() {
         </div>
 
         {adjustments.length > 0 && (
-          <div className="border-t border-[#E7DFF5] pt-4 mb-4">
+          <div className="border-t border-[#E4DEEE] pt-4 mb-4">
             <p className="text-sm font-semibold text-[#170B2E] mb-3">Adjustments</p>
             <div className="flex flex-col gap-2 text-sm">
               {adjustments.map((a) => (
@@ -213,7 +200,7 @@ export default function InvoiceDetailPage() {
           </div>
         )}
 
-        <div className="border-t border-[#E7DFF5] pt-4 flex flex-col gap-2 text-sm">
+        <div className="border-t border-[#E4DEEE] pt-4 flex flex-col gap-2 text-sm">
           <Row label="Subtotal" value={paiseToINR(invoice.subtotalPaise)} />
           {invoice.discountPaise > 0 && (
             <Row
@@ -226,20 +213,20 @@ export default function InvoiceDetailPage() {
             />
           )}
           <Row label="Tax (GST)" value={paiseToINR(invoice.taxPaise)} />
-          <div className="flex items-center justify-between text-base font-bold text-[#170B2E] pt-2 border-t border-[#E7DFF5]">
+          <div className="flex items-center justify-between text-base font-semibold text-[#170B2E] pt-2 border-t border-[#E4DEEE]">
             <span>Total</span>
             <span>{paiseToINR(invoice.totalPaise)}</span>
           </div>
         </div>
-      </Card>
+      </Panel>
     </div>
   );
 }
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between text-[#3D3650]">
-      <span className="text-[#3D3650]">{label}</span>
+    <div className="flex items-center justify-between text-[#6B6478]">
+      <span className="text-[#6B6478]">{label}</span>
       <span className="font-medium text-[#170B2E]">{value}</span>
     </div>
   );

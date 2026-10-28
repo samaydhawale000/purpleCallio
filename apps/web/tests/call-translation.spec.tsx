@@ -42,7 +42,7 @@ function fakeTranslation(over: Partial<CallTranslation> = {}): CallTranslation {
       state: {
          status: "ready", mode: "voice", role: "caller", you: { speak: "en", hear: "en" }, peer: null,
          replayEnabled: false, guard: null, limits: null, trial: false, speaking: false,
-         playingPhraseId: null, originalVolume: 0.2, limit: null, error: null,
+         playingPhraseId: null, originalVolume: 0.2, audioBlocked: false, limit: null, error: null,
       },
       phrases: [],
       repeatRequests: [],
@@ -55,6 +55,8 @@ function fakeTranslation(over: Partial<CallTranslation> = {}): CallTranslation {
       requestRepeat: vi.fn(() => true),
       dismissRepeatRequest: vi.fn(),
       disable: vi.fn(),
+      followCall: vi.fn(),
+      resumeAudio: vi.fn(),
       ...over,
    };
 }
@@ -69,9 +71,15 @@ class FakeClient {
       this.set({ status: "ready", mode: o.mode, you: { speak: o.speak, hear: o.hear } });
       return {} as any;
    });
-   disable = vi.fn(() => this.set({ status: "ended" }));
+   disable = vi.fn((_o?: { share?: boolean }) => this.set({ status: "ended" }));
+   followCall = vi.fn((mode: string) =>
+      this.set(mode === "off" ? { status: "ended" } : { status: "ready", mode, you: this.languages }),
+   );
+   languages = { speak: "", hear: "" };
    setMode = vi.fn();
-   setLanguages = vi.fn();
+   setLanguages = vi.fn((l: { speak?: string; hear?: string }) => {
+      this.languages = { ...this.languages, ...l } as any;
+   });
    setOriginalVolume = vi.fn();
    replay = vi.fn(() => true);
    requestRepeat = vi.fn(() => true);
@@ -137,14 +145,14 @@ describe("useCallTranslation", () => {
       act(() => result.current.setLanguages({ speak: "en", hear: "hi" }));
       await act(async () => result.current.setMode("captions"));
       const c = FakeClient.instances[0];
-      expect(c.config).toMatchObject({ token: "bj_session_t", serverUrl: "http://localhost:3005", originalVolume: 0.2 });
-      expect(c.enable).toHaveBeenCalledWith({ speak: "en", hear: "hi", mode: "captions", originalVolume: 0.2 });
+      expect(c.config).toMatchObject({ token: "bj_session_t", serverUrl: "http://localhost:3005", originalVolume: 0 });
+      expect(c.enable).toHaveBeenCalledWith({ speak: "en", hear: "hi", mode: "captions", originalVolume: 0 });
       expect(result.current.enabled).toBe(true);
       act(() => result.current.setMode("off"));
       expect(c.disable).toHaveBeenCalled();
    });
 
-   it("auto-enables with the call's translation defaults once in-call, and disables when the call ends", async () => {
+   it("follows the call's translation defaults once in-call, and leaves only this side when the call ends", async () => {
       const defaults = { mode: "voice" as const, language: "mr", role: "caller" as const };
       const hook = renderHook((p: { active: boolean }) => useCallTranslation({ ...base, active: p.active, defaults }), {
          initialProps: { active: false },
@@ -152,9 +160,48 @@ describe("useCallTranslation", () => {
       expect(FakeClient.instances).toHaveLength(0);
       await act(async () => hook.rerender({ active: true }));
       const c = FakeClient.instances[0];
-      expect(c.enable).toHaveBeenCalledWith(expect.objectContaining({ speak: "mr", hear: "mr", mode: "voice" }));
+      expect(c.setLanguages).toHaveBeenCalledWith({ speak: "mr", hear: "mr" });
+      expect(c.followCall).toHaveBeenCalledWith("voice");
+      expect(c.enable).not.toHaveBeenCalled();
       await act(async () => hook.rerender({ active: false }));
-      expect(c.disable).toHaveBeenCalled();
+      expect(c.disable).toHaveBeenCalledWith({ share: false });
+   });
+
+   it("applies a switch announced before the call is up, and follows the other side turning it off", async () => {
+      const hook = renderHook((p: { active: boolean }) => useCallTranslation({ ...base, active: p.active, defaults: null }), {
+         initialProps: { active: false },
+      });
+      act(() => hook.result.current.followCall("captions"));
+      expect(FakeClient.instances).toHaveLength(0);
+      await act(async () => hook.rerender({ active: true }));
+      const c = FakeClient.instances[0];
+      expect(c.followCall).toHaveBeenCalledWith("captions");
+      expect(hook.result.current.enabled).toBe(true);
+      act(() => hook.result.current.followCall("off"));
+      expect(c.followCall).toHaveBeenLastCalledWith("off");
+      expect(hook.result.current.enabled).toBe(false);
+   });
+
+   it("shares the switch for the whole call with PATCH /calls/:id/translation", async () => {
+      const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) }));
+      vi.stubGlobal("fetch", fetchMock);
+      const defaults = { mode: "off" as const, language: "mr", role: "receiver" as const };
+      const { result } = renderHook(() =>
+         useCallTranslation({ ...base, active: true, defaults, callId: "c 1", apiUrl: "http://api.test/api/" }),
+      );
+      await act(async () => result.current.setMode("voice"));
+      const c = FakeClient.instances[0];
+      await c.config.shareSwitch({ mode: "voice", speak: "mr", hear: "mr", peerPresent: false });
+      const [url, init] = fetchMock.mock.calls.at(-1) as any;
+      expect(url).toBe("http://api.test/api/calls/c%201/translation");
+      expect(init.method).toBe("PATCH");
+      expect(init.headers.Authorization).toBe("Bearer bj_session_t");
+      expect(JSON.parse(init.body)).toEqual({ mode: "voice", receiverLanguage: "mr" });
+
+      fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({ code: "TRANSLATION_INSUFFICIENT_CREDITS", message: "Add credits" }) } as any);
+      await expect(c.config.shareSwitch({ mode: "voice", peerPresent: true })).rejects.toMatchObject({
+         code: "TRANSLATION_INSUFFICIENT_CREDITS",
+      });
    });
 });
 
@@ -178,7 +225,7 @@ describe("TranslationPanel", () => {
 
       fireEvent.click(screen.getByRole("radio", { name: /translation captions/i }));
       expect(tr.setMode).toHaveBeenCalledWith("captions");
-      fireEvent.change(screen.getByLabelText("Original voice volume while translation plays"), { target: { value: "50" } });
+      fireEvent.change(screen.getByLabelText("Original voice volume while it is translated"), { target: { value: "50" } });
       expect(tr.setOriginalVolume).toHaveBeenCalledWith(0.5);
       expect(screen.getByTestId("replay-enabled")).toBeTruthy();
       expect(screen.getByRole("status").textContent).toContain("2 min left");

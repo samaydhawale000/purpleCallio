@@ -39,6 +39,20 @@ export class DashboardController {
     return this.dashboardService.getOverview(req.user.userId);
   }
 
+  @Get('usage/daily')
+  getDailyUsage(
+    @Req() req: any,
+    @Query('days') days?: string,
+    @Query('projectId') projectId?: string,
+  ) {
+    const d = parseInt(days ?? '', 10);
+    return this.dashboardService.getDailyUsage(
+      req.user.userId,
+      Number.isFinite(d) && d > 0 ? d : 30,
+      projectId || undefined,
+    );
+  }
+
   @Get('usage/chart')
   getUsageChart(
     @Req() req: any,

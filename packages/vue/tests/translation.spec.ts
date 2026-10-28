@@ -51,6 +51,16 @@ describe('useTranslation (vue)', () => {
     expect(c.listenerCount()).toBe(0);
   });
 
+  it('passes disable options through and resumes blocked audio', async () => {
+    const c = new FakeTranslationClient();
+    const m = mountWith({ client: c as any });
+    await m.tr.resumeAudio();
+    expect(c.resumeAudio).toHaveBeenCalled();
+    m.tr.disable({ share: false });
+    expect(c.disable).toHaveBeenCalledWith({ share: false });
+    m.wrapper.unmount();
+  });
+
   it('does not disable a client it was given', () => {
     const c = new FakeTranslationClient();
     const m = mountWith({ client: c as any });

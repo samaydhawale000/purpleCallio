@@ -17,6 +17,7 @@ export class FakeTranslationClient {
     return { role: 'caller' };
   });
   readonly disable = vi.fn(() => this.setState({ status: 'ended' }));
+  readonly resumeAudio = vi.fn(async () => true);
   readonly setMode = vi.fn((mode: string) => this.setState({ mode }));
   readonly setLanguages = vi.fn();
   readonly setOriginalVolume = vi.fn((v: number) => this.setState({ originalVolume: v }));

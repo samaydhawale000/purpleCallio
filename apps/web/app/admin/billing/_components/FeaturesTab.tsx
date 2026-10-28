@@ -3,10 +3,9 @@
 import { FormEvent, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { listAdminFeatures, upsertFeature, type AdminFeature } from '../../../lib/admin-billing';
-import { Button } from '../../../components/ui/Button';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
 import { useCanWrite } from '../../../lib/admin-access';
-import { Checkbox, ErrorText, Field, inputCls, linkBtn, Modal, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
+import { Button, Checkbox, ErrorText, Field, inputCls, linkBtn, Modal, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
 export function FeaturesTab() {
   const { data, loading, error, reload } = useResource(listAdminFeatures, []);
@@ -23,6 +22,7 @@ export function FeaturesTab() {
       <Panel
         title="Feature registry"
         subtitle="Features plans can include. Plans reference features by key; inactive features stay on existing plans but can't be newly offered."
+        flush
         actions={
           canWrite && (
             <Button size="sm" onClick={() => setEditing('new')}>
@@ -34,17 +34,17 @@ export function FeaturesTab() {
         <Table headers={['Key', 'Name', 'Category', 'Order', 'Status', 'Visibility', '']} empty={data.length === 0 ? 'No features yet.' : undefined}>
           {data.map((f) => (
             <tr key={f.key} className={rowCls}>
-              <td className={`${tdCls} font-mono text-xs`}>{f.key}</td>
+              <td className={`${tdCls} font-mono text-[13px]`}>{f.key}</td>
               <td className={tdCls}>
-                <span className="text-[#170B2E]">{f.name}</span>
-                {f.description && <div className="text-[11px]">{f.description}</div>}
+                <span className="font-medium">{f.name}</span>
+                {f.description && <div className="text-xs text-[#6B6478]">{f.description}</div>}
               </td>
               <td className={tdCls}>{f.category ?? '—'}</td>
               <td className={tdCls}>{f.displayOrder}</td>
               <td className={tdCls}><StatusBadge status={f.isActive ? 'ACTIVE' : 'INACTIVE'} /></td>
               <td className={tdCls}>{f.isPublic ? 'Public' : 'Hidden'}</td>
               <td className={tdCls}>
-                {canWrite && <button className={linkBtn} onClick={() => setEditing(f)}>Edit</button>}
+                {canWrite && <button type="button" className={linkBtn} onClick={() => setEditing(f)}>Edit</button>}
               </td>
             </tr>
           ))}

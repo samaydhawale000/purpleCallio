@@ -16,6 +16,16 @@ import { CallSessionService } from '../../call-session/services/call-session.ser
 import { UsageSegmentService } from '../../billing/usage-segment.service';
 import { socketOriginCallback } from '../../common/config/cors';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  modeFromDb,
+  TranslationModeName,
+} from '../../translation/translation-config';
+
+export interface TranslationCallState {
+  mode: TranslationModeName;
+  callerLanguage: string | null;
+  receiverLanguage: string | null;
+}
 
 type SocketAuthenticationResult = {
   success: boolean;
@@ -103,6 +113,14 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
     }
     return null;
+  }
+
+  /**
+   * Live Translate is one switch per call: tells both participants the
+   * call's translation mode/languages changed so their SDKs follow it.
+   */
+  emitTranslationChanged(callId: string, state: TranslationCallState) {
+    this.server.to(callId).emit('translation.changed', { callId, ...state });
   }
 
   emitToParticipant(
@@ -596,6 +614,7 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
         media: item.media,
       }));
     client.emit('call.state', { callId: body.callId, participants });
+    await this.sendTranslationState(client, body.callId);
 
     // Standardized event + backward-compatible alias.
     this.server.to(body.callId).emit('participant.joined', {
@@ -869,6 +888,32 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return 'SCREEN_SHARE_STOPPED';
       default:
         return socketEvent.replace(/[-.]/g, '_').toUpperCase();
+    }
+  }
+
+  /** A participant joining after translation was switched on follows it too. */
+  private async sendTranslationState(client: Socket, callId: string) {
+    try {
+      const call = await this.prisma.call.findUnique({
+        where: { id: callId },
+        select: {
+          translationMode: true,
+          callerLanguage: true,
+          receiverLanguage: true,
+        },
+      });
+      const mode = modeFromDb(call?.translationMode);
+      if (!call || mode === 'off') return;
+      client.emit('translation.changed', {
+        callId,
+        mode,
+        callerLanguage: call.callerLanguage,
+        receiverLanguage: call.receiverLanguage,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Translation state lookup failed call=${callId}: ${String(error)}`,
+      );
     }
   }
 

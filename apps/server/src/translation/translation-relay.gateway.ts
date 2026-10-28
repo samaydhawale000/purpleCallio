@@ -1386,9 +1386,12 @@ export class TranslationRelayGateway implements OnGatewayConnection, OnModuleDes
     }
     const setLang = (p: Participant, lang: string | null | undefined) => {
       if (!lang) return;
+      // `hear` follows `speak` unless the participant picked their own.
+      const hearDefaulted =
+        p.hear === p.speak || (p.speak === 'auto' && p.hear === 'en');
       if (lang !== p.speak) p.detected = null;
       p.speak = lang;
-      if (lang !== 'auto') p.hear = lang;
+      if (lang !== 'auto' && hearDefaulted) p.hear = lang;
     };
     setLang(relay.participants.caller, update.callerLanguage);
     setLang(relay.participants.receiver, update.receiverLanguage);

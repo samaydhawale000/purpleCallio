@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, PhoneCall } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { api } from '../../../lib/api';
 import {
   AiAgent,
@@ -14,8 +14,8 @@ import {
   terminationLabel,
   useAiStatus,
 } from '../../../lib/ai';
-import { Badge } from '../../../components/ui/Badge';
-import { AiDisabledNotice, AiLoading } from '../_components/AiNotices';
+import { Empty, ErrorNote, PageHeader, Pager, Pill, Table, fmtDateTime, fmtNumber } from '../../_ui';
+import { AiDisabledNotice, AiLoading, pillTone } from '../_components/AiNotices';
 import { AiSectionNav } from '../_components/AiSectionNav';
 import { Select, TextInput } from '../_components/fields';
 
@@ -29,6 +29,7 @@ async function loadAgents(): Promise<AiAgent[]> {
 }
 
 export default function AiCallsPage() {
+  const router = useRouter();
   const { status, loading: statusLoading } = useAiStatus();
   const enabled = status?.enabled === true;
 
@@ -73,18 +74,15 @@ export default function AiCallsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-[#170B2E]">AI Calls</h1>
-        <p className="text-sm text-[#3D3650] mt-1">Every call your agents have taken.</p>
-      </div>
+    <>
+      <PageHeader title="AI Calls" description="Every call your agents have taken." />
 
       {!enabled ? (
         <AiDisabledNotice />
       ) : (
         <>
           <AiSectionNav />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl">
+          <div className="mb-4 grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-3">
             <Select id="calls-agent" label="Agent" value={agentId} onChange={(e) => resetPage(setAgentId)(e.target.value)}>
               <option value="">All agents</option>
               {agents.map((a) => (
@@ -110,92 +108,70 @@ export default function AiCallsPage() {
           </div>
 
           {error ? (
-            <p className="text-sm text-red-600">{error}</p>
+            <ErrorNote message={error} onRetry={load} />
           ) : loading && !data ? (
             <AiLoading label="Loading calls…" />
-          ) : !data || data.items.length === 0 ? (
-            <div className="rounded-2xl border border-[#E7DFF5] py-16 px-6 text-center" style={{ background: '#FFFFFF' }}>
-              <div
-                className="inline-flex items-center justify-center w-14 h-14 rounded-xl mb-4"
-                style={{ background: 'rgba(65,6,134,0.1)', border: '1px solid rgba(65,6,134,0.2)' }}
-              >
-                <PhoneCall size={24} style={{ color: '#A05DF9' }} />
-              </div>
-              <p className="text-base font-semibold text-[#170B2E] mb-1">No calls in this period</p>
-              <p className="text-sm text-[#3D3650] max-w-sm mx-auto">
-                Calls from the playground and from your API show up here.
-              </p>
-            </div>
           ) : (
-            <div className={`rounded-2xl border border-[#E7DFF5] overflow-hidden ${loading ? 'opacity-60' : ''}`} style={{ background: '#FFFFFF' }}>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-[#3D3650] border-b border-[#E7DFF5]">
-                      <th className="px-4 py-3 font-medium">Date</th>
-                      <th className="px-4 py-3 font-medium">Agent</th>
-                      <th className="px-4 py-3 font-medium">Participant</th>
-                      <th className="px-4 py-3 font-medium">Duration</th>
-                      <th className="px-4 py-3 font-medium">Status</th>
-                      <th className="px-4 py-3 font-medium">Ended by</th>
-                      <th className="px-4 py-3 font-medium text-right">Credits</th>
-                      <th className="px-4 py-3 font-medium text-right">Tool calls</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#E7DFF5]">
-                    {data.items.map((c) => {
+            <div className={loading ? 'opacity-60' : ''}>
+              <Table
+                rows={data?.items ?? []}
+                rowKey={(c) => c.sessionId}
+                onRowClick={(c) => router.push(`/dashboard/ai/calls/${c.sessionId}`)}
+                empty={
+                  <Empty
+                    title="No calls in this period"
+                    body="Calls from the playground and from your API show up here."
+                  />
+                }
+                columns={[
+                  {
+                    key: 'date',
+                    label: 'Date',
+                    render: (c) => (
+                      // A real link keeps the row reachable by keyboard.
+                      <Link href={`/dashboard/ai/calls/${c.sessionId}`} onClick={(e) => e.stopPropagation()}>
+                        {fmtDateTime(c.date)}
+                      </Link>
+                    ),
+                  },
+                  { key: 'agent', label: 'Agent', render: (c) => c.agentName ?? '—' },
+                  {
+                    key: 'participant',
+                    label: 'Participant',
+                    className: 'max-w-[240px] truncate text-[#6B6478]',
+                    render: (c) => (c.participantName ? `${c.participantName} (${c.participantId})` : c.participantId),
+                  },
+                  { key: 'duration', label: 'Duration', align: 'right', render: (c) => formatDuration(c.durationSeconds) },
+                  {
+                    key: 'status',
+                    label: 'Status',
+                    render: (c) => {
                       const badge = sessionStatusBadge(c.status);
-                      return (
-                        <tr key={c.sessionId} className="hover:bg-[#F8F4FD]">
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <Link href={`/dashboard/ai/calls/${c.sessionId}`} className="text-[#170B2E] hover:text-[#7F40E8] font-medium">
-                              {new Date(c.date).toLocaleString()}
-                            </Link>
-                          </td>
-                          <td className="px-4 py-3 text-[#3D3650]">{c.agentName ?? '—'}</td>
-                          <td className="px-4 py-3 text-[#3D3650]">
-                            {c.participantName ? `${c.participantName} (${c.participantId})` : c.participantId}
-                          </td>
-                          <td className="px-4 py-3 text-[#3D3650] tabular-nums">{formatDuration(c.durationSeconds)}</td>
-                          <td className="px-4 py-3">
-                            <Badge variant={badge.tone}>{badge.label}</Badge>
-                          </td>
-                          <td className="px-4 py-3 text-[#3D3650]">{terminationLabel(c.terminationReason)}</td>
-                          <td className="px-4 py-3 text-[#3D3650] text-right tabular-nums">{c.creditsCharged ?? '—'}</td>
-                          <td className="px-4 py-3 text-[#3D3650] text-right tabular-nums">{c.toolCallCount}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3 border-t border-[#E7DFF5] text-xs text-[#3D3650]">
-                <span>
-                  {data.total.toLocaleString('en-US')} call{data.total === 1 ? '' : 's'} · page {data.page} of {pages}
-                </span>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => setPage((p) => p - 1)}
-                    disabled={page <= 1 || loading}
-                    className="p-1.5 rounded-md hover:bg-[#7F40E8]/5 disabled:opacity-40"
-                    aria-label="Previous page"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <button
-                    onClick={() => setPage((p) => p + 1)}
-                    disabled={page >= pages || loading}
-                    className="p-1.5 rounded-md hover:bg-[#7F40E8]/5 disabled:opacity-40"
-                    aria-label="Next page"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
+                      return <Pill tone={pillTone(badge.tone)}>{badge.label}</Pill>;
+                    },
+                  },
+                  {
+                    key: 'ended',
+                    label: 'Ended by',
+                    className: 'text-[#6B6478]',
+                    render: (c) => terminationLabel(c.terminationReason),
+                  },
+                  {
+                    key: 'credits',
+                    label: 'Credits',
+                    align: 'right',
+                    render: (c) => (c.creditsCharged == null ? '—' : fmtNumber(c.creditsCharged)),
+                  },
+                  { key: 'tools', label: 'Tool calls', align: 'right', render: (c) => c.toolCallCount },
+                ]}
+              />
+              {data && (
+                <Pager page={data.page} pageCount={pages} total={data.total} onChange={(p) => !loading && setPage(p)} />
+              )}
             </div>
           )}
         </>
       )}
-    </div>
+    </>
   );
 }

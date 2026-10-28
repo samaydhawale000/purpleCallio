@@ -190,6 +190,44 @@ describe('CallGateway session authorization', () => {
     expect(roomService.getParticipantCount('call-a')).toBe(1);
   });
 
+  it('tells a joining participant that translation is on, and stays quiet when it is off', async () => {
+    const session = playgroundSession();
+    const { gateway } = makeGateway(session);
+    const findUnique = (gateway as any).prisma.call.findUnique as jest.Mock;
+    findUnique.mockResolvedValue({
+      source: CallSource.PLAYGROUND,
+      status: CallStatus.RINGING,
+      expiresAt: new Date(Date.now() + 60_000),
+      translationMode: 'VOICE',
+      callerLanguage: 'en',
+      receiverLanguage: 'hi',
+    });
+    const client = { id: 'socket-1', emit: jest.fn(), join: jest.fn(), disconnect: jest.fn() } as any;
+    await gateway.authenticate(client as never, { token: callerToken });
+    await gateway.joinCall(client as never, { callId: 'call-a' });
+    expect(client.emit).toHaveBeenCalledWith('translation.changed', {
+      callId: 'call-a',
+      mode: 'voice',
+      callerLanguage: 'en',
+      receiverLanguage: 'hi',
+    });
+
+    const off = { id: 'socket-2', emit: jest.fn(), join: jest.fn(), disconnect: jest.fn() } as any;
+    const { gateway: g2 } = makeGateway(playgroundSession());
+    await g2.authenticate(off as never, { token: callerToken });
+    await g2.joinCall(off as never, { callId: 'call-a' });
+    expect(off.emit.mock.calls.map((c: unknown[]) => c[0])).not.toContain('translation.changed');
+  });
+
+  it('broadcasts a translation switch to the call room', () => {
+    const { gateway, emitted } = makeGateway(playgroundSession());
+    gateway.emitTranslationChanged('call-a', { mode: 'off', callerLanguage: null, receiverLanguage: null });
+    expect(emitted).toContainEqual([
+      'translation.changed',
+      { callId: 'call-a', mode: 'off', callerLanguage: null, receiverLanguage: null },
+    ]);
+  });
+
   it('replaces the previous socket when a participant token reconnects', async () => {
     const session = playgroundSession();
     const { gateway, sockets } = makeGateway(session);

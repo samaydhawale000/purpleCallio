@@ -71,8 +71,17 @@ export class PurpleCallioTranslationService implements OnDestroy {
     return this.require().enable(options).catch(() => null);
   }
 
-  disable(): void {
-    this.client?.disable();
+  /**
+   * Turns translation off. With `meeting.translation` that is for the whole
+   * call; `{ share: false }` leaves only this participant (e.g. on hang-up).
+   */
+  disable(options?: { share?: boolean }): void {
+    this.client?.disable(options);
+  }
+
+  /** "Join translation": retries audio the browser blocked (`state.audioBlocked`). Call from a click. */
+  resumeAudio(): Promise<boolean> {
+    return this.require().resumeAudio();
   }
 
   setMode(mode: TranslationMode): void {

@@ -21,13 +21,14 @@ import type {
   TranslationSocketFactory,
   TranslationSocketLike,
   TranslationState,
+  TranslationSwitchChange,
 } from './types';
 
 const FRAME_MS = 20;
 const DEFAULT_INPUT_RATE = 16_000;
 const DEFAULT_OUTPUT_RATE = 24_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
-export const DEFAULT_ORIGINAL_VOLUME = 0.2;
+export const DEFAULT_ORIGINAL_VOLUME = 0;
 export const SLOW_REPLAY_RATE = 0.85;
 const MODES: readonly TranslationMode[] = ['off', 'captions', 'voice'];
 
@@ -52,9 +53,10 @@ export function translationSocketUrl(serverUrl: string): string {
  * PurpleCallio Live Translate for one participant of a 1:1 call.
  *
  * Captures the mic (AudioWorklet → 16 kHz PCM16, sent only while the local
- * VAD hears speech), receives DualView captions for both sides, plays the
- * translated voice for you (echo-safe, one phrase at a time) and ducks the
- * other participant's original audio while it plays.
+ * VAD hears speech), receives DualView captions for both sides and plays the
+ * translated voice for you (echo-safe, one phrase at a time). In voice mode
+ * the other participant's original voice is held at `originalVolume`
+ * (muted by default) for as long as their speech is translated for you.
  *
  * ```ts
  * const tr = new TranslationClient({ serverUrl, token, remoteAudio: audioEl });
@@ -71,6 +73,7 @@ export class TranslationClient {
   private remoteAudio: RemoteAudioTarget | undefined;
 
   private desired: { speak?: string; hear?: string; mode: TranslationMode };
+  private peerLanguage: string | undefined;
   private lastSentSettings = '';
   /** What the relay last confirmed (ready / mode events). */
   private confirmed: { speak: string; hear: string; mode: TranslationMode } = { speak: '', hear: '', mode: 'off' };
@@ -107,6 +110,7 @@ export class TranslationClient {
     this.ducker = new Ducker(() => this.remoteElements());
     this.vad = new EnergyVad({ ...config.vad, frameMs: FRAME_MS });
     this.desired = { speak: config.speak, hear: config.hear, mode: validMode(config.mode) ?? 'voice' };
+    this.peerLanguage = config.peerLanguage;
     this.state = {
       status: 'idle',
       mode: 'off',
@@ -120,6 +124,7 @@ export class TranslationClient {
       speaking: false,
       playingPhraseId: null,
       originalVolume: clamp01(config.originalVolume ?? DEFAULT_ORIGINAL_VOLUME),
+      audioBlocked: false,
       limit: null,
       error: null,
     };
@@ -155,26 +160,63 @@ export class TranslationClient {
   /**
    * Opens the mic, connects to `/translate` and resolves on `ready`. Call
    * from a user gesture so audio can play. While already enabled it just
-   * applies the options. Rejects with an `Error` carrying `.code`.
+   * applies the options (and retries blocked audio, so it also serves a
+   * "Join translation" button). Turning translation on is shared with the
+   * other participant when `shareSwitch` is set. Rejects with an `Error`
+   * carrying `.code`.
    */
   enable(options: TranslationOptions = {}): Promise<TranslationReady> {
-    this.applyOptions(options);
-    if (this.state.status === 'ready' && this.lastReady) {
-      this.syncSettings();
-      return Promise.resolve(this.lastReady);
+    const turningOn = !this.active;
+    const ready = this.activate(options);
+    if (turningOn) {
+      void ready.then(
+        () => this.shareSwitch(this.desired.mode),
+        () => undefined,
+      );
+    } else {
+      void this.resumeAudio();
     }
-    if (this.enabling) return this.enabling;
-    this.enabling = this.start().finally(() => {
-      this.enabling = null;
-    });
-    return this.enabling;
+    return ready;
   }
 
-  /** Leaves translation (the call continues). Idempotent. */
-  disable(): void {
-    if (this.state.status === 'idle' || this.state.status === 'ended') return;
-    if (this.socket?.connected) this.socket.emit('end', {});
-    this.finish('participant');
+  /**
+   * Leaves translation (the call continues), for both participants when
+   * shared. `{ share: false }` leaves only you, e.g. when you hang up.
+   * Idempotent.
+   */
+  disable(options: { share?: boolean } = {}): void {
+    if (!this.active) return;
+    this.leave('participant');
+    if (options.share !== false) void this.shareSwitch('off');
+  }
+
+  /**
+   * Follows the call's translation switch, turned by the other participant
+   * or your backend (`translation.changed`; `meeting.translation` wires it).
+   * Never shared back. Starting without a user gesture may leave
+   * `state.audioBlocked` set until `enable()` is called from a click.
+   */
+  followCall(mode: TranslationMode): void {
+    if (!validMode(mode)) return;
+    if (mode === 'off') {
+      if (this.active) this.leave('switched_off');
+      return;
+    }
+    if (!this.active) void this.activate({ mode }).catch(() => undefined);
+  }
+
+  /** Retries audio the browser blocked; call from a user gesture. */
+  async resumeAudio(): Promise<boolean> {
+    const ctx = this.ctx;
+    if (!ctx) return false;
+    try {
+      await ctx.resume?.();
+    } catch {
+      // Still blocked; reported through `audioBlocked`.
+    }
+    await this.player?.resumeOutput();
+    this.syncAudioBlocked();
+    return !this.state.audioBlocked;
   }
 
   setMode(mode: TranslationMode): void {
@@ -188,20 +230,27 @@ export class TranslationClient {
     if (languages.speak) this.desired.speak = languages.speak;
     if (languages.hear) this.desired.hear = languages.hear;
     this.patchState({ you: { speak: this.desired.speak ?? this.state.you.speak, hear: this.desired.hear ?? this.state.you.hear } });
+    this.updateHold();
     this.syncSettings();
   }
 
-  /** Volume (0..1) of the original remote audio while translated speech plays. */
+  /** Volume (0..1) of the other participant's original voice while it is translated for you. */
   setOriginalVolume(volume: number): void {
     const v = clamp01(volume);
     this.patchState({ originalVolume: v });
-    if (this.ducker.ducked) this.ducker.duck(v);
+    this.updateHold();
   }
 
-  /** Change which element(s) carry the other participant's original audio. */
+  /**
+   * Change which element(s) carry the other participant's original audio.
+   * Passing the current target again picks up elements added since.
+   */
   setRemoteAudio(target: RemoteAudioTarget | undefined): void {
-    this.remoteAudio = target;
-    this.ducker.setElements(() => this.remoteElements());
+    if (target !== this.remoteAudio) {
+      this.remoteAudio = target;
+      this.ducker.setElements(() => this.remoteElements());
+    }
+    this.updateHold();
   }
 
   /**
@@ -226,9 +275,48 @@ export class TranslationClient {
 
   // ── Start / connect ───────────────────────────────────
 
+  private get active(): boolean {
+    return this.state.status === 'connecting' || this.state.status === 'ready';
+  }
+
+  private activate(options: TranslationOptions): Promise<TranslationReady> {
+    this.applyOptions(options);
+    if (this.state.status === 'ready' && this.lastReady) {
+      this.syncSettings();
+      return Promise.resolve(this.lastReady);
+    }
+    if (this.enabling) return this.enabling;
+    this.enabling = this.start().finally(() => {
+      this.enabling = null;
+    });
+    return this.enabling;
+  }
+
+  private leave(reason: string): void {
+    if (this.socket?.connected) this.socket.emit('end', {});
+    this.finish(reason);
+  }
+
+  private async shareSwitch(mode: TranslationMode): Promise<void> {
+    const share = this.config.shareSwitch;
+    if (!share) return;
+    const change: TranslationSwitchChange = { mode, peerPresent: Boolean(this.state.peer?.connected) };
+    if (mode !== 'off') {
+      if (this.state.you.speak) change.speak = this.state.you.speak;
+      if (this.state.you.hear) change.hear = this.state.you.hear;
+      if (this.peerLanguage && !change.peerPresent) change.peerLanguage = this.peerLanguage;
+    }
+    try {
+      await share(change);
+    } catch (e) {
+      this.emitError(toTranslationError(e));
+    }
+  }
+
   private applyOptions(o: TranslationOptions): void {
     if (o.speak) this.desired.speak = o.speak;
     if (o.hear) this.desired.hear = o.hear;
+    if (o.peerLanguage) this.peerLanguage = o.peerLanguage;
     const mode = validMode(o.mode);
     if (mode) this.desired.mode = mode;
     if (o.originalVolume !== undefined) this.setOriginalVolume(o.originalVolume);
@@ -290,6 +378,7 @@ export class TranslationClient {
     socket.on('caption', (c: Caption) => {
       const phrase = this.store.applyCaption(c);
       if (!phrase) return;
+      this.updateHold();
       this.emit('caption', phrase);
       this.emitPhrases();
     });
@@ -337,6 +426,7 @@ export class TranslationClient {
           hear: p?.hear ?? prev?.hear ?? '',
         },
       });
+      this.updateHold();
       this.emit('peer', { connected: Boolean(p?.connected), speak: p?.speak, hear: p?.hear });
     });
     socket.on('error', (p: { code?: unknown }) => {
@@ -382,7 +472,12 @@ export class TranslationClient {
     this.store.setRole(ready.role ?? null);
 
     if (!this.player) {
-      this.player = new TranslatedAudioPlayer(ctx, (id, replay) => this.onPlaying(id, replay));
+      this.player = new TranslatedAudioPlayer(
+        ctx,
+        (id, replay) => this.onPlaying(id, replay),
+        () => this.syncAudioBlocked(),
+      );
+      ctx.onstatechange = () => this.syncAudioBlocked();
     }
     if (!this.resampler || this.resampler.toRate !== ready.inputSampleRate) {
       this.resampler = new LinearResampler(ctx.sampleRate, ready.inputSampleRate);
@@ -413,6 +508,8 @@ export class TranslationClient {
       limit: null,
     });
     this.applyLocalMode(ready.mode);
+    this.syncAudioBlocked();
+    this.updateHold();
 
     const pending = this.pending;
     if (pending) {
@@ -490,11 +587,9 @@ export class TranslationClient {
     if (phraseId) {
       const p = this.store.get(phraseId);
       this.store.patch(phraseId, { playing: true, ...(replay || p?.playedAt ? {} : { playedAt: now }) });
-      this.ducker.duck(this.state.originalVolume);
-    } else {
-      this.ducker.restore();
     }
     this.patchState({ playingPhraseId: phraseId });
+    this.updateHold();
     this.emit('playback', { phraseId, replay });
     this.emitPhrases();
   }
@@ -503,6 +598,39 @@ export class TranslationClient {
     if (mode !== 'voice') this.player?.flush();
     if (mode === 'off') this.endSpeech();
     if (this.state.mode !== mode) this.patchState({ mode });
+    this.updateHold();
+  }
+
+  /**
+   * Holds the other participant's original voice at `originalVolume` while
+   * their speech is translated for you (voice mode), not just while a phrase
+   * plays: the translation lands after they finish a phrase, so ducking only
+   * during playback let you hear them live first and then again translated.
+   * A playing phrase or replay holds it too. Otherwise it stays untouched.
+   */
+  private updateHold(): void {
+    const hold =
+      this.state.status === 'ready' && (this.state.playingPhraseId !== null || this.peerTranslatedForYou());
+    if (!hold) {
+      if (this.ducker.ducked) this.ducker.restore();
+      return;
+    }
+    const level = this.state.originalVolume;
+    if (!this.ducker.ducked || this.ducker.duckLevel !== level || this.ducker.hasUntracked()) {
+      this.ducker.duck(level);
+    }
+  }
+
+  /** Same rule as the relay's: the peer is in translation and speaks something other than what you hear. */
+  private peerTranslatedForYou(): boolean {
+    const peer = this.state.peer;
+    if (this.state.mode !== 'voice' || !peer?.connected || !peer.speak) return false;
+    return peer.speak === 'auto' || baseLanguage(peer.speak) !== baseLanguage(this.state.you.hear);
+  }
+
+  private syncAudioBlocked(): void {
+    const blocked = this.ctx?.state === 'suspended' || Boolean(this.player?.outputBlocked);
+    if (blocked !== this.state.audioBlocked) this.patchState({ audioBlocked: blocked });
   }
 
   private remoteElements(): HTMLMediaElement[] {
@@ -530,7 +658,7 @@ export class TranslationClient {
     this.rejectPending(translationError('TRANSLATION_ENDED', 'Translation was turned off while starting'));
     this.teardown();
     this.lastReady = null;
-    this.patchState({ status: 'ended', speaking: false, playingPhraseId: null });
+    this.patchState({ status: 'ended', speaking: false, playingPhraseId: null, audioBlocked: false });
     this.emit('ended', { reason });
   }
 
@@ -559,6 +687,7 @@ export class TranslationClient {
     this.ownsStream = false;
     const ctx = this.ctx;
     this.ctx = null;
+    if (ctx) ctx.onstatechange = null;
     if (ctx && ctx.state !== 'closed') void ctx.close?.()?.catch?.(() => undefined);
     this.resampler = null;
     this.framer = null;
@@ -626,6 +755,10 @@ export class TranslationClient {
 
 function validMode(mode: unknown): TranslationMode | undefined {
   return MODES.includes(mode as TranslationMode) ? (mode as TranslationMode) : undefined;
+}
+
+function baseLanguage(lang: string): string {
+  return lang.toLowerCase().split('-')[0];
 }
 
 function clamp01(v: number): number {

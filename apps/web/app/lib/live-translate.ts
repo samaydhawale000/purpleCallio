@@ -166,7 +166,7 @@ const translation = new TranslationClient({
   speak: "mr",          // or "auto"
   hear: "en",
   mode: "voice",        // "captions" | "voice"
-  originalVolume: 0.2,  // other person's original voice, ducked
+  originalVolume: 0,    // other person's original voice while it's translated (0 = muted)
   remoteAudio: remoteAudioElement,
 });
 

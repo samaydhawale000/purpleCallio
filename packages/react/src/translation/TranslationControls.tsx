@@ -85,6 +85,16 @@ export function TranslationControls({ translation, showHeadphonesTip = true, chi
         ))}
       </div>
       {state.status === 'connecting' && <div role="status" style={{ fontSize: 12, color: v('--pc-tr-muted') }}>Connecting translation…</div>}
+      {state.audioBlocked && (
+        // Translation was switched on from the other side; the browser needs a click to play it.
+        <button
+          type="button"
+          onClick={() => void tr.resumeAudio()}
+          style={{ alignSelf: 'flex-start', border: 'none', borderRadius: 999, padding: '6px 14px', cursor: 'pointer', fontSize: 13, color: '#fff', background: 'var(--pc-tr-accent, #8B5CF6)' }}
+        >
+          Join translation
+        </button>
+      )}
       {state.error && state.status !== 'ready' && (
         <div role="alert" style={{ fontSize: 12, color: v('--pc-tr-warn') }}>
           {translationErrorMessage(state.error.code)}
@@ -95,7 +105,7 @@ export function TranslationControls({ translation, showHeadphonesTip = true, chi
         <button
           type="button"
           aria-pressed={muted}
-          aria-label={muted ? 'Unmute original voice' : 'Mute original voice while translation plays'}
+          aria-label={muted ? 'Hear the original voice quietly under the translation' : 'Mute the original voice while it is translated'}
           onClick={() => tr.setOriginalVolume(muted ? lastVolume.current : 0)}
           style={{ border: `1px solid ${v('--pc-tr-border')}`, background: 'transparent', color: 'inherit', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', fontSize: 12 }}
         >
@@ -107,7 +117,7 @@ export function TranslationControls({ translation, showHeadphonesTip = true, chi
           max={100}
           step={5}
           value={Math.round(state.originalVolume * 100)}
-          aria-label="Original voice volume while translation plays"
+          aria-label="Original voice volume while it is translated"
           aria-valuetext={`${Math.round(state.originalVolume * 100)} percent`}
           onChange={(e) => tr.setOriginalVolume(Number(e.target.value) / 100)}
           style={{ flex: 1, accentColor: 'var(--pc-tr-accent, #8B5CF6)' }}
@@ -146,6 +156,7 @@ const ERROR_TEXT: Record<string, string> = {
   TRANSLATION_AUDIO_UNSUPPORTED: 'This browser cannot run Live Translate.',
   TRANSLATION_CONNECTION_FAILED: 'Could not connect to Live Translate.',
   TRANSLATION_PROVIDER_UNAVAILABLE: 'The translation service is unavailable. Try again shortly.',
+  TRANSLATION_SWITCH_FAILED: 'Could not turn translation on for the call.',
 };
 
 /** User-facing text for a translation error code. */

@@ -114,7 +114,10 @@ export interface TranslationLimitEvent {
 }
 
 export interface TranslationEndedEvent {
-  /** Server reason, or `participant` (you called `disable()`), `disconnected`, `error`. */
+  /**
+   * Server reason, or `participant` (you called `disable()`), `switched_off`
+   * (the other participant turned the call's translation off), `disconnected`, `error`.
+   */
   reason: string;
 }
 
@@ -139,8 +142,16 @@ export interface TranslationState {
   speaking: boolean;
   /** Phrase whose translated / replayed audio is playing now. */
   playingPhraseId: string | null;
-  /** Volume (0..1) the original remote audio is ducked to while translated audio plays. */
+  /**
+   * Volume (0..1) of the other participant's original voice while their
+   * speech is being translated for you in voice mode. 0 (default) mutes it.
+   */
   originalVolume: number;
+  /**
+   * The browser is blocking audio (translation started without a user
+   * gesture). Show a "Join translation" button that calls `enable()`.
+   */
+  audioBlocked: boolean;
   /** Most recent CostGuard event, cleared on the next `ready`. */
   limit: TranslationLimitEvent | null;
   error: TranslationError | null;
@@ -200,8 +211,28 @@ export interface TranslationOptions {
   hear?: string;
   /** Default `voice`. */
   mode?: TranslationMode;
-  /** Original remote audio volume while translated audio plays (0..1). Default 0.2. */
+  /**
+   * Language the other participant speaks. When you turn translation on
+   * and they haven't joined it yet, it becomes their language for the call.
+   */
+  peerLanguage?: string;
+  /**
+   * Volume (0..1) of the other participant's original voice while their
+   * speech is translated for you in voice mode. Default 0 (muted).
+   */
   originalVolume?: number;
+}
+
+/** A user turned translation on or off (see `TranslationClientConfig.shareSwitch`). */
+export interface TranslationSwitchChange {
+  mode: TranslationMode;
+  /** Your languages, when turning on. */
+  speak?: string;
+  hear?: string;
+  /** `peerLanguage`, when given and the other participant isn't in translation yet. */
+  peerLanguage?: string;
+  /** The other participant is already in translation (keep their languages). */
+  peerPresent: boolean;
 }
 
 export interface TranslationClientConfig extends TranslationOptions {
@@ -213,7 +244,7 @@ export interface TranslationClientConfig extends TranslationOptions {
   serverUrl: string;
   /** The participant's call session token (`bj_session_…`), the same one used for the call. */
   token: string;
-  /** Element(s) playing the other participant's original audio; ducked while translation plays. */
+  /** Element(s) playing the other participant's original audio; held down while it is translated for you. */
   remoteAudio?: RemoteAudioTarget;
   /**
    * Mic to translate. Defaults to opening one with echo cancellation on.
@@ -230,6 +261,13 @@ export interface TranslationClientConfig extends TranslationOptions {
   socketFactory?: TranslationSocketFactory;
   /** Keep at most this many phrases in history. Default 500. */
   maxPhrases?: number;
+  /**
+   * Makes `enable()` / `disable()` one switch for the whole call: called
+   * after you turn translation on (once ready) or off, so the other
+   * participant can follow (`followCall()`). `meeting.translation` sets this.
+   * A rejection surfaces as an `error` event; local translation stays as is.
+   */
+  shareSwitch?: (change: TranslationSwitchChange) => Promise<void>;
 }
 
 export interface VadOptions {

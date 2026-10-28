@@ -131,14 +131,14 @@ export function TranslationPanel({
          )}
 
          <label className="text-xs flex flex-col gap-1" style={{ color: theme.textSecondary }}>
-            Original voice while translation plays: {volumePct}%
+            Original voice while it&apos;s translated: {volumePct === 0 ? "muted" : `${volumePct}%`}
             <input
                type="range"
                min={0}
                max={100}
                step={5}
                value={volumePct}
-               aria-label="Original voice volume while translation plays"
+               aria-label="Original voice volume while it is translated"
                onChange={(e) => tr.setOriginalVolume(Number(e.target.value) / 100)}
                style={{ accentColor: theme.primary }}
             />

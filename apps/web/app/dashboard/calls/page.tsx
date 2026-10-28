@@ -1,429 +1,183 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { PhoneCall, Video, Phone, Search, Filter } from "lucide-react";
-import { useAuthStore } from "../../store/auth.store";
-import { useRequireAuth } from "../../hooks/useRequireAuth";
-import { api } from "../../lib/api";
-import { Badge } from "../../components/ui/Badge";
-import { Input } from "../../components/ui/Input";
-import { Pagination } from "../../components/ui/Pagination";
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Search } from 'lucide-react';
+import { api } from '../../lib/api';
+import {
+  Block,
+  DetailList,
+  Drawer,
+  Empty,
+  PageHeader,
+  Pager,
+  Pill,
+  Segmented,
+  Table,
+  fmtDateTime,
+  inputCls,
+  useResource,
+} from '../_ui';
+import { STATUS_FILTERS, callDuration, callStatus, callTypeLabel, type CallRow } from './call-format';
 
-interface Call {
-   id: string;
-   projectId: string;
-   callerId: string;
-   receiverId: string;
-   type: "AUDIO" | "VIDEO";
-   status: string;
-   startedAt: string | null;
-   endedAt: string | null;
-   createdAt: string;
-   project?: { id: string; name: string };
-   events?: { id: string; event: string; createdAt: string }[];
-}
+type CallPage = { data: CallRow[]; total: number; page: number; pageCount: number };
 
-type StatusFilter =
-   | "ALL"
-   | "ACCEPTED"
-   | "RINGING"
-   | "INITIATED"
-   | "REJECTED"
-   | "MISSED"
-   | "ENDED";
+const EVENT_LABEL: Record<string, string> = {
+  CALL_CREATED: 'Call created',
+  CALL_STARTED: 'Call started',
+  CALL_ENDED: 'Call ended',
+  CALL_EXPIRED: 'Call expired',
+  PARTICIPANT_JOINED: 'Participant joined',
+  PARTICIPANT_LEFT: 'Participant left',
+};
+const eventLabel = (e: string) =>
+  EVENT_LABEL[e] ?? e.charAt(0) + e.slice(1).toLowerCase().replace(/_/g, ' ');
 
 export default function CallsPage() {
-   const { token, logout } = useAuthStore();
-   const router = useRouter();
-   const { isReady } = useRequireAuth();
+  return (
+    <Suspense fallback={null}>
+      <CallsView />
+    </Suspense>
+  );
+}
 
-   const [calls, setCalls] = useState<Call[]>([]);
-   const [loading, setLoading] = useState(true);
-   const [query, setQuery] = useState("");
-   const [status, setStatus] = useState<StatusFilter>("ALL");
-   const [selected, setSelected] = useState<Call | null>(null);
-   const [page, setPage] = useState(1);
-   const [pageSize, setPageSize] = useState(10);
-   const [totalCalls, setTotalCalls] = useState(0);
-   const [pageCount, setPageCount] = useState(1);
+function CallsView() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const openId = params?.get('call') ?? null;
 
-   const fetchCalls = useCallback(async () => {
-      setLoading(true);
-      try {
-         const params = new URLSearchParams({
-            page: String(page),
-         });
-         if (query.trim()) params.set("search", query.trim());
-         if (status !== "ALL") params.set("status", status);
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('ALL');
+  const [page, setPage] = useState(1);
 
-         const res = await api.get(`/dashboard/calls?${params.toString()}`);
-         setCalls(res.data.data ?? []);
-         setTotalCalls(res.data.total ?? 0);
-         setPageCount(res.data.pageCount ?? 1);
-         setPageSize(res.data.pageSize ?? 10);
-      } catch {
-         logout();
-         router.push("/login");
-      } finally {
-         setLoading(false);
-      }
-   }, [logout, page, query, router, status]);
+  // Search as you type, without a request per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setQuery(search.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
-   useEffect(() => {
-      if (!isReady) return;
-      if (!token) {
-         router.push("/login");
-         return;
-      }
-      fetchCalls();
-   }, [isReady, token, fetchCalls, router]);
+  const calls = useResource(() => {
+    const q = new URLSearchParams({ page: String(page) });
+    if (query) q.set('search', query);
+    if (status !== 'ALL') q.set('status', status);
+    return api.get<CallPage>(`/dashboard/calls?${q}`).then((r) => r.data);
+  }, [page, query, status]);
 
-   if (loading) {
-      return (
-         <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="flex flex-col items-center gap-3">
-               <svg
-                  className="animate-spin h-6 w-6 text-[#7F40E8]"
-                  viewBox="0 0 24 24"
-                  fill="none"
-               >
-                  <circle
-                     className="opacity-25"
-                     cx="12"
-                     cy="12"
-                     r="10"
-                     stroke="currentColor"
-                     strokeWidth="4"
+  const detail = useResource(
+    () => (openId ? api.get<CallRow>(`/dashboard/calls/${openId}`).then((r) => r.data) : Promise.resolve(null)),
+    [openId],
+  );
+
+  const open = (id: string | null) => router.replace(id ? `/dashboard/calls?call=${id}` : '/dashboard/calls');
+
+  return (
+    <>
+      <PageHeader title="Calls" description="Every call across your projects." />
+
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="relative md:w-80">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9C95A8]" />
+          <input
+            className={`${inputCls} pl-9`}
+            placeholder="Search call ID, participant or project"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search calls"
+          />
+        </div>
+        <div className="overflow-x-auto">
+          <Segmented
+            label="Status"
+            value={status}
+            onChange={(v) => {
+              setStatus(v);
+              setPage(1);
+            }}
+            options={STATUS_FILTERS}
+          />
+        </div>
+      </div>
+
+      <Block res={calls} loadingLabel="Loading calls…">
+        {(res) => (
+          <>
+            <Table
+              rows={res.data}
+              rowKey={(c) => c.id}
+              onRowClick={(c) => open(c.id)}
+              empty={
+                <Empty
+                  title={query || status !== 'ALL' ? 'No calls match these filters' : 'No calls yet'}
+                  body={query || status !== 'ALL' ? 'Try a different search or status.' : 'Calls you start from your app will appear here.'}
+                />
+              }
+              columns={[
+                { key: 'time', label: 'Started', render: (c) => fmtDateTime(c.createdAt) },
+                { key: 'type', label: 'Type', render: (c) => callTypeLabel(c.type) },
+                {
+                  key: 'status',
+                  label: 'Status',
+                  render: (c) => <Pill tone={callStatus(c.status).tone}>{callStatus(c.status).label}</Pill>,
+                },
+                { key: 'project', label: 'Project', render: (c) => c.project?.name ?? '—' },
+                {
+                  key: 'participants',
+                  label: 'Participants',
+                  className: 'max-w-[220px] truncate text-[#6B6478]',
+                  render: (c) => `${c.callerName || c.callerId} → ${c.receiverName || c.receiverId}`,
+                },
+                { key: 'duration', label: 'Duration', align: 'right', render: (c) => callDuration(c) },
+                { key: 'id', label: 'Call ID', mono: true, className: 'text-[#6B6478]', render: (c) => c.id.slice(0, 8) },
+              ]}
+            />
+            <Pager page={res.page} pageCount={res.pageCount} total={res.total} onChange={setPage} />
+          </>
+        )}
+      </Block>
+
+      {openId && (
+        <Drawer title="Call details" onClose={() => open(null)}>
+          <Block res={detail}>
+            {(c) =>
+              c && (
+                <>
+                  <DetailList
+                    items={[
+                      { label: 'Status', value: <Pill tone={callStatus(c.status).tone}>{callStatus(c.status).label}</Pill> },
+                      { label: 'Type', value: callTypeLabel(c.type) },
+                      { label: 'Project', value: c.project?.name ?? '—' },
+                      { label: 'Caller', value: c.callerName || c.callerId, mono: !c.callerName },
+                      { label: 'Receiver', value: c.receiverName || c.receiverId, mono: !c.receiverName },
+                      { label: 'Started', value: fmtDateTime(c.startedAt ?? c.createdAt) },
+                      { label: 'Ended', value: fmtDateTime(c.endedAt) },
+                      { label: 'Duration', value: callDuration(c) },
+                      { label: 'Call ID', value: c.id, mono: true },
+                    ]}
                   />
-                  <path
-                     className="opacity-75"
-                     fill="currentColor"
-                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                  />
-               </svg>
-               <span className="text-sm text-[#3D3650]">Loading calls…</span>
-            </div>
-         </div>
-      );
-   }
-
-   return (
-      <div className="flex flex-col gap-6">
-         <div>
-            <h1 className="text-2xl font-bold text-[#170B2E]">Calls</h1>
-            <p className="text-sm text-[#3D3650] mt-1">
-               Full call history across all your projects.
-            </p>
-         </div>
-
-         {/* Filters */}
-         <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-               <Search
-                  size={15}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3D3650]"
-               />
-               <Input
-                  placeholder="Search by call ID, caller, receiver, or project…"
-                  value={query}
-                  onChange={(e) => {
-                     setQuery(e.target.value);
-                     setPage(1);
-                  }}
-                  className="pl-9"
-               />
-            </div>
-            <div className="flex items-center gap-2 overflow-x-auto">
-               <Filter size={15} className="text-[#3D3650] shrink-0" />
-               {(
-                  [
-                     "ALL",
-                     "ACCEPTED",
-                     "RINGING",
-                     "INITIATED",
-                     "REJECTED",
-                     "MISSED",
-                     "ENDED",
-                  ] as StatusFilter[]
-               ).map((s) => (
-                  <button
-                     key={s}
-                     onClick={() => {
-                        setStatus(s);
-                        setPage(1);
-                     }}
-                     className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border ${
-                        status === s
-                           ? "text-[#170B2E] border-[#7F40E8]/50"
-                           : "text-[#3D3650] border-[#E7DFF5] hover:border-[#D6C4EE] hover:text-[#170B2E]"
-                     }`}
-                     style={
-                        status === s
-                           ? { background: "rgba(127,64,232,0.15)" }
-                           : { background: "#FFFFFF" }
-                     }
-                  >
-                     {s === "ALL" ? "All" : statusLabel(s)}
-                  </button>
-               ))}
-            </div>
-         </div>
-
-         {calls.length === 0 ? (
-            <div
-               className="rounded-2xl border border-[#E7DFF5] py-16 px-6 text-center"
-               style={{ background: "#FFFFFF" }}
-            >
-               <div
-                  className="inline-flex items-center justify-center w-14 h-14 rounded-xl mb-4"
-                  style={{
-                     background: "rgba(127,64,232,0.1)",
-                     border: "1px solid rgba(127,64,232,0.2)",
-                  }}
-               >
-                  <PhoneCall size={24} style={{ color: "#7F40E8" }} />
-               </div>
-               <p className="text-base font-semibold text-[#170B2E] mb-1">
-                  {totalCalls === 0 ? "No calls yet" : "No matching calls"}
-               </p>
-               <p className="text-sm text-[#3D3650]">
-                  {totalCalls === 0
-                     ? "Your call history will appear here once you make your first call."
-                     : "Try adjusting your search or filters."}
-               </p>
-            </div>
-         ) : (
-            <div
-               className="rounded-2xl border border-[#E7DFF5] overflow-hidden"
-               style={{ background: "#FFFFFF" }}
-            >
-               <div className="divide-y divide-[#E7DFF5]">
-                  {calls.map((call) => (
-                     <button
-                        key={call.id}
-                        onClick={() => setSelected(call)}
-                        className="w-full flex flex-wrap items-center gap-3 px-5 py-4 text-left hover:bg-[#7F40E8]/[0.03] transition-colors"
-                     >
-                        <div
-                           className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
-                           style={{
-                              background:
-                                 call.type === "VIDEO"
-                                    ? "rgba(65,6,134,0.12)"
-                                    : "rgba(127,64,232,0.12)",
-                              border: `1px solid ${call.type === "VIDEO" ? "rgba(65,6,134,0.25)" : "rgba(127,64,232,0.25)"}`,
-                           }}
-                        >
-                           {call.type === "VIDEO" ? (
-                              <Video size={17} style={{ color: "#A05DF9" }} />
-                           ) : (
-                              <Phone size={17} style={{ color: "#7F40E8" }} />
-                           )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                           <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-sm font-semibold text-[#170B2E]">
-                                 {call.type === "VIDEO"
-                                    ? "Video Call"
-                                    : "Voice Call"}
-                              </p>
-                              <Badge variant={statusBadge(call.status)}>
-                                 {statusLabel(call.status)}
-                              </Badge>
-                           </div>
-                           <p className="text-xs text-[#3D3650] mt-0.5">
-                              {new Date(call.createdAt).toLocaleString("en-US")}
-                              {call.project?.name
-                                 ? ` · ${call.project.name}`
-                                 : ""}
-                           </p>
-                        </div>
-                        <div className="text-right shrink-0">
-                           <p className="text-sm font-mono text-[#3D3650]">
-                              {callDuration(call)}
-                           </p>
-                           <p className="text-[10px] font-mono text-[#3D3650] mt-0.5">
-                              {call.id.slice(0, 8)}
-                           </p>
-                        </div>
-                     </button>
-                  ))}
-               </div>
-               <div className="px-5 py-4">
-                  <Pagination
-                     page={page}
-                     pageCount={pageCount}
-                     totalItems={totalCalls}
-                     pageSize={pageSize}
-                     onPageChange={setPage}
-                  />
-               </div>
-            </div>
-         )}
-
-         {/* Detail modal */}
-         {selected && (
-            <div
-               className="fixed inset-0 z-50 flex items-center justify-center p-6"
-               style={{ background: "rgba(0,0,0,0.7)" }}
-               onClick={() => setSelected(null)}
-            >
-               <div
-                  className="w-full max-w-lg rounded-xl p-6 max-h-[85vh] overflow-y-auto"
-                  style={{ background: "#FFFFFF", border: "1px solid #D6C4EE" }}
-                  onClick={(e) => e.stopPropagation()}
-               >
-                  <div className="flex items-center justify-between mb-5">
-                     <p className="font-bold text-[#170B2E]">Call Details</p>
-                     <button
-                        onClick={() => setSelected(null)}
-                        className="text-[#3D3650] hover:text-[#170B2E] transition-colors text-sm"
-                        aria-label="Close"
-                     >
-                        ✕
-                     </button>
-                  </div>
-                  <div className="space-y-3 text-sm mb-6">
-                     <Row label="Call ID" value={selected.id} mono />
-                     <Row
-                        label="Project"
-                        value={selected.project?.name ?? "—"}
-                     />
-                     <Row label="Caller" value={selected.callerId} mono />
-                     <Row label="Receiver" value={selected.receiverId} mono />
-                     <Row label="Type" value={selected.type} />
-                     <Row label="Status" value={statusLabel(selected.status)} />
-                     <Row
-                        label="Created"
-                        value={new Date(selected.createdAt).toLocaleString(
-                           "en-US",
-                        )}
-                     />
-                     <Row
-                        label="Started"
-                        value={
-                           selected.startedAt
-                              ? new Date(selected.startedAt).toLocaleString(
-                                   "en-US",
-                                )
-                              : "—"
-                        }
-                     />
-                     <Row
-                        label="Ended"
-                        value={
-                           selected.endedAt
-                              ? new Date(selected.endedAt).toLocaleString(
-                                   "en-US",
-                                )
-                              : "—"
-                        }
-                     />
-                     <Row label="Duration" value={callDuration(selected)} />
-                  </div>
-                  {selected.events && selected.events.length > 0 && (
-                     <div>
-                        <p className="text-sm font-semibold text-[#170B2E] mb-3">
-                           Timeline
-                        </p>
-                        <div className="flex flex-col gap-2">
-                           {selected.events.map((ev) => (
-                              <div
-                                 key={ev.id}
-                                 className="flex items-start gap-2"
-                              >
-                                 <span
-                                    className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
-                                    style={{ background: "#7F40E8" }}
-                                 />
-                                 <div>
-                                    <p className="text-xs text-[#3D3650]">
-                                       {ev.event}
-                                    </p>
-                                    <p className="text-[10px] text-[#3D3650]">
-                                       {new Date(ev.createdAt).toLocaleString(
-                                          "en-US",
-                                       )}
-                                    </p>
-                                 </div>
-                              </div>
-                           ))}
-                        </div>
-                     </div>
+                  {c.events && c.events.length > 0 && (
+                    <div className="mt-8">
+                      <h3 className="mb-3 text-sm font-semibold text-[#170B2E]">Timeline</h3>
+                      <ol className="space-y-3 border-l border-[#ECE8F2] pl-4">
+                        {c.events.map((ev) => (
+                          <li key={ev.id} className="relative">
+                            <span className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-[#7F40E8]" />
+                            <p className="text-sm text-[#170B2E]">{eventLabel(ev.event)}</p>
+                            <p className="text-xs text-[#6B6478]">{fmtDateTime(ev.createdAt)}</p>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
                   )}
-               </div>
-            </div>
-         )}
-      </div>
-   );
-}
-
-function Row({
-   label,
-   value,
-   mono,
-}: {
-   label: string;
-   value: string;
-   mono?: boolean;
-}) {
-   return (
-      <div className="flex items-start justify-between gap-4">
-         <span className="text-[#3D3650] shrink-0">{label}</span>
-         <span
-            className={`text-[#3D3650] text-right break-all ${mono ? "font-mono text-xs" : ""}`}
-         >
-            {value}
-         </span>
-      </div>
-   );
-}
-
-function statusLabel(status: string): string {
-   switch (status) {
-      case "ACCEPTED":
-         return "Completed";
-      case "RINGING":
-         return "Ringing";
-      case "INITIATED":
-         return "Initiated";
-      case "REJECTED":
-         return "Rejected";
-      case "MISSED":
-         return "Missed";
-      case "ENDED":
-         return "Ended";
-      default:
-         return status;
-   }
-}
-
-function statusBadge(
-   status: string,
-): "default" | "purple" | "success" | "error" | "warning" {
-   switch (status) {
-      case "ACCEPTED":
-         return "success";
-      case "RINGING":
-      case "INITIATED":
-         return "warning";
-      case "REJECTED":
-      case "MISSED":
-         return "error";
-      case "ENDED":
-         return "default";
-      default:
-         return "default";
-   }
-}
-
-function callDuration(call: Call): string {
-   if (!call.startedAt) return "—";
-   const end = call.endedAt ? new Date(call.endedAt).getTime() : Date.now();
-   const secs = Math.floor((end - new Date(call.startedAt).getTime()) / 1000);
-   if (secs < 60) return `${secs}s`;
-   const m = Math.floor(secs / 60);
-   const s = secs % 60;
-   return `${m}m ${s.toString().padStart(2, "0")}s`;
+                </>
+              )
+            }
+          </Block>
+        </Drawer>
+      )}
+    </>
+  );
 }

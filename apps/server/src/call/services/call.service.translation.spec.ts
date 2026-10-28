@@ -29,10 +29,11 @@ function setup(opts: { access?: { ok: boolean; code?: string }; lexicon?: unknow
   };
   const access = { canStart: jest.fn().mockResolvedValue(opts.access ?? { ok: true, trial: false }) };
   const relay = { applyCallUpdate: jest.fn().mockResolvedValue(true), endForCall: jest.fn().mockResolvedValue(undefined) };
+  const gateway = { emitTranslationChanged: jest.fn() };
   const service = new CallService(
     prisma,
     sessions as never,
-    {} as never,
+    gateway as never,
     { fireForCall: jest.fn() } as never,
     { canStartCall: jest.fn().mockResolvedValue({ allowed: true }) } as never,
     {} as never,
@@ -41,7 +42,7 @@ function setup(opts: { access?: { ok: boolean; code?: string }; lexicon?: unknow
     access as never,
     relay as never,
   );
-  return { service, prisma, access, relay };
+  return { service, prisma, access, relay, gateway };
 }
 
 const base = { projectId: 'p1', callerId: 'a', receiverId: 'b', type: 'AUDIO' as const };
@@ -112,6 +113,8 @@ describe('CallService Live Translate', () => {
     expect(out).toEqual({ mode: 'captions', callerLanguage: null, receiverLanguage: 'ta' });
     expect(t.access.canStart).toHaveBeenCalledWith('u1', 'captions');
     expect(t.relay.applyCallUpdate).toHaveBeenCalledWith('c1', { mode: 'captions', receiverLanguage: 'ta' });
+    // Both participants' SDKs follow the call-wide switch.
+    expect(t.gateway.emitTranslationChanged).toHaveBeenCalledWith('c1', out);
   });
 
   it('PATCH 404s for another project and 410s for an ended call', async () => {

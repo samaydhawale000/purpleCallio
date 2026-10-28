@@ -30,6 +30,13 @@ export interface SignalingEventMap {
 'call.started': { callId: string };
   'call.ended': { callId: string };
   'call.expired': { callId: string };
+  /** The call's Live Translate switch (on join too, when it is on). */
+  'translation.changed': {
+    callId: string;
+    mode: 'off' | 'captions' | 'voice';
+    callerLanguage: string | null;
+    receiverLanguage: string | null;
+  };
   'connection.diagnostic': { code: 'TURN_CREDENTIALS_FAILED' | 'AUDIO_AUTOPLAY_BLOCKED' | 'AUDIO_OUTPUT_SWITCH_FAILED' | 'ICE_FAILED' };
   /**
    * Media connection progress: `recovering` while ICE restarts run,
@@ -87,6 +94,7 @@ export class SignalingEvents {
 'call.started': new Set(),
     'call.ended': new Set(),
     'call.expired': new Set(),
+    'translation.changed': new Set(),
     'connection.diagnostic': new Set(),
     'connection.status': new Set(),
     'remote.stream': new Set(),

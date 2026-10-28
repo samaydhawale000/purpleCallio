@@ -1,9 +1,8 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { Button } from '../../../components/ui/Button';
-import { Input } from '../../../components/ui/Input';
 import { TranslationEstimate, TranslationMode, fmtInr, fmtNumber, getEstimate, translationErrorText } from '../../../lib/translation';
+import { buttonCls, inputCls } from '../../_ui';
 import { Card, selectCls } from './shared';
 import { whole } from './settings-form';
 
@@ -35,40 +34,42 @@ export function CostEstimator({ defaultMinutes }: { defaultMinutes?: string }) {
   };
 
   return (
-    <Card title="CostGuard estimator" subtitle="Estimate credits for translated calls at your current rates." testId="cost-estimator">
+    <Card title="Cost estimator" subtitle="Estimate credits for translated calls at your current rates." testId="cost-estimator">
       <form onSubmit={run} noValidate className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1.5 w-44">
-          <label htmlFor="est-mode" className="text-sm font-medium text-[#3D3650]">Mode</label>
+          <label htmlFor="est-mode" className="text-[13px] font-medium text-[#170B2E]">Mode</label>
           <select id="est-mode" className={selectCls} value={mode} onChange={(e) => setMode(e.target.value as TranslationMode)}>
             <option value="voice">Voice translation</option>
             <option value="captions">Captions</option>
           </select>
         </div>
         <div className="flex flex-col gap-1.5 w-44">
-          <label htmlFor="est-listeners" className="text-sm font-medium text-[#3D3650]">People translating</label>
+          <label htmlFor="est-listeners" className="text-[13px] font-medium text-[#170B2E]">People translating</label>
           <select id="est-listeners" className={selectCls} value={listeners} onChange={(e) => setListeners(e.target.value === '1' ? 1 : 2)}>
             <option value={1}>One side (1×)</option>
             <option value={2}>Both sides (2×)</option>
           </select>
         </div>
-        <div className="w-36">
-          <Input label="Minutes per call" type="number" min={1} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+        <div className="flex w-36 flex-col gap-1.5">
+          <label htmlFor="est-minutes" className="text-[13px] font-medium text-[#170B2E]">Minutes per call</label>
+          <input id="est-minutes" type="number" min={1} className={inputCls} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
         </div>
-        <div className="w-36">
-          <Input label="Calls" type="number" min={1} value={calls} onChange={(e) => setCalls(e.target.value)} />
+        <div className="flex w-36 flex-col gap-1.5">
+          <label htmlFor="est-calls" className="text-[13px] font-medium text-[#170B2E]">Calls</label>
+          <input id="est-calls" type="number" min={1} className={inputCls} value={calls} onChange={(e) => setCalls(e.target.value)} />
         </div>
-        <Button type="submit" variant="secondary" loading={loading}>Estimate</Button>
+        <button type="submit" className={buttonCls('secondary')} disabled={loading}>Estimate</button>
       </form>
       {error && <p role="alert" className="text-sm text-red-600 mt-3">{error}</p>}
       {estimate && (
-        <div className="mt-4 rounded-xl border border-[#E7DFF5] bg-[#F8F4FD] p-4 text-sm text-[#170B2E]" data-testid="estimate-result">
+        <div className="mt-4 rounded-lg border border-[#ECE8F2] bg-white p-4 text-sm text-[#170B2E]" data-testid="estimate-result">
           <p>
-            <strong>{fmtNumber(estimate.creditsPerCall)} credits</strong> per call
+            <strong className="font-semibold">{fmtNumber(estimate.creditsPerCall)} credits</strong> per call
             {estimate.approxInrPerCall != null && <> (≈ {fmtInr(estimate.approxInrPerCall)})</>} ·{' '}
-            <strong>{fmtNumber(estimate.totalCredits)} credits</strong> for {fmtNumber(Number(calls))} calls
+            <strong className="font-semibold">{fmtNumber(estimate.totalCredits)} credits</strong> for {fmtNumber(Number(calls))} calls
             {estimate.approxInrTotal != null && <> (≈ {fmtInr(estimate.approxInrTotal)})</>}
           </p>
-          <p className="text-xs text-[#3D3650] mt-1">
+          <p className="mt-1 text-xs text-[#6B6478]">
             {fmtNumber(estimate.ratePerMinute)} credits per minute for each person translating.
             {estimate.note ? ` ${estimate.note}` : ''}
           </p>

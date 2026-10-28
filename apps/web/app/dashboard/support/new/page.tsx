@@ -11,8 +11,7 @@ import {
   MESSAGE_MAX_LENGTH,
   SUBJECT_MAX_LENGTH,
 } from '../../../lib/support';
-import { Button } from '../../../components/ui/Button';
-import { Input } from '../../../components/ui/Input';
+import { PageHeader, Panel, buttonCls, inputCls } from '../../_ui';
 import { ToastHost, ToastState } from '../../billing/Toast';
 
 function NewTicketForm() {
@@ -52,86 +51,83 @@ function NewTicketForm() {
     }
   }
 
+  const labelCls = 'mb-1 block text-[13px] text-[#6B6478]';
+  const errorCls = 'border-red-300 focus:border-red-400 focus:ring-red-100';
+
   return (
-    <div className="flex flex-col gap-6 max-w-3xl">
+    <div className="max-w-3xl">
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
-      <div>
-        <Link
-          href="/dashboard/support"
-          className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E] mb-3"
-        >
-          <ArrowLeft size={14} /> Back to Support
-        </Link>
-        <h1 className="text-2xl font-bold text-[#170B2E]">Create Ticket</h1>
-        <p className="text-sm text-[#3D3650] mt-1">
-          Describe the problem and include any relevant error message.
-        </p>
-      </div>
-
-      <form
-        onSubmit={submit}
-        noValidate
-        className="rounded-2xl border border-[#E7DFF5] p-5 flex flex-col gap-4"
-        style={{ background: '#FFFFFF' }}
+      <Link
+        href="/dashboard/support"
+        className="mb-4 inline-flex items-center gap-1 text-[13px] text-[#6B6478] hover:text-[#170B2E]"
       >
-        <Input
-          label="Subject"
-          placeholder="e.g. Webhook call.ended not received"
-          value={subject}
-          maxLength={SUBJECT_MAX_LENGTH}
-          onChange={(e) => {
-            setSubject(e.target.value);
-            if (errors.subject) setErrors((p) => ({ ...p, subject: undefined }));
-          }}
-          error={errors.subject}
-          autoFocus
-        />
+        <ArrowLeft size={14} /> Back to Support
+      </Link>
+      <PageHeader title="New ticket" description="Describe the problem and include any relevant error message." />
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="ticket-message" className="text-sm font-medium text-[#3D3650]">Message</label>
-          <textarea
-            id="ticket-message"
-            value={message}
-            onChange={(e) => {
-              setMessage(e.target.value);
-              if (errors.message) setErrors((p) => ({ ...p, message: undefined }));
-            }}
-            placeholder="What were you trying to do, what happened, and any error output…"
-            rows={8}
-            maxLength={MESSAGE_MAX_LENGTH}
-            className={`w-full px-3 py-2.5 rounded-lg text-sm text-[#170B2E] placeholder:text-[#6B6478] bg-white border outline-none transition-all resize-y ${
-              errors.message
-                ? 'border-red-500/50 focus:border-red-500/70'
-                : 'border-[#D6C4EE] focus:border-[#7F40E8]/60 focus:shadow-[0_0_0_3px_rgba(127,64,232,0.1)]'
-            }`}
-          />
-          {errors.message && <p className="text-xs text-red-600">{errors.message}</p>}
-        </div>
+      <Panel>
+        <form onSubmit={submit} noValidate className="flex flex-col gap-4">
+          <div>
+            <label htmlFor="ticket-subject" className={labelCls}>Subject</label>
+            <input
+              id="ticket-subject"
+              className={`${inputCls} ${errors.subject ? errorCls : ''}`}
+              placeholder="e.g. Webhook call.ended not received"
+              value={subject}
+              maxLength={SUBJECT_MAX_LENGTH}
+              onChange={(e) => {
+                setSubject(e.target.value);
+                if (errors.subject) setErrors((p) => ({ ...p, subject: undefined }));
+              }}
+              autoFocus
+            />
+            {errors.subject && <p className="mt-1 text-xs text-red-600">{errors.subject}</p>}
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="ticket-doc" className="text-sm font-medium text-[#3D3650]">
-            Related documentation <span className="font-normal">(optional)</span>
-          </label>
-          <select
-            id="ticket-doc"
-            value={documentationId}
-            onChange={(e) => setDocumentationId(e.target.value)}
-            className="w-full px-3 py-2.5 rounded-lg text-sm text-[#170B2E] bg-[#FFFFFF] border border-[#D6C4EE] outline-none focus:border-[#7F40E8]/60"
-          >
-            <option value="">None</option>
-            {DOC_PAGES.map((d) => (
-              <option key={d.id} value={d.id}>{d.label}</option>
-            ))}
-          </select>
-        </div>
+          <div>
+            <label htmlFor="ticket-message" className={labelCls}>Message</label>
+            <textarea
+              id="ticket-message"
+              value={message}
+              onChange={(e) => {
+                setMessage(e.target.value);
+                if (errors.message) setErrors((p) => ({ ...p, message: undefined }));
+              }}
+              placeholder="What were you trying to do, what happened, and any error output…"
+              rows={8}
+              maxLength={MESSAGE_MAX_LENGTH}
+              className={`${inputCls} resize-y ${errors.message ? errorCls : ''}`}
+            />
+            {errors.message && <p className="mt-1 text-xs text-red-600">{errors.message}</p>}
+          </div>
 
-        <div className="flex gap-3">
-          <Button type="submit" loading={submitting}>Create Ticket</Button>
-          <Link href="/dashboard/support">
-            <Button type="button" variant="ghost">Cancel</Button>
-          </Link>
-        </div>
-      </form>
+          <div>
+            <label htmlFor="ticket-doc" className={labelCls}>
+              Related documentation (optional)
+            </label>
+            <select
+              id="ticket-doc"
+              value={documentationId}
+              onChange={(e) => setDocumentationId(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">None</option>
+              {DOC_PAGES.map((d) => (
+                <option key={d.id} value={d.id}>{d.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-2">
+            <button type="submit" className={buttonCls('primary')} disabled={submitting}>
+              Create Ticket
+            </button>
+            <Link href="/dashboard/support" className={buttonCls('ghost')}>
+              Cancel
+            </Link>
+          </div>
+        </form>
+      </Panel>
     </div>
   );
 }

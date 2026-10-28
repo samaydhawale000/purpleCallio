@@ -366,7 +366,7 @@ export function CreditEstimator() {
                   ) : (
                      <p className="text-sm text-[#3D3650]">{priceState.status === "loading" ? "Loading published credit pricing…" : PRICE_NOT_PUBLISHED}</p>
                   )}
-                  <Link href={token ? "/dashboard/billing/credits#topups" : "/signup"} className="mt-3 inline-block text-sm font-medium text-[#6425C4] hover:text-[#170B2E]">
+                  <Link href={token ? "/dashboard/billing?add=1" : "/signup"} className="mt-3 inline-block text-sm font-medium text-[#6425C4] hover:text-[#170B2E]">
                      {token ? "Buy credits" : "Create an account to buy credits"} →
                   </Link>
                </div>

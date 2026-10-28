@@ -8,9 +8,11 @@ import {
    type TranslationPhrase,
    type TranslationRepeatRequest,
    type TranslationState,
+   type TranslationSwitchChange,
 } from "@purplecallio/sdk";
 
-export const DEFAULT_ORIGINAL_VOLUME = 0.2;
+/** The other person's original voice is muted while it is translated for you. */
+export const DEFAULT_ORIGINAL_VOLUME = 0;
 
 export interface CallTranslationDefaults {
    mode: TranslationMode;
@@ -85,6 +87,7 @@ export type CallTranslationClient = Pick<
    | "getState"
    | "on"
    | "phrases"
+   | "followCall"
 >;
 
 export interface UseCallTranslationOptions {
@@ -96,6 +99,10 @@ export interface UseCallTranslationOptions {
    defaults: CallTranslationDefaults | null;
    getRemoteElements: () => (HTMLMediaElement | null | undefined)[];
    getLocalStream: () => MediaStream | null | undefined;
+   /** With `apiUrl`, turning translation on/off here turns it on/off for the whole call. */
+   callId?: string | null;
+   /** REST base (with `/api` when the API sits behind it). */
+   apiUrl?: string;
    createClient?: (config: TranslationClientConfig) => CallTranslationClient;
 }
 
@@ -113,19 +120,24 @@ export interface CallTranslation {
    requestRepeat: (phraseId: string) => boolean;
    dismissRepeatRequest: (phraseId: string) => void;
    disable: () => void;
+   /** Follow the call's switch (`translation.changed` from the call socket). */
+   followCall: (mode: TranslationMode) => void;
+   /** "Join translation": retries audio the browser blocked (call from a click). */
+   resumeAudio: () => void;
 }
 
 /**
- * Live Translate for the hosted call page. Nothing connects until the user
- * (or the call's own translation default) turns it on, so a call without
- * translation behaves exactly as before.
+ * Live Translate for the hosted call page. Nothing connects until someone
+ * turns it on, so a call without translation behaves exactly as before.
+ * It is one switch per call: turning it on/off here does so for both sides
+ * (PATCH /calls/:id/translation), and `followCall` applies the other side's.
  */
 export function useCallTranslation(opts: UseCallTranslationOptions): CallTranslation {
    const optsRef = useRef(opts);
    optsRef.current = opts;
    const clientRef = useRef<CallTranslationClient | null>(null);
    const offsRef = useRef<(() => void)[]>([]);
-   const autoTriedRef = useRef(false);
+   const pendingFollowRef = useRef<TranslationMode | null>(null);
 
    const [state, setState] = useState<TranslationState | null>(null);
    const [phrases, setPhrases] = useState<TranslationPhrase[]>([]);
@@ -157,6 +169,7 @@ export function useCallTranslation(opts: UseCallTranslationOptions): CallTransla
          originalVolume: prefsRef.current.originalVolume,
          remoteAudio: () => optsRef.current.getRemoteElements().filter(Boolean) as HTMLMediaElement[],
          stream: () => optsRef.current.getLocalStream() ?? null,
+         shareSwitch: (change) => shareCallSwitch(optsRef.current, change, clientRef.current),
       };
       const client = createClient ? createClient(config) : new TranslationClient(config);
       clientRef.current = client;
@@ -198,6 +211,33 @@ export function useCallTranslation(opts: UseCallTranslationOptions): CallTransla
       setRepeatRequests([]);
    }, []);
 
+   const followCall = useCallback(
+      (mode: TranslationMode) => {
+         // Not in the call yet: apply it once the call is up.
+         if (!optsRef.current.active) {
+            pendingFollowRef.current = mode;
+            return;
+         }
+         pendingFollowRef.current = null;
+         if (mode === "off") {
+            clientRef.current?.followCall("off");
+            setRepeatRequests([]);
+            return;
+         }
+         const client = ensureClient();
+         if (!client) return;
+         const { speak, hear, originalVolume } = prefsRef.current;
+         client.setLanguages({ speak, hear });
+         client.setOriginalVolume(originalVolume);
+         client.followCall(mode);
+      },
+      [ensureClient],
+   );
+
+   const resumeAudio = useCallback(() => {
+      void clientRef.current?.enable().catch(() => undefined);
+   }, []);
+
    const isLive = state?.status === "ready" || state?.status === "connecting";
 
    const setMode = useCallback(
@@ -226,27 +266,33 @@ export function useCallTranslation(opts: UseCallTranslationOptions): CallTransla
       clientRef.current?.setOriginalVolume(v);
    }, []);
 
-   // Call created with translation on → start it once the call is up.
+   // Call created with translation on → follow it once the call is up
+   // (the call socket also announces it on join; following twice is a no-op).
    useEffect(() => {
       const d = opts.defaults;
-      if (!opts.active || !d || d.mode === "off" || autoTriedRef.current) return;
-      autoTriedRef.current = true;
+      if (!opts.active || !d || d.mode === "off") return;
       if (d.language && d.language !== "auto" && !userTouchedRef.current) {
          prefsRef.current = { ...prefsRef.current, speak: d.language, hear: d.language };
          setPrefs(prefsRef.current);
       }
-      enable(d.mode);
-   }, [opts.active, opts.defaults, enable]);
+      followCall(d.mode);
+   }, [opts.active, opts.defaults, followCall]);
 
-   // Tear down when the call ends or the page unmounts.
+   // A switch announced before the call was up.
+   useEffect(() => {
+      if (opts.active && pendingFollowRef.current) followCall(pendingFollowRef.current);
+   }, [opts.active, followCall]);
+
+   // Tear down when the call ends or the page unmounts: only this side
+   // leaves translation; the call's switch is untouched.
    useEffect(() => {
       if (opts.active) return;
-      clientRef.current?.disable();
+      clientRef.current?.disable({ share: false });
    }, [opts.active]);
    useEffect(
       () => () => {
          offsRef.current.forEach((off) => off());
-         clientRef.current?.disable();
+         clientRef.current?.disable({ share: false });
          clientRef.current = null;
       },
       [],
@@ -265,5 +311,31 @@ export function useCallTranslation(opts: UseCallTranslationOptions): CallTransla
       requestRepeat: (id) => clientRef.current?.requestRepeat(id) ?? false,
       dismissRepeatRequest: (id) => setRepeatRequests((list) => list.filter((r) => r.phraseId !== id)),
       disable,
+      followCall,
+      resumeAudio,
    };
+}
+
+/** PATCH /calls/:id/translation: the switch both participants follow. */
+async function shareCallSwitch(
+   opts: UseCallTranslationOptions,
+   change: TranslationSwitchChange,
+   client: CallTranslationClient | null,
+): Promise<void> {
+   const { callId, apiUrl, token } = opts;
+   if (!callId || !apiUrl || !token) return;
+   const role = client?.getState().role ?? opts.defaults?.role;
+   const body: Record<string, string> = { mode: change.mode };
+   if (change.speak && role) body[role === "receiver" ? "receiverLanguage" : "callerLanguage"] = change.speak;
+   const res = await fetch(`${apiUrl.replace(/\/$/, "")}/calls/${encodeURIComponent(callId)}/translation`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+   });
+   if (res.ok) return;
+   const err = (await res.json().catch(() => ({}))) as { code?: unknown; message?: unknown };
+   throw Object.assign(
+      new Error(typeof err.message === "string" ? err.message : "Could not change translation for the call"),
+      { code: typeof err.code === "string" ? err.code : "TRANSLATION_SWITCH_FAILED" },
+   );
 }

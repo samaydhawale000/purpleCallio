@@ -13,11 +13,9 @@ import {
   type TopUpInput,
 } from '../../../lib/admin-billing';
 import { formatCredits, formatDate, formatMoney } from '../../../lib/billing';
-import { Button } from '../../../components/ui/Button';
-import { Badge } from '../../../components/ui/Badge';
 import { ToastHost, type ToastState } from '../../../dashboard/billing/Toast';
 import { useCanWrite } from '../../../lib/admin-access';
-import { Checkbox, ErrorText, Field, inputCls, linkBtn, Modal, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
+import { Badge, Button, Checkbox, ErrorText, Field, inputCls, linkBtn, Modal, Panel, rowCls, Spinner, StatusBadge, Table, tdCls, useAdminErrorHandler, useResource } from './ui';
 
 type Status = AdminTopUp['status'];
 
@@ -48,6 +46,7 @@ export function TopUpsTab() {
       <Panel
         title="Top-up packages"
         subtitle="One-time credit packages customers can buy any time. Price and credit changes apply to future purchases only."
+        flush
         actions={
           canWrite && (
             <Button size="sm" onClick={() => setEditing('new')}>
@@ -61,10 +60,14 @@ export function TopUpsTab() {
             <tr key={t.id} className={rowCls}>
               <td className={tdCls}>
                 <span className="font-medium text-[#170B2E]">{t.name}</span>
-                {t.isPopular && <Badge variant="purple" className="ml-2">Popular</Badge>}
-                {t.description && <div className="text-[11px]">{t.description}</div>}
+                {t.isPopular && (
+                  <span className="ml-2">
+                    <Badge variant="purple">Popular</Badge>
+                  </span>
+                )}
+                {t.description && <div className="text-xs text-[#6B6478]">{t.description}</div>}
               </td>
-              <td className={`${tdCls} text-[#170B2E]`}>{formatMoney(t.pricePaise, t.currency)}</td>
+              <td className={`${tdCls} tabular-nums`}>{formatMoney(t.pricePaise, t.currency)}</td>
               <td className={tdCls}>{formatCredits(t.credits)}</td>
               <td className={tdCls}><StatusBadge status={t.status} /></td>
               <td className={tdCls}>{t.displayOrder}</td>
@@ -73,12 +76,13 @@ export function TopUpsTab() {
               <td className={tdCls}>
                 {canWrite && (
                 <div className="flex flex-wrap gap-x-3 gap-y-1">
-                  <button className={linkBtn} onClick={() => setEditing(t)}>Edit</button>
-                  {t.status !== 'ACTIVE' && <button className={linkBtn} onClick={() => setStatus(t, 'ACTIVE')}>Activate</button>}
-                  {t.status === 'ACTIVE' && <button className={linkBtn} onClick={() => setStatus(t, 'INACTIVE')}>Deactivate</button>}
+                  <button type="button" className={linkBtn} onClick={() => setEditing(t)}>Edit</button>
+                  {t.status !== 'ACTIVE' && <button type="button" className={linkBtn} onClick={() => setStatus(t, 'ACTIVE')}>Activate</button>}
+                  {t.status === 'ACTIVE' && <button type="button" className={linkBtn} onClick={() => setStatus(t, 'INACTIVE')}>Deactivate</button>}
                   {t.status !== 'ARCHIVED' && (
                     <button
-                      className="text-xs font-medium text-red-600 hover:text-red-800"
+                      type="button"
+                      className="text-[13px] font-medium text-red-600 hover:underline"
                       onClick={() => window.confirm(`Archive "${t.name}"? Customers can no longer buy it; past purchases are unaffected.`) && setStatus(t, 'ARCHIVED')}
                     >
                       Archive

@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { Check, Copy, FlaskConical, Pencil, Plus, Trash2, Wrench } from 'lucide-react';
+import { Check, Copy, FlaskConical, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../../lib/api';
 import {
   AiAgentTool,
@@ -16,9 +16,8 @@ import {
   sampleToolArguments,
   toolErrorText,
 } from '../../../lib/ai';
-import { Button } from '../../../components/ui/Button';
-import { Badge } from '../../../components/ui/Badge';
-import { Checkbox, Select, TextArea, TextInput } from './fields';
+import { Empty, Panel, Pill, buttonCls, type Tone } from '../../_ui';
+import { ActionButton, Checkbox, Select, TextArea, TextInput } from './fields';
 
 interface ToolFormValues {
   name: string;
@@ -142,14 +141,9 @@ function ToolForm({
   }
 
   return (
-    <form
-      onSubmit={submit}
-      noValidate
-      className="rounded-2xl border border-[#D6C4EE] p-5 flex flex-col gap-4"
-      style={{ background: 'linear-gradient(135deg, rgba(127,64,232,0.06), rgba(65,6,134,0.03))' }}
-    >
+    <form onSubmit={submit} noValidate className="flex flex-col gap-4 rounded-xl bg-[#F7F6FA] p-5">
       {serverErrors.length > 0 && (
-        <div role="alert" className="rounded-xl border border-red-500/30 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
           {serverErrors.map((m) => (
             <p key={m} className="break-words">{m}</p>
           ))}
@@ -222,19 +216,19 @@ function ToolForm({
         />
       </div>
       <div className="flex gap-3">
-        <Button type="submit" loading={saving}>{submitLabel}</Button>
-        <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
+        <ActionButton type="submit" loading={saving}>{submitLabel}</ActionButton>
+        <ActionButton variant="secondary" onClick={onCancel}>Cancel</ActionButton>
       </div>
     </form>
   );
 }
 
-const TEST_STATUS: Record<AiToolTestResult['status'], { label: string; variant: 'success' | 'warning' | 'error' }> = {
-  SUCCESS: { label: 'Success', variant: 'success' },
-  TIMEOUT: { label: 'Timed out', variant: 'warning' },
-  FAILED: { label: 'Failed', variant: 'error' },
-  REJECTED: { label: 'Rejected', variant: 'warning' },
-  UNCONFIRMED: { label: 'Not confirmed', variant: 'warning' },
+const TEST_STATUS: Record<AiToolTestResult['status'], { label: string; tone: Tone }> = {
+  SUCCESS: { label: 'Success', tone: 'success' },
+  TIMEOUT: { label: 'Timed out', tone: 'warning' },
+  FAILED: { label: 'Failed', tone: 'danger' },
+  REJECTED: { label: 'Rejected', tone: 'warning' },
+  UNCONFIRMED: { label: 'Not confirmed', tone: 'warning' },
 };
 
 /** Sends sample arguments through the server's tool gateway (signed, SSRF-checked). */
@@ -273,7 +267,7 @@ function ToolTester({ agentId, tool, onClose }: { agentId: string; tool: AiAgent
   const status = result ? TEST_STATUS[result.status] : null;
 
   return (
-    <div className="w-full rounded-xl border border-[#E7DFF5] bg-[#FBF9FE] p-4 flex flex-col gap-3" data-testid="tool-tester">
+    <div className="flex w-full flex-col gap-3 rounded-xl bg-[#F7F6FA] p-4" data-testid="tool-tester">
       <TextArea
         id={`tool-test-args-${tool.id}`}
         label="Sample arguments (JSON)"
@@ -286,12 +280,12 @@ function ToolTester({ agentId, tool, onClose }: { agentId: string; tool: AiAgent
         helper="Sent to your endpoint with sessionId null and test: true, signed like a real call."
       />
       <div className="flex gap-2">
-        <Button size="sm" onClick={send} loading={sending}>
+        <ActionButton small onClick={send} loading={sending}>
           Send test call
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onClose}>
+        </ActionButton>
+        <ActionButton small variant="secondary" onClick={onClose}>
           Close
-        </Button>
+        </ActionButton>
       </div>
       {requestError && (
         <p role="alert" className="text-sm text-red-700">
@@ -300,8 +294,8 @@ function ToolTester({ agentId, tool, onClose }: { agentId: string; tool: AiAgent
       )}
       {result && status && (
         <div className="flex flex-col gap-2" data-testid="tool-test-result">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-[#3D3650]">
-            <Badge variant={status.variant}>{status.label}</Badge>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-[#6B6478]">
+            <Pill tone={status.tone}>{status.label}</Pill>
             <span>{result.latencyMs} ms</span>
             {result.httpStatus !== null && <span>HTTP {result.httpStatus}</span>}
           </div>
@@ -312,7 +306,7 @@ function ToolTester({ agentId, tool, onClose }: { agentId: string; tool: AiAgent
             </p>
           ))}
           {result.responsePreview !== null && (
-            <pre className="max-h-64 overflow-auto rounded-lg border border-[#E7DFF5] bg-white p-3 text-xs font-mono text-[#170B2E] whitespace-pre-wrap break-all">
+            <pre className="max-h-64 overflow-auto rounded-lg border border-[#ECE8F2] bg-white p-3 text-xs font-mono text-[#170B2E] whitespace-pre-wrap break-all">
               {result.responsePreview || '(empty response)'}
             </pre>
           )}
@@ -382,39 +376,40 @@ export function ToolsPanel({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <p className="text-sm text-[#3D3650] max-w-xl">
+        <p className="max-w-xl text-[13px] text-[#6B6478]">
           Tools let the agent call your HTTPS endpoints during a conversation. Each request is signed with the
           tool&apos;s signing secret.
         </p>
         {!mode && (
-          <Button size="sm" onClick={() => setMode({ kind: 'create' })}>
+          <ActionButton small onClick={() => setMode({ kind: 'create' })}>
             <Plus size={14} /> Add tool
-          </Button>
+          </ActionButton>
         )}
       </div>
 
       {secret && (
-        <div className="rounded-2xl border p-5" style={{ borderColor: 'rgba(52,211,153,0.35)', background: 'rgba(16,185,129,0.06)' }}>
-          <p className="text-sm font-semibold text-[#170B2E] mb-1">Signing secret for {secret.toolName}</p>
-          <p className="text-xs text-amber-700 mb-3">
+        <Panel>
+          <p className="mb-1 text-sm font-medium text-[#170B2E]">Signing secret for {secret.toolName}</p>
+          <p className="mb-3 text-xs text-amber-700">
             Copy it now. You won&apos;t be able to see it again. Use it to verify the X-PurpleCallio-Signature header.
           </p>
           <div className="flex items-center gap-2 flex-wrap">
-            <code className="flex-1 min-w-0 text-xs font-mono text-[#170B2E] bg-[#F8F4FD] border border-[#E7DFF5] rounded-lg px-3 py-2.5 break-all">
+            <code className="min-w-0 flex-1 break-all rounded-lg border border-[#ECE8F2] bg-white px-3 py-2.5 font-mono text-xs text-[#170B2E]">
               {secret.value}
             </code>
             <button
               onClick={copySecret}
-              className="p-2.5 rounded-lg text-[#3D3650] hover:text-[#170B2E] hover:bg-[#7F40E8]/5 transition-colors border border-[#E7DFF5]"
+              className={buttonCls('secondary', 'px-2.5')}
               title="Copy"
+              aria-label="Copy signing secret"
             >
-              {copied ? <Check size={16} style={{ color: '#34D399' }} /> : <Copy size={16} />}
+              {copied ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
             </button>
           </div>
           <div className="mt-3">
-            <Button variant="ghost" onClick={() => setSecret(null)}>I&apos;ve saved it</Button>
+            <ActionButton variant="secondary" small onClick={() => setSecret(null)}>I&apos;ve saved it</ActionButton>
           </div>
-        </div>
+        </Panel>
       )}
 
       {mode?.kind === 'create' && (
@@ -422,14 +417,10 @@ export function ToolsPanel({
       )}
 
       {tools.length === 0 && mode?.kind !== 'create' ? (
-        <div className="rounded-2xl border border-[#E7DFF5] py-12 px-6 text-center" style={{ background: '#FFFFFF' }}>
-          <Wrench size={22} className="mx-auto mb-3" style={{ color: '#A05DF9' }} />
-          <p className="text-sm font-semibold text-[#170B2E]">No tools yet</p>
-          <p className="text-sm text-[#3D3650] mt-1">Add one to let the agent look things up or take actions.</p>
-        </div>
+        <Empty title="No tools yet" body="Add one to let the agent look things up or take actions." />
       ) : (
         tools.length > 0 && (
-          <div className="divide-y divide-[#E7DFF5] rounded-2xl border border-[#E7DFF5] overflow-hidden" style={{ background: '#FFFFFF' }}>
+          <div className="divide-y divide-[#F2EFF6] overflow-hidden rounded-xl border border-[#ECE8F2] bg-white">
             {tools.map((tool) =>
               mode?.kind === 'edit' && mode.tool.id === tool.id ? (
                 <div key={tool.id} className="p-4">
@@ -441,14 +432,14 @@ export function ToolsPanel({
                   />
                 </div>
               ) : (
-                <div key={tool.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
+                <div key={tool.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold font-mono text-[#170B2E]">{tool.name}</p>
-                      <Badge variant={tool.enabled ? 'success' : 'default'}>{tool.enabled ? 'Enabled' : 'Disabled'}</Badge>
-                      {tool.requiresConfirmation && <Badge variant="warning">Needs confirmation</Badge>}
+                      <p className="font-mono text-[13px] font-medium text-[#170B2E]">{tool.name}</p>
+                      <Pill tone={tool.enabled ? 'success' : 'neutral'}>{tool.enabled ? 'Enabled' : 'Disabled'}</Pill>
+                      {tool.requiresConfirmation && <Pill tone="warning">Needs confirmation</Pill>}
                     </div>
-                    <p className="text-xs text-[#3D3650] mt-1 truncate">{tool.description}</p>
+                    <p className="mt-1 truncate text-xs text-[#6B6478]">{tool.description}</p>
                     <p className="text-xs font-mono text-[#6B6478] mt-0.5 truncate">
                       {tool.method} {tool.endpointUrl}
                     </p>
@@ -456,7 +447,7 @@ export function ToolsPanel({
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setTesting(testing === tool.id ? null : tool.id)}
-                      className="p-2 rounded-lg text-[#3D3650] hover:text-[#170B2E] hover:bg-[#7F40E8]/5"
+                      className="rounded-md p-2 text-[#6B6478] hover:bg-[#F7F6FA] hover:text-[#170B2E]"
                       aria-label={`Test ${tool.name}`}
                       title="Test call"
                     >
@@ -465,7 +456,7 @@ export function ToolsPanel({
                     <button
                       onClick={() => setMode({ kind: 'edit', tool })}
                       disabled={!!mode}
-                      className="p-2 rounded-lg text-[#3D3650] hover:text-[#170B2E] hover:bg-[#7F40E8]/5 disabled:opacity-40"
+                      className="rounded-md p-2 text-[#6B6478] hover:bg-[#F7F6FA] hover:text-[#170B2E] disabled:opacity-40"
                       aria-label={`Edit ${tool.name}`}
                       title="Edit"
                     >
@@ -474,7 +465,7 @@ export function ToolsPanel({
                     <button
                       onClick={() => remove(tool)}
                       disabled={busy === tool.id}
-                      className="p-2 rounded-lg text-[#3D3650] hover:text-red-600 hover:bg-red-500/5 disabled:opacity-40"
+                      className="rounded-md p-2 text-[#6B6478] hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
                       aria-label={`Delete ${tool.name}`}
                       title="Delete"
                     >

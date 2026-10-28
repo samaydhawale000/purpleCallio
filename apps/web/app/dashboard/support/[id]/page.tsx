@@ -18,6 +18,7 @@ import { TicketStatusBadge } from '../../../components/support/TicketStatusBadge
 import { TicketThread } from '../../../components/support/TicketThread';
 import { CustomPlanBadge } from '../../../components/support/CustomPlanBadge';
 import { ToastHost, ToastState } from '../../billing/Toast';
+import { ErrorNote, Loading } from '../../_ui';
 
 type TicketDetail = SupportTicket & { messages: SupportMessage[]; type?: 'GENERAL' | 'CUSTOM_PLAN' };
 
@@ -81,21 +82,21 @@ function TicketConversation() {
   const backLink = (
     <Link
       href="/dashboard/support"
-      className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E]"
+      className="inline-flex items-center gap-1 text-[13px] text-[#6B6478] hover:text-[#170B2E]"
     >
       <ArrowLeft size={14} /> Back to Support
     </Link>
   );
 
   if (loading) {
-    return <div className="text-[#3D3650] text-sm py-20 text-center">Loading ticket…</div>;
+    return <Loading label="Loading ticket…" />;
   }
 
   if (error || !ticket) {
     return (
       <div className="flex flex-col gap-4">
         {backLink}
-        <p className="text-sm text-red-600 py-10 text-center">{error || 'Ticket not found.'}</p>
+        <ErrorNote message={error || 'Ticket not found.'} />
       </div>
     );
   }
@@ -117,24 +118,24 @@ function TicketConversation() {
         header={
           <>
             <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="font-mono text-xs text-[#6425C4]">{ticket.ticketNumber}</span>
+              <span className="font-mono text-xs text-[#6B6478]">{ticket.ticketNumber}</span>
               <TicketStatusBadge status={ticket.status} />
               {ticket.type === 'CUSTOM_PLAN' && <CustomPlanBadge />}
             </div>
-            <h1 className="text-lg font-bold text-[#170B2E] break-words">{ticket.subject}</h1>
-            <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2 text-xs text-[#3D3650]">
+            <h1 className="break-words text-lg font-semibold text-[#170B2E]">{ticket.subject}</h1>
+            <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2 text-xs text-[#6B6478]">
               <span>Created {new Date(ticket.createdAt).toLocaleString()}</span>
               {doc && (
                 <Link
                   href={`/docs/${ticket.documentationId}`}
-                  className="inline-flex items-center gap-1 text-[#6425C4] hover:text-[#170B2E]"
+                  className="inline-flex items-center gap-1 text-[#5B21B6] hover:underline"
                 >
                   <BookOpen size={12} /> {doc}
                 </Link>
               )}
             </div>
             {ticket.type === 'CUSTOM_PLAN' && (
-              <p className="mt-2 text-xs text-[#3D3650]" data-testid="custom-plan-note">
+              <p className="mt-2 text-xs text-[#6B6478]" data-testid="custom-plan-note">
                 Our team will continue the conversation here.
               </p>
             )}

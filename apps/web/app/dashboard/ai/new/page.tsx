@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import { api } from '../../../lib/api';
 import { AgentFormValues, EMPTY_AGENT_FORM, apiErrorMessages, buildCreateAgentPayload, useAiStatus } from '../../../lib/ai';
 import { AgentForm } from '../_components/AgentForm';
-import { AiDisabledNotice, AiLoading, AiUpgradeCard } from '../_components/AiNotices';
+import { AiDisabledNotice, AiLoading, AiUpgradeCard, BackLink } from '../_components/AiNotices';
+import { Notice, PageHeader, Panel } from '../../_ui';
 import { Select } from '../_components/fields';
 
 interface Project {
@@ -44,21 +43,17 @@ export default function NewAiAgentPage() {
   if (loading || projects === null) return <AiLoading label="Loading…" />;
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
-      <div>
-        <Link href="/dashboard/ai" className="inline-flex items-center gap-1.5 text-sm text-[#3D3650] hover:text-[#170B2E]">
-          <ArrowLeft size={15} /> AI Agents
-        </Link>
-        <h1 className="text-2xl font-bold text-[#170B2E] mt-2">New agent</h1>
-      </div>
+    <div className="max-w-4xl">
+      <BackLink href="/dashboard/ai">AI Agents</BackLink>
+      <PageHeader title="New agent" />
       {!status?.enabled ? (
         <AiDisabledNotice />
       ) : !status.paidPlan ? (
         <AiUpgradeCard />
       ) : projects.length === 0 ? (
-        <p className="text-sm text-amber-700">You need a project first. Create one in the Projects page.</p>
+        <Notice>You need a project first. Create one in the Projects page.</Notice>
       ) : (
-        <div className="rounded-2xl border border-[#E7DFF5] p-5" style={{ background: '#FFFFFF' }}>
+        <Panel>
           <AgentForm
             // Preselect a provider that can actually take calls.
             initial={{ ...EMPTY_AGENT_FORM, provider: status.providers?.[0] ?? '' }}
@@ -73,7 +68,7 @@ export default function NewAiAgentPage() {
               </Select>
             }
           />
-        </div>
+        </Panel>
       )}
     </div>
   );
