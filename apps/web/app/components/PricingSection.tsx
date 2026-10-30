@@ -680,7 +680,8 @@ function LiveTranslatePricing() {
         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">Early access</span>
       </h3>
       <p className="mb-5 max-w-3xl text-sm text-[#3D3650]">
-        Real-time voice translation and captions for 1:1 calls. Billed per minute for each person translating (one side 1×, both sides 2×),
+        Real-time voice translation and captions for 1:1 calls. Billed per minute for each person receiving translation: 2× when the two people don&apos;t share a language,
+        1× only when one of them understands the other&apos;s language,
         from the same credit balance, on top of the call&apos;s own audio or video minutes. Same-language calls aren&apos;t
         charged for translation.{' '}
         <Link href="/features/live-translation" className="font-medium text-[#6425C4] hover:text-[#170B2E]">

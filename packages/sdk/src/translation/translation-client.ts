@@ -75,6 +75,8 @@ export class TranslationClient {
 
   private desired: { speak?: string; hear?: string; mode: TranslationMode };
   private peerLanguage: string | undefined;
+  /** The relay translates our speech for the peer (see `TranslationReady.outbound`). */
+  private outbound = false;
   /** `settings` sent and not yet answered by a `ready`. */
   private inFlightSettings = '';
   /** The same `settings` re-sent after the relay answered without applying them. */
@@ -330,6 +332,7 @@ export class TranslationClient {
   private async start(): Promise<TranslationReady> {
     this.inFlightSettings = '';
     this.settingsRetry = { key: '', count: 0 };
+    this.outbound = false;
     this.patchState({ status: 'connecting', error: null, limit: null });
     try {
       const ctx = this.createAudioContext();
@@ -422,6 +425,10 @@ export class TranslationClient {
       this.applyLocalMode(mode);
       this.emit('mode', { mode, reason: p.reason });
     });
+    socket.on('outbound', (p: { active?: boolean }) => {
+      this.outbound = Boolean(p?.active);
+      if (!this.sendingMic()) this.endSpeech();
+    });
     socket.on('peer', (p: { connected?: boolean; speak?: string; hear?: string }) => {
       const prev = this.state.peer;
       this.patchState({
@@ -470,8 +477,10 @@ export class TranslationClient {
       guard: raw.guard ?? { enabled: false, sensitivity: 'standard' },
       limits: raw.limits ?? { maxMinutes: null, usedSeconds: 0 },
       trial: Boolean(raw.trial),
+      outbound: Boolean(raw.outbound),
     };
     this.lastReady = ready;
+    this.outbound = Boolean(ready.outbound);
     this.confirmed = { speak: ready.you.speak, hear: ready.you.hear, mode: ready.mode };
     this.outputRate = ready.outputSampleRate;
     this.store.setRole(ready.role ?? null);
@@ -566,7 +575,7 @@ export class TranslationClient {
     if (!this.resampler || !this.framer) return;
     const frames = this.framer.push(floatToPcm16(this.resampler.process(chunk)));
     const socket = this.socket;
-    const live = Boolean(socket?.connected) && this.state.status === 'ready' && this.state.mode !== 'off';
+    const live = Boolean(socket?.connected) && this.state.status === 'ready' && this.sendingMic();
     for (const frame of frames) {
       if (!live) {
         this.endSpeech();
@@ -587,7 +596,12 @@ export class TranslationClient {
     }
   }
 
-  /** Close an open phrase (mode off, disconnect, disable). */
+  /** Our speech is wanted: we use translation, or the peer needs ours translated. */
+  private sendingMic(): boolean {
+    return this.state.mode !== 'off' || this.outbound;
+  }
+
+  /** Close an open phrase (mic no longer needed, disconnect, disable). */
   private endSpeech(): void {
     if (!this.vad.reset()) return;
     if (this.socket?.connected) this.socket.emit('speech.end', {});
@@ -618,8 +632,8 @@ export class TranslationClient {
 
   private applyLocalMode(mode: TranslationMode): void {
     if (mode !== 'voice') this.player?.flush();
-    if (mode === 'off') this.endSpeech();
     if (this.state.mode !== mode) this.patchState({ mode });
+    if (!this.sendingMic()) this.endSpeech();
     this.updateHold();
   }
 

@@ -198,7 +198,9 @@ export function LiveTranslateDoc() {
 
          <Sec id="costguard" title="CostGuard: budgets, limits and estimates">
             <p>
-               Translation is billed per minute for each person who has translation on (one side 1×, both sides 2×) at the voice or captions rate,
+               Translation is billed per minute for each person who receives translation, at the voice or captions rate. When the
+               two people don&apos;t share a language both sides are translated (2×); one side (1×) applies only when one of them
+               already understands the other&apos;s language. Billing is
                in credits. Rates are set by PurpleCallio and shown on the <Link href="/pricing#live-translate" className="text-[#6425C4] underline">pricing page</Link>{" "}
                and in your dashboard; a session keeps the rate it started with. Starting translation needs credits for
                at least one minute of the chosen mode.

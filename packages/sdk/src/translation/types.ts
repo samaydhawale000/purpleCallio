@@ -81,6 +81,12 @@ export interface TranslationReady {
   guard: { enabled: boolean; sensitivity: string };
   limits: { maxMinutes: number | null; usedSeconds: number };
   trial: boolean;
+  /**
+   * Your speech is being translated for the other participant. Your mic is
+   * sent while this is true even in mode `off`, so they can have translation
+   * without you needing it. Absent from older relays (treated as false).
+   */
+  outbound?: boolean;
 }
 
 export interface TranslationPeerEvent {

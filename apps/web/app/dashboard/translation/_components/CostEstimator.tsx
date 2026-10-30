@@ -46,9 +46,10 @@ export function CostEstimator({ defaultMinutes }: { defaultMinutes?: string }) {
         <div className="flex flex-col gap-1.5 w-44">
           <label htmlFor="est-listeners" className="text-[13px] font-medium text-[#170B2E]">People translating</label>
           <select id="est-listeners" className={selectCls} value={listeners} onChange={(e) => setListeners(e.target.value === '1' ? 1 : 2)}>
-            <option value={1}>One side (1×)</option>
             <option value={2}>Both sides (2×)</option>
+            <option value={1}>One side (1×)</option>
           </select>
+          <p className="text-[11px] text-[#3D3650]">2× when the two people don&apos;t share a language.</p>
         </div>
         <div className="flex w-36 flex-col gap-1.5">
           <label htmlFor="est-minutes" className="text-[13px] font-medium text-[#170B2E]">Minutes per call</label>

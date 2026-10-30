@@ -188,7 +188,8 @@ export function CostGuardEstimator() {
             {status === "ready" && result?.note && <p className="mt-3 text-xs text-[#3D3650]">{result.note}</p>}
          </div>
          <p className="mt-3 text-xs text-[#3D3650]">
-            Billed per minute for each person who has translation on: one side is 1× the rate, both sides 2×. Credits come
+            Billed per minute for each person who receives translation. Two people without a shared language means both
+            sides (2×); one side (1×) only when one of them already understands the other&apos;s language. Credits come
             from your prepaid balance; rupee amounts use the published credit price. GST extra.
          </p>
       </div>
