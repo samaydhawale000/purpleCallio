@@ -59,11 +59,16 @@ interface ValidatedTranslation {
   mode: TranslationModeName;
 }
 
+/** How long an answered call may sit with nobody connected before it is ended. */
+const ABANDONED_CALL_GRACE_MS = 60_000;
+
 @Injectable()
 export class CallService implements OnModuleInit {
   private readonly logger = new Logger(CallService.name);
 
   private readonly ringTimeoutMs: number;
+  private readonly bootedAt = Date.now();
+  private sweepingAbandoned = false;
 
   constructor(
     private prisma: PrismaService,
@@ -99,6 +104,12 @@ export class CallService implements OnModuleInit {
     setInterval(() => {
       this.missExpiredCalls();
     }, 10_000).unref();
+    // End answered calls everyone has left without calling "end".
+    setInterval(() => {
+      this.endAbandonedCalls().catch((err) =>
+        this.logger.error('Abandoned call sweep failed', err),
+      );
+    }, 30_000).unref();
     this.expirePlaygroundCalls().catch((err) =>
       this.logger.error('Playground expiry sweep failed', err),
     );
@@ -522,6 +533,68 @@ export class CallService implements OnModuleInit {
   }
 
   /**
+   * End answered calls that nobody is connected to any more. Participants
+   * often just close the tab, so the API's "end" is never called and the call
+   * would stay ACCEPTED forever. A call qualifies when no socket is in its
+   * room and nothing has happened on it for ABANDONED_CALL_GRACE_MS (room for
+   * a quick reconnect). It is ended at its last activity — normally the last
+   * participant's leave — so billing stops when people actually left.
+   *
+   * Signaling runs in this one process (no socket adapter), so the in-memory
+   * room is authoritative. Right after a restart the rooms are empty until
+   * clients reconnect, so the sweep waits before its first run.
+   */
+  async endAbandonedCalls(now = new Date()) {
+    const grace = ABANDONED_CALL_GRACE_MS;
+    if (this.sweepingAbandoned || now.getTime() - this.bootedAt < 3 * grace) {
+      return [];
+    }
+    this.sweepingAbandoned = true;
+    try {
+      const calls = await this.prisma.call.findMany({
+        where: {
+          status: CallStatus.ACCEPTED,
+          // Playground calls expire on their own; AI calls are ended by
+          // AiSessionService.
+          source: { notIn: [CallSource.PLAYGROUND, CallSource.AI_AGENT] },
+        },
+        select: {
+          id: true,
+          startedAt: true,
+          createdAt: true,
+          events: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { createdAt: true },
+          },
+        },
+      });
+      const ended: string[] = [];
+      for (const call of calls) {
+        if (this.callGateway.getRoomParticipantCount(call.id) > 0) continue;
+        const start = call.startedAt ?? call.createdAt;
+        const lastActivity = call.events[0]?.createdAt ?? start;
+        if (now.getTime() - lastActivity.getTime() < grace) continue;
+        const endedAt = lastActivity > start ? lastActivity : start;
+        try {
+          await this.endCall(call.id, { endedAt });
+          ended.push(call.id);
+          this.logger.log(
+            `Ended abandoned call ${call.id} at ${endedAt.toISOString()}`,
+          );
+        } catch (err) {
+          this.logger.warn(
+            `Could not end abandoned call ${call.id}: ${String(err)}`,
+          );
+        }
+      }
+      return ended;
+    } finally {
+      this.sweepingAbandoned = false;
+    }
+  }
+
+  /**
    * Mark a ringing call as MISSED (nobody answered within the timeout).
    */
   async missCall(callId: string) {
@@ -701,7 +774,12 @@ export class CallService implements OnModuleInit {
     }
   }
 
-  async endCall(callId: string) {
+  /**
+   * End a call and bill it. `endedAt` backdates the end — used when an
+   * abandoned call is cleaned up later, so it is billed only up to the last
+   * real activity, not until the moment the cleanup ran.
+   */
+  async endCall(callId: string, options: { endedAt?: Date } = {}) {
     const call = await this.prisma.call.findUnique({
       where: { id: callId },
       include: { project: true },
@@ -725,7 +803,7 @@ export class CallService implements OnModuleInit {
       return this.prisma.call.findUniqueOrThrow({ where: { id: callId } });
     }
 
-    const endedAt = new Date();
+    const endedAt = options.endedAt ?? new Date();
 
     // Atomically claim the ENDED transition — only the caller that actually
     // flips status away from ENDED records usage / fires webhooks. A second
@@ -761,7 +839,13 @@ export class CallService implements OnModuleInit {
     }
 
     await this.prisma.callEvent.create({
-      data: { callId, event: 'CALL_ENDED', participantId: call.callerId },
+      data: {
+        callId,
+        event: 'CALL_ENDED',
+        participantId: call.callerId,
+        // Segments close at this event's time, so it must match endedAt.
+        createdAt: endedAt,
+      },
     });
 
     // Segment-based usage recording: rebuild segments from the live event

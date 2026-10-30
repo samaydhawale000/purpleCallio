@@ -47,7 +47,7 @@ function pricingFaq(rates?: CreditRates, credit?: PublishedCreditPricing | null)
       ],
       [
          "How is Live Translate priced?",
-         "Live Translate is charged per minute for each person who has translation turned on: one side costs 1× the rate and both sides 2×. Voice translation and captions have separate rates, the same for every language pair, and translation is billed on top of the call's own minutes.",
+         "Live Translate is charged per minute for each person who receives translation. When the two people don't share a language, both sides are translated, so it costs 2× the rate; one side (1×) applies only when one of them already understands the other's language. Voice translation and captions have separate rates, the same for every language pair, and translation is billed on top of the call's own minutes.",
       ],
       [
          "Are there free credits?",

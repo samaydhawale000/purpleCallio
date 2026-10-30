@@ -78,14 +78,19 @@ export class TurnService {
   /**
    * Public TURN hostname that clients dial. It must be a DNS name covered by
    * Coturn's TLS certificate (`turns:` validates the certificate against it).
-   * `TURN_SERVER` is the legacy name for the same value.
+   * `TURN_SERVER` is the legacy name for the same value. A URL such as
+   * `https://example.com` is reduced to its hostname: used as-is it would
+   * produce `turn:https://…` URIs that browsers reject, leaving no relay.
    */
   turnHost(): string {
-    return (
+    const raw = (
       this.config.get<string>('TURN_HOST') ||
       this.config.get<string>('TURN_SERVER') ||
       'localhost'
     ).trim();
+    const host = bareHost(raw);
+    if (host !== raw) this.warnMalformedTurnHostOnce();
+    return host;
   }
 
   getCredentials(playground = false, playgroundExpiresAt?: Date) {
@@ -135,6 +140,13 @@ export class TurnService {
         username,
         credential,
       });
+      // Without `?transport=` browsers use UDP only; networks that block
+      // UDP (some mobile carriers, corporate Wi-Fi) need TCP.
+      iceServers.push({
+        urls: `turn:${host}:3478?transport=tcp`,
+        username,
+        credential,
+      });
       // TURN over TLS needs a hostname the certificate covers; an IP literal
       // would fail certificate validation in every browser, so do not
       // advertise it (plain TURN on 3478 still works).
@@ -150,6 +162,16 @@ export class TurnService {
     }
 
     return { iceServers };
+  }
+
+  private warnedMalformedHost = false;
+
+  private warnMalformedTurnHostOnce() {
+    if (this.warnedMalformedHost) return;
+    this.warnedMalformedHost = true;
+    this.logger.warn(
+      'TURN_HOST/TURN_SERVER is not a bare hostname (it has a scheme, port or path); using only its hostname. Set TURN_HOST to the hostname alone, e.g. example.com.',
+    );
   }
 
   private warnedIpHost = false;
@@ -188,5 +210,19 @@ export class TurnService {
     } catch {
       return { configured: true, credentialGeneration: 'failed' };
     }
+  }
+}
+
+/** `https://host:443/x`, `turn:host:3478` or `host:3478` → `host`; IP literals are kept. */
+export function bareHost(value: string): string {
+  if (isIP(value) || isIP(value.replace(/^\[|\]$/g, ''))) {
+    return value.replace(/^\[|\]$/g, '');
+  }
+  const v = value.replace(/^(stuns?|turns?):(?!\/\/)/i, '');
+  try {
+    const url = new URL(v.includes('://') ? v : `turn://${v}`);
+    return url.hostname.replace(/^\[|\]$/g, '') || value;
+  } catch {
+    return value;
   }
 }

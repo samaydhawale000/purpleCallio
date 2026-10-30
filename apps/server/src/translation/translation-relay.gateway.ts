@@ -197,6 +197,8 @@ interface Participant {
   mode: Mode | null;
   detected: string | null;
   sentMode: Mode | null;
+  /** Last `outbound` told to the client (is its speech translated for the peer). */
+  sentOutbound: boolean;
   frameWindowStart: number;
   frameCount: number;
   seq: number;
@@ -389,6 +391,7 @@ export class TranslationRelayGateway implements OnGatewayConnection, OnModuleDes
         mode: null,
         detected: null,
         sentMode: null,
+        sentOutbound: false,
         frameWindowStart: 0,
         frameCount: 0,
         seq: 0,
@@ -546,6 +549,7 @@ export class TranslationRelayGateway implements OnGatewayConnection, OnModuleDes
 
   private readyPayload(relay: Relay, p: Participant) {
     const peer = relay.participants[other(p.role)];
+    p.sentOutbound = this.outbound(relay, p);
     return {
       role: p.role,
       inputSampleRate: TRANSLATION_INPUT_SAMPLE_RATE,
@@ -556,6 +560,7 @@ export class TranslationRelayGateway implements OnGatewayConnection, OnModuleDes
       replayEnabled: !!relay.replay,
       guard: { enabled: relay.guard.enabled, sensitivity: relay.guard.sensitivity },
       limits: { maxMinutes: relay.maxMinutes, usedSeconds: Math.floor(this.usedMs(relay) / 1000) },
+      outbound: p.sentOutbound,
       // Deprecated: translation has no free trial; kept for SDK compatibility.
       trial: false,
     };
@@ -856,11 +861,26 @@ export class TranslationRelayGateway implements OnGatewayConnection, OnModuleDes
   private emitModes(relay: Relay, reason?: 'participant' | 'api' | 'limit') {
     for (const role of ROLES) {
       const p = relay.participants[role];
+      if (!p.socket) continue;
+      const outbound = this.outbound(relay, p);
+      if (outbound !== p.sentOutbound) {
+        p.sentOutbound = outbound;
+        p.socket.emit('outbound', { active: outbound });
+      }
       const mode = this.effectiveMode(relay, p);
-      if (!p.socket || mode === p.sentMode) continue;
+      if (mode === p.sentMode) continue;
       p.sentMode = mode;
       p.socket.emit('mode', reason ? { mode, reason } : { mode });
     }
+  }
+
+  /**
+   * Whether p's speech is translated for the peer. The SDK keeps sending the
+   * mic while this is true even if p's own mode is off, so one person can
+   * have translation without the other needing it.
+   */
+  private outbound(relay: Relay, p: Participant): boolean {
+    return relay.directions.has(directionOf(p.role));
   }
 
   private activateDirection(

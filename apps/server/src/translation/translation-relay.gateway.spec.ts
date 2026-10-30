@@ -364,6 +364,21 @@ describe('TranslationRelayGateway', () => {
       expect(sessions.end.mock.calls[0][1]).toMatchObject({ reason: 'inactive' });
     });
 
+    it("tells a participant whose own mode is off that the peer still needs their speech", async () => {
+      const { caller, receiver } = await both();
+      expect(caller.payloads('outbound').at(-1)).toEqual({ active: true });
+      caller.trigger('settings', { mode: 'off' });
+      await flush();
+      // Only the caller stopped listening: their speech is still translated.
+      expect(caller.payloads('ready').at(-1)).toMatchObject({ mode: 'off', outbound: true });
+      expect(receiver.payloads('outbound').at(-1)).toEqual({ active: false });
+      await speak(caller);
+      expect(callerSession().sendAudio).toHaveBeenCalled();
+      receiver.trigger('settings', { mode: 'off' });
+      await flush();
+      expect(caller.payloads('outbound').at(-1)).toEqual({ active: false });
+    });
+
     it('a call-wide language update keeps a hear language the participant picked', async () => {
       const { caller, receiver } = await both();
       receiver.trigger('settings', { hear: 'ta' });

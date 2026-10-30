@@ -330,7 +330,9 @@ export default function LiveTranslationPage() {
                <Reveal variant="left" className="min-w-0 rounded-2xl border border-[#E7DFF5] p-7">
                   <h2 className="text-2xl font-bold text-[#170B2E]">Pricing</h2>
                   <p className="mt-3 text-sm">
-                     One rate per minute for each person who has translation on (one side 1×, both sides 2×), in credits from your prepaid balance.
+                     One rate per minute for each person who receives translation, in credits from your prepaid balance. When the two
+                     people don&apos;t share a language, both sides are translated (2×); one side (1×) applies only when one of them
+                     already understands the other&apos;s language.
                      Same-language calls aren&apos;t charged for translation. Rates are set by PurpleCallio and shown here
                      and in your dashboard.
                   </p>

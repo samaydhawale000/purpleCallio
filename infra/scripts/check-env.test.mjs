@@ -95,6 +95,17 @@ test('a TURN IP literal is rejected: TLS needs the certificate hostname', () => 
   assert.match(errorsOf({ ...good(), TURN_HOST: '130.210.24.136' }), /turns:5349 needs the DNS hostname/);
 });
 
+test('a URL-shaped TURN host is rejected', () => {
+  for (const value of ['https://purplecallio.com', 'purplecallio.com:3478']) {
+    assert.match(errorsOf({ ...good(), TURN_HOST: value }), /bare hostname/);
+  }
+});
+
+test('a URL in legacy TURN_SERVER is not taken as the external IP', () => {
+  const vars = { ...good(), TURN_EXTERNAL_IP: '', TURN_SERVER: 'https://purplecallio.com' };
+  assert.match(errorsOf(vars), /TURN_EXTERNAL_IP is missing/);
+});
+
 test('the legacy IP-only TURN_SERVER still supplies the external IP', () => {
   const vars = { ...good(), TURN_EXTERNAL_IP: '', TURN_SERVER: '130.210.24.136' };
   assert.doesNotMatch(errorsOf(vars), /TURN_EXTERNAL_IP is missing/);
