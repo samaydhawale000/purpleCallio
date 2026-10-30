@@ -28,6 +28,7 @@ const FRAME_MS = 20;
 const DEFAULT_INPUT_RATE = 16_000;
 const DEFAULT_OUTPUT_RATE = 24_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
+const MAX_SETTINGS_RETRIES = 3;
 export const DEFAULT_ORIGINAL_VOLUME = 0;
 export const SLOW_REPLAY_RATE = 0.85;
 const MODES: readonly TranslationMode[] = ['off', 'captions', 'voice'];
@@ -74,7 +75,10 @@ export class TranslationClient {
 
   private desired: { speak?: string; hear?: string; mode: TranslationMode };
   private peerLanguage: string | undefined;
-  private lastSentSettings = '';
+  /** `settings` sent and not yet answered by a `ready`. */
+  private inFlightSettings = '';
+  /** The same `settings` re-sent after the relay answered without applying them. */
+  private settingsRetry = { key: '', count: 0 };
   /** What the relay last confirmed (ready / mode events). */
   private confirmed: { speak: string; hear: string; mode: TranslationMode } = { speak: '', hear: '', mode: 'off' };
   private state: TranslationState;
@@ -324,7 +328,8 @@ export class TranslationClient {
   }
 
   private async start(): Promise<TranslationReady> {
-    this.lastSentSettings = '';
+    this.inFlightSettings = '';
+    this.settingsRetry = { key: '', count: 0 };
     this.patchState({ status: 'connecting', error: null, limit: null });
     try {
       const ctx = this.createAudioContext();
@@ -519,10 +524,18 @@ export class TranslationClient {
     }
     this.emit('ready', ready);
     this.emitPhrases();
+    // Every `ready` answers what we sent; if it still disagrees (e.g. the
+    // relay re-planned when the peer joined), send our choice again.
+    this.inFlightSettings = '';
     this.syncSettings();
   }
 
-  /** Sends `settings` when what we want differs from what the relay last said (once per distinct value). */
+  /**
+   * Sends `settings` when what we want differs from what the relay last
+   * confirmed. Not repeated while unanswered, and the same correction is
+   * re-sent at most MAX_SETTINGS_RETRIES times so a relay that won't apply
+   * it can't cause a loop.
+   */
   private syncSettings(): void {
     const socket = this.socket;
     const ready = this.lastReady;
@@ -531,10 +544,19 @@ export class TranslationClient {
     if (this.desired.speak && this.desired.speak !== this.confirmed.speak) diff.speak = this.desired.speak;
     if (this.desired.hear && this.desired.hear !== this.confirmed.hear) diff.hear = this.desired.hear;
     if (this.desired.mode !== this.confirmed.mode) diff.mode = this.desired.mode;
-    if (Object.keys(diff).length === 0) return;
-    const key = JSON.stringify({ ...this.desired });
-    if (key === this.lastSentSettings) return;
-    this.lastSentSettings = key;
+    if (Object.keys(diff).length === 0) {
+      this.settingsRetry = { key: '', count: 0 };
+      return;
+    }
+    const key = JSON.stringify(diff);
+    if (key === this.inFlightSettings) return;
+    if (key === this.settingsRetry.key) {
+      if (this.settingsRetry.count >= MAX_SETTINGS_RETRIES) return;
+      this.settingsRetry.count++;
+    } else {
+      this.settingsRetry = { key, count: 0 };
+    }
+    this.inFlightSettings = key;
     socket.emit('settings', diff);
   }
 

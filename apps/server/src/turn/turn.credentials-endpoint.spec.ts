@@ -266,8 +266,28 @@ describe('TURN hostname configuration', () => {
     ).toEqual([
       'stun:calls.example.com:3478,stun:stun.l.google.com:19302',
       'turn:calls.example.com:3478',
+      'turn:calls.example.com:3478?transport=tcp',
       'turns:calls.example.com:5349',
     ]);
+  });
+
+  it('reduces a URL-shaped TURN host to its hostname', () => {
+    for (const TURN_SERVER of [
+      'https://purplecallio.com',
+      'https://purplecallio.com/',
+      'purplecallio.com:3478',
+      'turn:purplecallio.com:3478',
+    ]) {
+      expect(urls(service({ TURN_SECRET: 's', TURN_SERVER }))).toEqual([
+        'stun:purplecallio.com:3478,stun:stun.l.google.com:19302',
+        'turn:purplecallio.com:3478',
+        'turn:purplecallio.com:3478?transport=tcp',
+        'turns:purplecallio.com:5349',
+      ]);
+    }
+    expect(
+      urls(service({ TURN_SECRET: 's', TURN_HOST: '[2001:db8::1]' })),
+    ).toContain('turn:[2001:db8::1]:3478');
   });
 
   it('brackets an IPv6 literal TURN host in every URI', () => {

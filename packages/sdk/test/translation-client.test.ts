@@ -127,6 +127,37 @@ describe('TranslationClient', () => {
     expect(socket.events('settings')).toHaveLength(1);
   });
 
+  it('re-sends its languages when a later ready reverts them (e.g. the peer joined)', async () => {
+    const { socket, client } = await enabled({}, {}, { speak: 'hi', hear: 'ta' });
+    socket.server('ready', { ...READY, you: { speak: 'hi', hear: 'ta' } });
+    // Relay re-plans on peer join and falls back to the call default.
+    socket.server('ready', { ...READY, you: { speak: 'en', hear: 'en' } });
+    expect(socket.events('settings').map((e) => e.args[0])).toEqual([
+      { speak: 'hi', hear: 'ta' },
+      { speak: 'hi', hear: 'ta' },
+    ]);
+    socket.server('ready', { ...READY, you: { speak: 'hi', hear: 'ta' } });
+    expect(client.getState().you).toEqual({ speak: 'hi', hear: 'ta' });
+    expect(socket.events('settings')).toHaveLength(2);
+  });
+
+  it('re-sends its mode when a later ready reports off', async () => {
+    const { socket } = await enabled();
+    socket.server('ready', { ...READY, mode: 'off' });
+    expect(socket.events('settings').map((e) => e.args[0])).toEqual([{ mode: 'voice' }]);
+  });
+
+  it('does not repeat unanswered settings and gives up on a relay that never applies them', async () => {
+    const { socket, client } = await enabled({}, {}, { speak: 'hi', hear: 'ta' });
+    client.setLanguages({ hear: 'ta' });
+    expect(socket.events('settings')).toHaveLength(1);
+    for (let i = 0; i < 10; i++) socket.server('ready', READY);
+    expect(socket.events('settings')).toHaveLength(4); // first send + 3 retries
+    // A new choice is sent again.
+    client.setLanguages({ hear: 'mr' });
+    expect(socket.events('settings').at(-1)!.args[0]).toEqual({ speak: 'hi' });
+  });
+
   it('VAD gates audio: nothing while silent, speech.start + pre-roll, speech.end after 600 ms', async () => {
     const { socket, mic, client } = await enabled();
     const speaking = vi.fn();

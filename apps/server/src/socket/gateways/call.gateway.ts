@@ -224,9 +224,25 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // authenticated index; getOtherParticipant uses that index.
         const other = this.getOtherParticipant(client.id);
         this.authenticatedSockets.delete(token);
+        const wasInRoom = !!this.roomService.getParticipant(client.id);
 
         // Notify the other participant that this one left.
         this.roomService.removeParticipant(client.id);
+
+        // A dropped socket (tab closed, network gone) is a leave too. Record
+        // it so usage segments stop here and abandoned calls can be ended at
+        // this time — unless the same participant is still connected on a
+        // newer socket (a reconnect opens the new socket first).
+        const stillConnected = this.roomService
+          .getParticipants(session.callId)
+          .some((p) => p.participantId === session.participantId);
+        if (wasInRoom && !stillConnected) {
+          void this.safeRecordEvent(
+            session.callId,
+            'PARTICIPANT_LEFT',
+            session.participantId,
+          );
+        }
         if (other) {
           this.server.to(other.socketId).emit('participant.left', {
             participantId: session.participantId,

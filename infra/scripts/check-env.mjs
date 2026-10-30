@@ -120,6 +120,8 @@ export function checkEnv(input, { allowPlaceholders = false } = {}) {
   const turnHost = get('TURN_HOST') || get('TURN_SERVER');
   if (!turnHost) {
     errors.push('TURN_HOST is missing (TURN_SERVER is the legacy name)');
+  } else if (isIP(turnHost) === 0 && /[:/]/.test(turnHost)) {
+    errors.push('TURN_HOST/TURN_SERVER must be a bare hostname (no https://, port or path), e.g. example.com');
   } else if (isIP(turnHost) !== 0) {
     errors.push('TURN_HOST/TURN_SERVER is an IP address: turns:5349 needs the DNS hostname covered by the TURN TLS certificate');
   } else if (frontend && turnHost !== frontend.hostname) {
