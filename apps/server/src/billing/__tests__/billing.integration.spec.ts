@@ -688,6 +688,10 @@ d('prepaid billing (integration)', () => {
           where: { userId: u.id, amount: 100000 },
         }),
       ).toBe(1);
+      // One receipt email, not one per callback.
+      expect(
+        h.receipts.sendInBackground.mock.calls.filter(([id]) => id === started.paymentId),
+      ).toHaveLength(1);
       expect(
         await h.prisma.subscription.count({
           where: { companyId: u.id, status: 'ACTIVE' },

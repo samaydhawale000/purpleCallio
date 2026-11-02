@@ -9,11 +9,15 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { AuthMeController } from './auth.me.controller';
 import { BillingModule } from '../billing/billing.module';
+import { MailModule } from '../mail/mail.module';
+import { PasswordAuthService } from './password-auth.service';
+import { EmailOtpService } from './email-otp.service';
 
 @Module({
   imports: [
     JwtModule.register({}),
     BillingModule,
+    MailModule,
   ],
 
   controllers: [
@@ -23,6 +27,8 @@ import { BillingModule } from '../billing/billing.module';
 
   providers: [
     AuthService,
+    PasswordAuthService,
+    EmailOtpService,
     JwtStrategy,
   ],
 

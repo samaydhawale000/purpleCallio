@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Languages } from "lucide-react";
 import { Reveal, RevealGroup, RevealItem } from "../../motion/Reveal";
-import { DualViewDemo } from "./DualViewDemo";
 import {
    FEATURE_THEMES,
    LIVE_TRANSLATE_FEATURES,
@@ -15,39 +14,34 @@ export function LiveTranslateSection() {
    return (
       <section id="live-translate" className="section-base px-6 py-24" aria-labelledby="live-translate-title">
          <div className="mx-auto max-w-6xl">
-            <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
-               <Reveal variant="left" className="min-w-0">
-                  <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900">
-                     <Languages size={14} aria-hidden="true" /> {LIVE_TRANSLATE_STATUS}
-                  </p>
-                  <h2 id="live-translate-title" className="lp-h2 font-bold leading-tight text-[#170B2E]">
-                     Live Translate: talk to anyone, in their language
-                  </h2>
-                  <p className="mt-4 max-w-xl leading-relaxed text-[#3D3650]">
-                     Two people on a 1:1 call speak different languages, and each hears and reads the other in their
-                     own, a short moment behind the speaker. Built so possible misunderstandings get flagged, costs
-                     stay inside your limits and quality is measurable. 60 languages, from English, Spanish and
-                     Arabic to Hindi, Japanese and more.
-                  </p>
-                  <div className="mt-8 flex flex-wrap gap-3">
-                     <Link
-                        href={LIVE_TRANSLATE_PATH}
-                        className="btn-primary inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition-all hover:-translate-y-0.5"
-                     >
-                        Explore Live Translate <ArrowRight size={16} aria-hidden="true" />
-                     </Link>
-                     <Link
-                        href={LIVE_TRANSLATE_SIGNUP}
-                        className="rounded-xl border border-[#E7DFF5] px-5 py-3 text-sm font-semibold text-[#170B2E] hover:border-[#D6C4EE]"
-                     >
-                        Join early access
-                     </Link>
-                  </div>
-               </Reveal>
-               <Reveal variant="right" delay={0.1} className="min-w-0">
-                  <DualViewDemo />
-               </Reveal>
-            </div>
+            <Reveal variant="left" className="min-w-0 max-w-3xl">
+               <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900">
+                  <Languages size={14} aria-hidden="true" /> {LIVE_TRANSLATE_STATUS}
+               </p>
+               <h2 id="live-translate-title" className="lp-h2 font-bold leading-tight text-[#170B2E]">
+                  Live Translate: talk to anyone, in their language
+               </h2>
+               <p className="mt-4 max-w-xl leading-relaxed text-[#3D3650]">
+                  Two people on a 1:1 call speak different languages, and each hears and reads the other in their
+                  own, a short moment behind the speaker. Built so possible misunderstandings get flagged, costs
+                  stay inside your limits and quality is measurable. 60 languages, from English, Spanish and
+                  Arabic to Hindi, Japanese and more.
+               </p>
+               <div className="mt-8 flex flex-wrap gap-3">
+                  <Link
+                     href={LIVE_TRANSLATE_PATH}
+                     className="btn-primary inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition-all hover:-translate-y-0.5"
+                  >
+                     Explore Live Translate <ArrowRight size={16} aria-hidden="true" />
+                  </Link>
+                  <Link
+                     href={LIVE_TRANSLATE_SIGNUP}
+                     className="rounded-xl border border-[#E7DFF5] px-5 py-3 text-sm font-semibold text-[#170B2E] hover:border-[#D6C4EE]"
+                  >
+                     Join early access
+                  </Link>
+               </div>
+            </Reveal>
 
             <div className="mt-16 grid grid-cols-1 gap-8 lg:grid-cols-3">
                {FEATURE_THEMES.map((t) => (

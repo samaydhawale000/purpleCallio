@@ -155,14 +155,14 @@ export const SECTION_FIELDS: Record<'about' | 'company' | 'usage', ProfileField[
 
 // ── Presentational pieces ───────────────────────────────────────────────
 
-const inputClass = (invalid?: boolean) =>
+export const inputClass = (invalid?: boolean) =>
   `w-full px-3 py-2.5 rounded-lg text-sm text-[#170B2E] placeholder:text-[#6B6478] bg-white border outline-none transition-all disabled:bg-[#F8F4FD] disabled:text-[#3D3650] ${
     invalid
       ? 'border-red-500/50 focus:border-red-500/70'
       : 'border-[#D6C4EE] focus:border-[#7F40E8]/60 focus:shadow-[0_0_0_3px_rgba(127,64,232,0.1)]'
   }`;
 
-function FieldRow({
+export function FieldRow({
   id,
   label,
   required,

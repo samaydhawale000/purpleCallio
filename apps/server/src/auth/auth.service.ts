@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
+import type { User } from '@prisma/client';
 
 import * as bcrypt from 'bcrypt';
 
@@ -89,6 +90,14 @@ export class AuthService {
       }
     }
 
+    return this.issueSession(user);
+  }
+
+  /**
+   * Signs a user in (Google or password): tokens, the stored refresh-token
+   * hash, and the profile the client routes on.
+   */
+  async issueSession(user: User) {
     // Ensure the user has an active subscription + credit wallet (Free plan
     // by default; it grants no recurring credits).
     this.subscriptions.getActiveSubscription(user.id).catch(() => {
