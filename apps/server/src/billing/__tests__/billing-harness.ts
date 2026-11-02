@@ -316,6 +316,9 @@ export function createHarness() {
   );
   const topUps = new TopUpService(prisma, audit);
   const creditPricing = new CreditPricingService(prisma, audit);
+  // Receipt emails are covered by receipt-email.service.spec.ts; here we
+  // only count them (one per fulfilled payment).
+  const receipts = { sendInBackground: jest.fn() };
   const fulfillment = new BillingFulfillmentService(
     prisma,
     provider,
@@ -326,6 +329,7 @@ export function createHarness() {
     notify,
     notifications as any,
     autoRenew,
+    receipts as any,
   );
   const checkout = new CheckoutService(
     prisma,
@@ -382,6 +386,7 @@ export function createHarness() {
     entitlements,
     topUps,
     fulfillment,
+    receipts,
     checkout,
     webhooks,
     support,

@@ -49,6 +49,12 @@ enum UserStatus {
   SUSPENDED
 }
 
+// What an emailed one-time code is for (see auth/email-otp.service.ts).
+enum EmailOtpPurpose {
+  SIGNUP
+  PASSWORD_RESET
+}
+
 // Onboarding: self-reported expected participant-minutes per month.
 enum ExpectedUsageRange {
   UNDER_1K
@@ -1858,4 +1864,23 @@ model AutoTopUpAttempt {
   @@index([userId, status])
   @@index([userId, monthKey])
   @@index([status, nextRetryAt])
+}
+
+// One-time codes emailed for email/password sign-up and password reset. Only
+// a keyed hash of the code is stored. A new code for the same email+purpose
+// replaces the pending one; `attempts` caps guessing.
+model EmailOtp {
+  id         String          @id @default(uuid())
+  email      String
+  purpose    EmailOtpPurpose
+  codeHash   String
+  // SIGNUP: the pending account ({ name, phone, passwordHash }), created only
+  // once the code is verified.
+  payload    Json?
+  attempts   Int             @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime        @default(now())
+
+  @@index([email, purpose, createdAt])
 }

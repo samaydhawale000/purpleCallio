@@ -31,6 +31,7 @@ import {
   snapshotData,
 } from '../subscriptions/subscription.service';
 import { AutoRenewService } from '../subscriptions/auto-renew.service';
+import { ReceiptEmailService } from '../receipt-email.service';
 
 type Tx = Prisma.TransactionClient;
 type PostCommit = (() => Promise<unknown>)[];
@@ -67,6 +68,7 @@ export class BillingFulfillmentService {
     private notify: BillingNotificationService,
     private notifications: NotificationService,
     private autoRenew: AutoRenewService,
+    private receipts: ReceiptEmailService,
   ) {}
 
   private async lockPayment(tx: Tx, paymentId: string): Promise<Payment> {
@@ -211,6 +213,8 @@ export class BillingFulfillmentService {
         tx,
       );
       postCommit.unshift(() => this.notify.paymentSucceeded(paid));
+      // Once per payment: only the call that marks it PAID gets here.
+      postCommit.push(async () => this.receipts.sendInBackground(paid.id));
       return { alreadyFulfilled: false };
     });
 

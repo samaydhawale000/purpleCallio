@@ -8,6 +8,7 @@ import { AnimatePresence, m } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { GoogleSignInButton } from '../ui/GoogleSignInButton';
 import { ProfileCompletionForm } from './ProfileCompletionForm';
+import { PasswordAuth } from './PasswordAuth';
 import { api } from '../../lib/api';
 import { useAuthStore, toAuthUser, type AuthUser } from '../../store/auth.store';
 import { captureBillingIntent, consumeBillingIntent } from '../../lib/billing-intent';
@@ -23,17 +24,20 @@ const fade = {
 };
 
 /**
- * The right-hand card on /login and /signup: Google sign-in first, then — on
+ * The right-hand card on /login and /signup: Google sign-in or email/mobile +
+ * password (see PasswordAuth), then — on
  * the same page — the profile-completion step when the backend says
  * onboarding is required. Completed profiles go straight to /dashboard (or
  * to the plan chosen on the pricing page — see lib/billing-intent.ts).
  */
 export function AuthCard({
+  mode,
   title,
   subtitle,
   footer,
   legal,
 }: {
+  mode: 'login' | 'signup';
   title: string;
   subtitle: string;
   footer: ReactNode;
@@ -103,13 +107,15 @@ export function AuthCard({
 
   return (
     <div className={`relative w-full transition-[max-width] duration-300 ${wide ? 'max-w-lg' : 'max-w-md'}`}>
-      {/* Mobile brand */}
-      <div className={`text-center lg:hidden ${wide ? 'mb-5' : 'mb-8'}`}>
-        <Link href="/" className="inline-flex">
-          <Image src={logo} alt="PurpleCallio" width={176} height={42} className="h-auto w-44 object-contain" />
-        </Link>
-        {!wide && <p className="text-[#3D3650] text-sm mt-1">Communication Infrastructure</p>}
-      </div>
+      {/* Mobile brand (the sign-in step has the logo inside the card) */}
+      {phase !== 'signin' && (
+        <div className={`text-center lg:hidden ${wide ? 'mb-5' : 'mb-8'}`}>
+          <Link href="/" className="inline-flex">
+            <Image src={logo} alt="PurpleCallio" width={176} height={42} className="h-auto w-44 object-contain" />
+          </Link>
+          {!wide && <p className="text-[#3D3650] text-sm mt-1">Communication Infrastructure</p>}
+        </div>
+      )}
 
       <div
         className={`rounded-2xl border border-[#EDE6F8] bg-white ${wide ? 'p-5 sm:p-8' : 'px-8 py-10 sm:px-9'}`}
@@ -146,6 +152,8 @@ export function AuthCard({
                   <span className="text-xs uppercase tracking-widest text-[#9C95A8]">or</span>
                   <div className="h-px flex-1 bg-[#ECE6F6]" />
                 </div>
+
+                <PasswordAuth mode={mode} />
 
                 {footer}
               </div>

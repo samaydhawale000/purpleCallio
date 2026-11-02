@@ -34,6 +34,8 @@ import { AdminGuard } from '../admin/guards/admin.guard';
 import { PaymentModule } from '../payment/payment.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SupportModule } from '../support/support.module';
+import { MailModule } from '../mail/mail.module';
+import { ReceiptEmailService } from './receipt-email.service';
 
 /**
  * Prepaid billing domain: plans → checkout → verified payment →
@@ -46,6 +48,7 @@ import { SupportModule } from '../support/support.module';
     PrismaModule,
     SupportModule,
     JwtModule.register({}),
+    MailModule,
   ],
   controllers: [BillingController, AdminBillingController],
   providers: [
@@ -77,6 +80,7 @@ import { SupportModule } from '../support/support.module';
     BillingService,
     InvoiceBillingService,
     InvoicePdfService,
+    ReceiptEmailService,
     CustomerDiscountService,
     BillingGuard,
     AdminGuard,

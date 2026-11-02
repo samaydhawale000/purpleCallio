@@ -5,6 +5,7 @@ import request from 'supertest';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { PasswordAuthService } from './password-auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 /**
@@ -36,7 +37,11 @@ describe('PATCH /auth/profile', () => {
 
     const moduleRef = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [JwtStrategy, { provide: AuthService, useValue: authService }],
+      providers: [
+        JwtStrategy,
+        { provide: AuthService, useValue: authService },
+        { provide: PasswordAuthService, useValue: {} },
+      ],
     }).compile();
 
     app = moduleRef.createNestApplication();

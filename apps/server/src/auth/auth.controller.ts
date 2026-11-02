@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  HttpCode,
   Patch,
   Post,
   Req,
@@ -9,10 +10,18 @@ import {
 import { Throttle } from '@nestjs/throttler';
 
 import { AuthService } from './auth.service';
+import { PasswordAuthService } from './password-auth.service';
 
 import { GoogleDto } from './dto/google.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import {
+  ForgotPasswordDto,
+  LoginDto,
+  RegisterDto,
+  ResetPasswordDto,
+  VerifyRegistrationDto,
+} from './dto/password-auth.dto';
 
 import { JwtGuard } from './guards/jwt.guard';
 
@@ -20,6 +29,7 @@ import { JwtGuard } from './guards/jwt.guard';
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly passwordAuth: PasswordAuthService,
   ) {}
 
   // Stricter than the global default — this is the credential-stuffing /
@@ -32,6 +42,43 @@ export class AuthController {
     return this.authService.loginWithGoogle(
       body.idToken,
     );
+  }
+
+  // ── Email + password ──────────────────────────────────
+  // Sign-up: emails a code; the account is created by register/verify.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(202)
+  @Post('register')
+  register(@Body() body: RegisterDto) {
+    return this.passwordAuth.register(body);
+  }
+
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('register/verify')
+  verifyRegistration(@Body() body: VerifyRegistrationDto) {
+    return this.passwordAuth.verifyRegistration(body.email, body.code);
+  }
+
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('login')
+  login(@Body() body: LoginDto) {
+    return this.passwordAuth.login(body.email, body.password);
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(202)
+  @Post('password/forgot')
+  forgotPassword(@Body() body: ForgotPasswordDto) {
+    return this.passwordAuth.forgotPassword(body.email);
+  }
+
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('password/reset')
+  resetPassword(@Body() body: ResetPasswordDto) {
+    return this.passwordAuth.resetPassword(body.email, body.code, body.password);
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })

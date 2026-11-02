@@ -35,7 +35,7 @@ const REQUIRED = [
 
 const SECRETS = [
   'POSTGRES_PASSWORD', 'JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET',
-  'GOOGLE_CLIENT_SECRET', 'TURN_SECRET', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET',
+  'GOOGLE_CLIENT_SECRET', 'TURN_SECRET', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET', 'RESEND_API_KEY',
 ];
 
 const isPlaceholder = (v) => /^<.*>$/.test(v) || /<[^>]+>/.test(v);
@@ -163,6 +163,12 @@ export function checkEnv(input, { allowPlaceholders = false } = {}) {
   }
   if ((get('PLAYGROUND_ENABLED') || 'true').toLowerCase() === 'true' && Number(get('PLAYGROUND_CALL_DURATION_SECONDS') || 60) > 60) {
     warnings.push('PLAYGROUND_CALL_DURATION_SECONDS is above 60');
+  }
+  // Resend: without it, email + password sign-up and password reset fail (Google sign-in still works).
+  if (!get('RESEND_API_KEY') || !get('EMAIL_FROM')) {
+    warnings.push('RESEND_API_KEY / EMAIL_FROM are not set: email + password sign-up and password reset cannot send their codes');
+  } else if (!/@[^\s@>]+\.[^\s@>]+>?$/.test(get('EMAIL_FROM'))) {
+    errors.push('EMAIL_FROM must be an address on your Resend-verified domain, e.g. "PurpleCallio <no-reply@example.com>"');
   }
   if (get('ALLOWED_ORIGINS')) warnings.push('ALLOWED_ORIGINS is no longer read by the server (CORS reflects origins; participant tokens authorize) and can be removed');
 
