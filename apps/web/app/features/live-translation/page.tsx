@@ -20,6 +20,7 @@ import { CodeBlock } from "../../components/marketing/InteractiveTools";
 import { FaqList } from "../../components/marketing/FaqItem";
 import { Reveal, RevealGroup, RevealItem } from "../../components/motion/Reveal";
 import { LanguageGrid } from "../../components/marketing/live-translate/LanguageGrid";
+import { TranslationHeroVisual } from "../../components/marketing/live-translate/TranslationHeroVisual";
 import { TranslationRateList } from "../../components/marketing/live-translate/TranslationPricing";
 import { FEATURE_MOCKS } from "./_components/FeatureMocks";
 import { pageMetadata, siteUrl } from "../../lib/seo";
@@ -127,34 +128,39 @@ export default function LiveTranslationPage() {
                         ]}
                      />
                   </div>
-                  <div className="min-w-0 max-w-3xl">
-                     <p className="mb-5 inline-flex items-center gap-2 rounded-full bg-amber-300 px-3 py-1 text-xs font-semibold text-amber-950" data-testid="early-access-badge">
-                        <Languages size={14} aria-hidden="true" /> {LIVE_TRANSLATE_STATUS} · Live Translate
-                     </p>
-                     <h1 className="text-4xl font-bold leading-tight tracking-tight md:text-5xl">
-                        Talk to anyone on a call, in their own language.
-                     </h1>
-                     <p className="mt-6 text-lg leading-8 text-white/80">
-                        Two-way voice translation and captions for 1:1 calls, built so possible misunderstandings get
-                        flagged, costs stay predictable and quality is measurable. One flag on your call, 60 languages.
-                     </p>
-                     <div className="mt-8 flex flex-wrap gap-3">
-                        <Link
-                           href={LIVE_TRANSLATE_SIGNUP}
-                           className="inline-flex items-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-semibold text-[#5B1BB5] hover:bg-white/90"
-                        >
-                           Join early access <ArrowRight size={16} aria-hidden="true" />
-                        </Link>
-                        <Link
-                           href={LIVE_TRANSLATE_DOCS_PATH}
-                           className="rounded-lg border border-white/30 px-5 py-3 text-sm font-medium text-white hover:bg-white/10"
-                        >
-                           Read the docs
-                        </Link>
-                     </div>
-                     <p className="mt-4 text-sm text-white/70">
-                        Early access: features, languages and pricing may change before general availability.
-                     </p>
+                  <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
+                     <div className="min-w-0">
+                        <p className="mb-5 inline-flex items-center gap-2 rounded-full bg-amber-300 px-3 py-1 text-xs font-semibold text-amber-950" data-testid="early-access-badge">
+                           <Languages size={14} aria-hidden="true" /> {LIVE_TRANSLATE_STATUS} · Live Translate
+                        </p>
+                        <h1 className="text-4xl font-bold leading-tight tracking-tight md:text-5xl">
+                           Talk to anyone on a call, in their own language.
+                        </h1>
+                        <p className="mt-6 text-lg leading-8 text-white/80">
+                           Two-way voice translation and captions for 1:1 calls, built so possible misunderstandings get
+                           flagged, costs stay predictable and quality is measurable. One flag on your call, 60 languages.
+                        </p>
+                        <div className="mt-8 flex flex-wrap gap-3">
+                           <Link
+                              href={LIVE_TRANSLATE_SIGNUP}
+                              className="inline-flex items-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-semibold text-[#5B1BB5] hover:bg-white/90"
+                           >
+                              Join early access <ArrowRight size={16} aria-hidden="true" />
+                           </Link>
+                           <Link
+                              href={LIVE_TRANSLATE_DOCS_PATH}
+                              className="rounded-lg border border-white/30 px-5 py-3 text-sm font-medium text-white hover:bg-white/10"
+                           >
+                              Read the docs
+                           </Link>
+                        </div>
+                        <p className="mt-4 text-sm text-white/70">
+                           Early access: features, languages and pricing may change before general availability.
+                        </p>
+                  </div>
+                  <div className="min-w-0">
+                     <TranslationHeroVisual />
+                  </div>
                   </div>
                </div>
             </section>

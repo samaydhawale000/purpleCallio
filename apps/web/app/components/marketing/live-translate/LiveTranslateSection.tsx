@@ -14,20 +14,20 @@ export function LiveTranslateSection() {
    return (
       <section id="live-translate" className="section-base px-6 py-24" aria-labelledby="live-translate-title">
          <div className="mx-auto max-w-6xl">
-            <Reveal variant="left" className="min-w-0 max-w-3xl">
+            <Reveal variant="up" className="mx-auto min-w-0 max-w-3xl text-center">
                <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900">
                   <Languages size={14} aria-hidden="true" /> {LIVE_TRANSLATE_STATUS}
                </p>
                <h2 id="live-translate-title" className="lp-h2 font-bold leading-tight text-[#170B2E]">
                   Live Translate: talk to anyone, in their language
                </h2>
-               <p className="mt-4 max-w-xl leading-relaxed text-[#3D3650]">
+               <p className="mx-auto mt-4 max-w-2xl leading-relaxed text-[#3D3650]">
                   Two people on a 1:1 call speak different languages, and each hears and reads the other in their
                   own, a short moment behind the speaker. Built so possible misunderstandings get flagged, costs
                   stay inside your limits and quality is measurable. 60 languages, from English, Spanish and
                   Arabic to Hindi, Japanese and more.
                </p>
-               <div className="mt-8 flex flex-wrap gap-3">
+               <div className="mt-8 flex flex-wrap justify-center gap-3">
                   <Link
                      href={LIVE_TRANSLATE_PATH}
                      className="btn-primary inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition-all hover:-translate-y-0.5"
