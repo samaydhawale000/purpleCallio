@@ -1,5 +1,5 @@
 /**
- * Shared frame for PurpleCallio emails: wordmark, the message, and a grey
+ * Shared frame for PurpleCallio emails: logo, the message, and a grey
  * footer card (tagline, links, automated-message note, copyright). Inline
  * styles and tables only, so it renders the same in Gmail, Outlook and
  * Apple Mail.
@@ -29,8 +29,20 @@ export function p(html: string): string {
   return `<p style="margin:0 0 20px;font-size:16px;line-height:26px;color:${TEXT}">${html}</p>`;
 }
 
-function wordmark(size: number): string {
-  return `<span style="font-size:${size}px;font-weight:800;letter-spacing:-0.5px;color:#170B2E">Purple</span><span style="font-size:${size}px;font-weight:800;letter-spacing:-0.5px;color:${PURPLE}">Callio</span>`;
+/**
+ * Where email images are loaded from. Mail clients fetch them from the
+ * internet, so a localhost FRONTEND_URL (local testing) falls back to the
+ * production site, which serves the same file.
+ */
+function assetUrl(path: string): string {
+  const url = siteUrl(path);
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(url) ? `https://purplecallio.com${path}` : url;
+}
+
+/** The logo (apps/web/public/email/logo.png, 440×105, shown at half size for sharp retina rendering). */
+function logo(width: number): string {
+  const height = Math.round((width * 105) / 440);
+  return `<a href="${esc(siteUrl())}" style="text-decoration:none"><img src="${esc(assetUrl('/email/logo.png'))}" width="${width}" height="${height}" alt="PurpleCallio" style="display:inline-block;border:0;outline:none;width:${width}px;height:${height}px;font-size:22px;font-weight:800;color:#6425C4"></a>`;
 }
 
 export function emailLayout({ preheader, body }: { preheader: string; body: string }): string {
@@ -45,12 +57,12 @@ export function emailLayout({ preheader, body }: { preheader: string; body: stri
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff">
     <tr><td align="center" style="padding:40px 16px">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px">
-        <tr><td align="center" style="padding-bottom:36px">${wordmark(26)}</td></tr>
+        <tr><td align="center" style="padding-bottom:36px">${logo(200)}</td></tr>
         <tr><td style="padding:0 8px">${body}</td></tr>
         <tr><td style="padding-top:20px">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F2F8;border-radius:20px">
             <tr><td align="center" style="padding:36px 24px">
-              <div style="padding-bottom:14px">${wordmark(22)}</div>
+              <div style="padding-bottom:14px">${logo(160)}</div>
               <div style="font-size:16px;color:#4A4458;padding-bottom:18px">Voice, video, AI agents and live translation for your product.</div>
               <div style="font-size:14px;padding-bottom:22px">${footerLink('', 'Website')}${dot}${footerLink('/docs', 'Docs')}${dot}${footerLink('/pricing', 'Pricing')}${dot}${footerLink('/dashboard', 'Dashboard')}${dot}${footerLink('/dashboard/support', 'Support')}</div>
               <div style="font-size:13px;line-height:20px;color:#7A7389">This is an automated message from PurpleCallio. Please do not reply to this email.<br>For help, contact us from <a href="${esc(siteUrl('/dashboard/support'))}" style="color:#7A7389;font-weight:600;text-decoration:none">Support</a> in your dashboard.</div>
