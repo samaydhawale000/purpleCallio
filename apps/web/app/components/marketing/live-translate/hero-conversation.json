@@ -1,0 +1,8 @@
+[
+  { "from": "neha", "hi": "नमस्ते! मुझे अपने ऑर्डर के बारे में जानना है।", "fr": "Bonjour ! J’aimerais avoir des nouvelles de ma commande." },
+  { "from": "pierre", "fr": "Bien sûr ! Quel est votre numéro de commande ?", "hi": "ज़रूर! आपका ऑर्डर नंबर क्या है?" },
+  { "from": "neha", "hi": "चार पाँच दो एक। यह कब तक पहुँचेगा?", "fr": "Quatre, cinq, deux, un. Quand va-t-il arriver ?" },
+  { "from": "pierre", "fr": "Il est déjà expédié, il arrivera jeudi.", "hi": "यह भेज दिया गया है, गुरुवार तक पहुँच जाएगा।" },
+  { "from": "neha", "hi": "बहुत बढ़िया! क्या मैं इसे ट्रैक कर सकती हूँ?", "fr": "Super ! Est-ce que je peux le suivre ?" },
+  { "from": "pierre", "fr": "Oui, je vous envoie le lien de suivi par SMS.", "hi": "हाँ, मैं आपको ट्रैकिंग लिंक SMS पर भेज रहा हूँ।" }
+]

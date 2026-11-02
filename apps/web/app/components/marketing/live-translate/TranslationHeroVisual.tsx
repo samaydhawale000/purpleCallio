@@ -1,24 +1,33 @@
 "use client";
 
 import Image from "next/image";
-import { Code2, Languages, Sparkles, Video, Volume2, VolumeX, type LucideIcon } from "lucide-react";
-import { useEffect, useState } from "react";
-import nehaPortrait from "../../../assets/images/live-translate-asha.webp";
-import pierrePortrait from "../../../assets/images/live-translate-daniel.webp";
+import { Code2, Ear, Languages, Mic, Sparkles, Video, Volume2, VolumeX, type LucideIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import nehaPortrait from "../../../assets/images/live-translate-neha.webp";
+import pierrePortrait from "../../../assets/images/live-translate-pierre.webp";
 import indiaFlag from "../../../assets/images/flag-india.webp";
 import franceFlag from "../../../assets/images/flag-france.webp";
+import conversation from "./hero-conversation.json";
 
 type Side = "neha" | "pierre";
 
-/** A short support call: each line in the speaker's language, with the other side's translation. */
-const CONVERSATION: { from: Side; hi: string; fr: string }[] = [
-   { from: "neha", hi: "नमस्ते! मुझे अपने ऑर्डर के बारे में जानना है।", fr: "Bonjour ! J’aimerais avoir des nouvelles de ma commande." },
-   { from: "pierre", fr: "Bien sûr ! Quel est votre numéro de commande ?", hi: "ज़रूर! आपका ऑर्डर नंबर क्या है?" },
-   { from: "neha", hi: "चार पाँच दो एक। यह कब तक पहुँचेगा?", fr: "Quatre, cinq, deux, un. Quand va-t-il arriver ?" },
-   { from: "pierre", fr: "Il est déjà expédié, il arrivera jeudi.", hi: "यह भेज दिया गया है, गुरुवार तक पहुँच जाएगा।" },
-   { from: "neha", hi: "बहुत बढ़िया! क्या मैं इसे ट्रैक कर सकती हूँ?", fr: "Super ! Est-ce que je peux le suivre ?" },
-   { from: "pierre", fr: "Oui, je vous envoie le lien de suivi par SMS.", hi: "हाँ, मैं आपको ट्रैकिंग लिंक SMS पर भेज रहा हूँ।" },
-];
+/**
+ * Where each portrait's mouth is, in % of the card's portrait box (the square
+ * photo is object-cover cropped to 0.95:1). `origin` is the upper-teeth line
+ * the lower lip moves toward.
+ */
+type Mouth = { x: number; y: number; rx: number; ry: number; origin: number };
+const NEHA_MOUTH: Mouth = { x: 66.2, y: 47.8, rx: 11, ry: 7, origin: 45.5 };
+const PIERRE_MOUTH: Mouth = { x: 38, y: 48.4, rx: 11, ry: 6, origin: 47 };
+
+/**
+ * A short support call: each line in the speaker's language, with the other
+ * side's translation. Each line has two pre-recorded clips in
+ * public/audio/live-translate-hero/: <n>-hi.mp3 and <n>-fr.mp3 (n from 1),
+ * both in the speaker's voice (Neha female, Pierre male).
+ */
+const CONVERSATION = conversation as { from: Side; hi: string; fr: string }[];
+const clipUrl = (index: number, lang: "hi" | "fr") => `/audio/live-translate-hero/${index + 1}-${lang}.mp3`;
 
 const VOICE_LANG = { hi: "hi-IN", fr: "fr-FR" } as const;
 
@@ -40,8 +49,13 @@ function pickVoice(lang: keyof typeof VOICE_LANG, gender: Gender): { voice: Spee
    const other: Gender = gender === "male" ? "female" : "male";
    const exact = voices.find((v) => VOICE_NAMES[gender].test(v.name));
    if (exact) return { voice: exact, pitch: 1 };
-   const neutral = voices.find((v) => !VOICE_NAMES[other].test(v.name)) ?? voices[0];
-   return { voice: neutral, pitch: gender === "male" ? 0.7 : 1.15 };
+   // No voice of that gender installed (e.g. only a female Hindi voice on
+   // macOS): shift the pitch of the closest one. Local voices honour pitch;
+   // some network voices ignore it.
+   const fits = (v: SpeechSynthesisVoice) => !VOICE_NAMES[other].test(v.name);
+   const neutral =
+      voices.find((v) => v.localService && fits(v)) ?? voices.find(fits) ?? voices.find((v) => v.localService) ?? voices[0];
+   return { voice: neutral, pitch: gender === "male" ? 0.5 : 1.15 };
 }
 
 /** Floating capability chips around the globe (position in % of the visual). */
@@ -51,6 +65,49 @@ const CHIPS: { label: string; icon: LucideIcon; className: string; tone: string 
    { label: "Live Translate", icon: Languages, className: "left-[18%] bottom-[2%]", tone: "from-[#A05DF9] to-[#7F40E8]" },
    { label: "Developer APIs", icon: Code2, className: "right-[6%] bottom-[2%]", tone: "from-[#4F46E5] to-[#6366F1]" },
 ];
+
+/** Set once a clip 404s, so later lines go straight to speech synthesis. */
+let clipsMissing = false;
+
+/**
+ * Plays the line's pre-recorded clip (same voice for every visitor, right
+ * gender in both languages) and falls back to `say` when it's missing or
+ * can't play.
+ * Returns a cancel.
+ */
+function playLine(
+   audio: HTMLAudioElement,
+   src: string,
+   text: string,
+   lang: keyof typeof VOICE_LANG,
+   gender: Gender,
+   done: () => void,
+): () => void {
+   let cancelled = false;
+   let stopSpeech: (() => void) | null = null;
+   const speak = () => {
+      if (cancelled || stopSpeech) return;
+      stopSpeech = say(text, lang, gender, done);
+   };
+   if (clipsMissing) {
+      speak();
+   } else {
+      audio.onended = () => !cancelled && done();
+      audio.onerror = () => {
+         clipsMissing = true;
+         speak();
+      };
+      audio.src = src;
+      audio.play().catch((e: DOMException) => e.name !== "AbortError" && speak());
+   }
+   return () => {
+      cancelled = true;
+      audio.onended = null;
+      audio.onerror = null;
+      audio.pause();
+      stopSpeech?.();
+   };
+}
 
 /**
  * Speaks `text` with the browser's own speech synthesis and calls `done`
@@ -67,9 +124,9 @@ function say(text: string, lang: keyof typeof VOICE_LANG, gender: Gender, done: 
       done();
    };
    const fallback = window.setTimeout(finish, 1500 + text.length * 110);
-   const synth = window.speechSynthesis;
-   const picked = pickVoice(lang, gender);
-   if (picked) {
+   const synth = "speechSynthesis" in window ? window.speechSynthesis : null;
+   const picked = synth ? pickVoice(lang, gender) : null;
+   if (synth && picked) {
       const u = new SpeechSynthesisUtterance(text);
       u.voice = picked.voice;
       u.pitch = picked.pitch;
@@ -92,14 +149,16 @@ export function TranslationHeroVisual() {
    const [soundOn, setSoundOn] = useState(false);
    // Known only after mount, so the server and first client render match.
    const [canSpeak, setCanSpeak] = useState(false);
+   const audioRef = useRef<HTMLAudioElement | null>(null);
+   const rootRef = useRef<HTMLDivElement>(null);
 
    const line = CONVERSATION[index];
    const nehaSpeaks = line.from === "neha";
 
    useEffect(() => {
-      if (!("speechSynthesis" in window)) return;
       setCanSpeak(true);
-      // Voices load asynchronously in Chrome; asking once starts the load.
+      if (!("speechSynthesis" in window)) return;
+      // Voices (the fallback) load asynchronously in Chrome; asking once starts the load.
       window.speechSynthesis.getVoices();
       return () => window.speechSynthesis.cancel();
    }, []);
@@ -118,7 +177,8 @@ export function TranslationHeroVisual() {
       const original = nehaSpeaks ? "hi" : "fr";
       const lang = phase === "speaking" ? original : original === "hi" ? "fr" : "hi";
       let pause: number | undefined;
-      const cancel = say(line[lang], lang, nehaSpeaks ? "female" : "male", () => {
+      audioRef.current ??= new Audio();
+      const cancel = playLine(audioRef.current, clipUrl(index, lang), line[lang], lang, nehaSpeaks ? "female" : "male", () => {
          pause = window.setTimeout(advance, phase === "speaking" ? 250 : 700);
       });
       return () => {
@@ -127,16 +187,38 @@ export function TranslationHeroVisual() {
       };
    }, [index, phase, soundOn, line, nehaSpeaks]);
 
+   // Sound stops on its own once the visual is scrolled (mostly) out of view
+   // or the tab is hidden; the visitor taps again to resume.
+   useEffect(() => {
+      const root = rootRef.current;
+      if (!soundOn || !root) return;
+      const mute = () => {
+         if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+         setSoundOn(false);
+      };
+      const observer = new IntersectionObserver(([entry]) => entry.intersectionRatio < 0.25 && mute(), {
+         threshold: [0, 0.25],
+      });
+      observer.observe(root);
+      const onVisibility = () => document.hidden && mute();
+      document.addEventListener("visibilitychange", onVisibility);
+      return () => {
+         observer.disconnect();
+         document.removeEventListener("visibilitychange", onVisibility);
+      };
+   }, [soundOn]);
+
    const toggleSound = () => {
-      const synth = window.speechSynthesis;
+      const synth = "speechSynthesis" in window ? window.speechSynthesis : null;
       if (soundOn) {
-         synth.cancel();
+         synth?.cancel();
          setSoundOn(false);
          return;
       }
-      // Speaking inside the click unlocks audio on iOS Safari.
-      synth.cancel();
-      synth.speak(new SpeechSynthesisUtterance(""));
+      // Starting audio inside the click unlocks it on iOS Safari.
+      audioRef.current ??= new Audio();
+      synth?.cancel();
+      synth?.speak(new SpeechSynthesisUtterance(""));
       setPhase("speaking");
       setSoundOn(true);
    };
@@ -147,6 +229,7 @@ export function TranslationHeroVisual() {
 
    return (
       <div
+         ref={rootRef}
          className="hero-globe @container relative mx-auto aspect-[1.12] w-full max-w-[640px]"
          role="group"
          aria-label="Neha speaks Hindi and Pierre speaks French; each hears the other translated in real time"
@@ -186,6 +269,9 @@ export function TranslationHeroVisual() {
          <SpeakerCard
             className="left-[4%] top-[17%] -rotate-[4deg]"
             active={nehaActive}
+            talking={nehaSpeaks && phase === "speaking"}
+            mouth={NEHA_MOUTH}
+            loops="neha"
             name="Neha"
             country="India"
             language="Hindi"
@@ -198,6 +284,9 @@ export function TranslationHeroVisual() {
          <SpeakerCard
             className="right-[2%] top-[19%] rotate-[3deg]"
             active={!nehaActive}
+            talking={!nehaSpeaks && phase === "speaking"}
+            mouth={PIERRE_MOUTH}
+            loops="pierre"
             name="Pierre"
             country="France"
             language="French"
@@ -255,6 +344,9 @@ export function TranslationHeroVisual() {
 function SpeakerCard({
    className,
    active,
+   talking,
+   mouth,
+   loops,
    name,
    country,
    language,
@@ -266,6 +358,11 @@ function SpeakerCard({
 }: {
    className: string;
    active: boolean;
+   /** Talking (head moves, lips move) or listening (still lips, slow nod). */
+   talking: boolean;
+   mouth: Mouth;
+   /** Name of the avatar's video loops (see AvatarLoops). */
+   loops: string;
    name: string;
    country: string;
    language: string;
@@ -298,9 +395,31 @@ function SpeakerCard({
          </div>
          {/* Portrait */}
          <div className={`relative -mt-[1cqw] ml-[6%] w-[88%] overflow-hidden rounded-[3cqw] border-[0.6cqw] bg-white shadow-[0_24px_48px_-24px_rgba(65,6,134,.6)] transition-colors duration-500 ${active ? "border-[#C4A3FF]" : "border-white"}`}>
-            <div className="relative aspect-[0.95] bg-[#EDE3FF]">
-               <Image src={portrait} alt="" fill sizes="(max-width: 640px) 30vw, 200px" className="object-cover" priority />
+            <div className="relative aspect-[0.95] overflow-hidden bg-[#EDE3FF]">
+               <AvatarLoops name={loops} talking={talking} />
+               <div className={`absolute inset-0 ${talking ? "avatar-talk" : "avatar-listen"}`} style={{ transformOrigin: `${mouth.x}% 90%` }}>
+                  <Image src={portrait} alt="" fill sizes="(max-width: 640px) 30vw, 200px" className="object-cover" priority />
+                  {/* The mouth area again, squashed toward the upper teeth: moving while talking, a calmer smile while listening. */}
+                  <div
+                     aria-hidden="true"
+                     className="absolute inset-0"
+                     style={{
+                        maskImage: `radial-gradient(ellipse ${mouth.rx}% ${mouth.ry}% at ${mouth.x}% ${mouth.y}%, #000 55%, transparent 100%)`,
+                        WebkitMaskImage: `radial-gradient(ellipse ${mouth.rx}% ${mouth.ry}% at ${mouth.x}% ${mouth.y}%, #000 55%, transparent 100%)`,
+                     }}
+                  >
+                     <div className={`absolute inset-0 ${talking ? "avatar-lips" : ""}`} style={{ transformOrigin: `50% ${mouth.origin}%`, transform: talking ? undefined : "scaleY(.88)" }}>
+                        <Image src={portrait} alt="" fill sizes="(max-width: 640px) 30vw, 200px" className="object-cover" />
+                     </div>
+                  </div>
+               </div>
             </div>
+            <span
+               className={`absolute bottom-[2.6cqw] flex items-center gap-[0.6cqw] rounded-full bg-white/90 px-[1.4cqw] py-[0.5cqw] text-[max(7px,1.4cqw)] font-semibold shadow-sm backdrop-blur transition-colors duration-300 ${flagSide === "left" ? "right-[8%]" : "left-[8%]"} ${talking ? "text-[#6425C4]" : "text-[#75658C]"}`}
+            >
+               {talking ? <Mic className="h-[1.8cqw] w-[1.8cqw]" aria-hidden="true" /> : <Ear className="h-[1.8cqw] w-[1.8cqw]" aria-hidden="true" />}
+               {talking ? "Speaking" : "Listening"}
+            </span>
          </div>
          <Image
             src={flag}
@@ -316,6 +435,59 @@ function Bars({ active }: { active: boolean }) {
       <div className="flex h-[7cqw] flex-1 items-center justify-between" aria-hidden="true">
          {[35, 60, 45, 85, 55, 100, 40].map((h, i) => (
             <span key={i} className={`w-[0.8cqw] rounded-full bg-gradient-to-b from-[#A75BFF] to-[#6366F1] ${active ? "translation-wave" : "opacity-50"}`} style={{ height: `${h}%`, animationDelay: `${i * 90}ms` }} />
+         ))}
+      </div>
+   );
+}
+
+/**
+ * Animated speaking / listening loops for an avatar, when they exist:
+ * public/video/live-translate-hero/<name>-speaking.mp4 and
+ * <name>-listening.mp4 (muted, seamless, square). They cover the still photo
+ * and its CSS lip/head animation once both can play; until then, or with
+ * reduced motion, nothing renders and the still stays.
+ */
+function AvatarLoops({ name, talking }: { name: string; talking: boolean }) {
+   const [enabled, setEnabled] = useState(false);
+   const [ready, setReady] = useState({ speaking: false, listening: false });
+   const refs = { speaking: useRef<HTMLVideoElement>(null), listening: useRef<HTMLVideoElement>(null) };
+   const shown = ready.speaking && ready.listening;
+   const state = talking ? "speaking" : "listening";
+
+   useEffect(() => {
+      setEnabled(!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+   }, []);
+
+   // Play only the visible loop; restart it so each turn begins cleanly.
+   useEffect(() => {
+      if (!shown) return;
+      for (const key of ["speaking", "listening"] as const) {
+         const v = refs[key].current;
+         if (!v) continue;
+         if (key === state) {
+            v.currentTime = 0;
+            void v.play().catch(() => undefined);
+         } else v.pause();
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [state, shown]);
+
+   if (!enabled) return null;
+   return (
+      <div aria-hidden="true" className={`absolute inset-0 z-[1] transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`}>
+         {(["speaking", "listening"] as const).map((key) => (
+            <video
+               key={key}
+               ref={refs[key]}
+               src={`/video/live-translate-hero/${name}-${key}.mp4`}
+               muted
+               loop
+               playsInline
+               preload="auto"
+               onCanPlay={() => setReady((r) => (r[key] ? r : { ...r, [key]: true }))}
+               onError={() => setEnabled(false)}
+               className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${key === state ? "opacity-100" : "opacity-0"}`}
+            />
          ))}
       </div>
    );

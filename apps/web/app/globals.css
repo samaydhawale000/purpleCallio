@@ -171,7 +171,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .stripe-gradient-canvas { display: none; }
-  .translation-speaking, .translation-wave, .translation-audio, .translation-arrow-right, .translation-arrow-left, .hero-arrow-path, .hero-orb, .lt-fade-up, .lt-pop { animation: none; }
+  .translation-speaking, .translation-wave, .translation-audio, .translation-arrow-right, .translation-arrow-left, .hero-arrow-path, .hero-orb, .lt-fade-up, .lt-pop, .avatar-talk, .avatar-listen, .avatar-lips { animation: none; }
 }
 
 .hero-badge-dot {
@@ -228,6 +228,33 @@ body {
 }
 @keyframes hero-arrow-flow {
   to { stroke-dashoffset: -22; }
+}
+
+/* Hero avatars: head motion while talking / a slow nod while listening, and
+   lips that open and close (the mouth area of the photo squashed vertically
+   inside a soft mask; 0.88 is about as far as it goes before the chin ghosts). */
+.avatar-talk { animation: avatar-talk 1.5s ease-in-out infinite; }
+.avatar-listen { animation: avatar-listen 3.2s ease-in-out infinite; }
+.avatar-lips { animation: avatar-lips 1.1s linear infinite; }
+@keyframes avatar-talk {
+  0%, 100% { transform: scale(1.06) rotate(-.6deg); }
+  30% { transform: scale(1.06) rotate(.5deg) translateY(-.6%); }
+  65% { transform: scale(1.06) rotate(-.2deg) translateY(.3%); }
+}
+@keyframes avatar-listen {
+  0%, 100% { transform: scale(1.06); }
+  45% { transform: scale(1.06) rotate(1.2deg) translateY(1%); }
+  60% { transform: scale(1.06) rotate(.6deg) translateY(.4%); }
+}
+@keyframes avatar-lips {
+  0%, 100% { transform: scaleY(1); }
+  12% { transform: scaleY(.9); }
+  24% { transform: scaleY(.98); }
+  36% { transform: scaleY(.88); }
+  50% { transform: scaleY(1); }
+  62% { transform: scaleY(.92); }
+  74% { transform: scaleY(.99); }
+  87% { transform: scaleY(.89); }
 }
 
 /* Live Translate in-call demo */
