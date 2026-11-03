@@ -102,6 +102,21 @@ describe('Usage page — call analytics in participant-minutes', () => {
     expect(document.body.textContent).not.toMatch(/₹|free tier|free allowance|spending limit/i);
   });
 
+  it('shows total credits including Live Translate, AI and the post-call report', async () => {
+    const withExtras = { ...call, translationSeconds: 300, translationCredits: 25, aiCredits: 0, reportCredits: 5, totalCredits: 70 };
+    const base = api.get.getMockImplementation()!;
+    api.get.mockImplementation(async (url: string) =>
+      url.startsWith('/billing/call-usage')
+        ? { data: { data: [withExtras], total: 1, page: 1, pageSize: 10, pageCount: 1 } }
+        : base(url),
+    );
+    render(<UsagePage />);
+
+    expect((await screen.findByTestId('call-credits')).textContent).toBe('70');
+    expect(screen.getByTestId('call-translate').textContent).toBe('5m 00s');
+    expect(screen.getByText('Call 40 · Translate 25 · Report 5')).toBeTruthy();
+  });
+
   it('opens the call in the Calls page when a billed call is selected', async () => {
     render(<UsagePage />);
 

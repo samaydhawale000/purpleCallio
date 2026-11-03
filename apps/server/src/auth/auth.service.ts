@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
 import type { User } from '@prisma/client';
@@ -18,6 +18,7 @@ import { toUserProfile, PROFILE_SELECT } from './user-profile';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private googleClient: OAuth2Client;
 
   constructor(
@@ -76,7 +77,10 @@ export class AuthService {
           },
         });
         // Non-fatal: welcome credits must never block signup.
-        this.signupCredits.grant(user.id).catch(() => undefined);
+        const userId = user.id;
+        this.signupCredits.grant(userId).catch((err) =>
+          this.logger.warn(`event=signup_credits_failed user=${userId} reason=${(err as Error)?.message ?? 'unknown'}`),
+        );
       } else {
         // Existing email user — link the Google account.
         user = await this.prisma.user.update({

@@ -44,6 +44,20 @@ export interface BillingRates {
  * the uncovered remainder is recorded as `shortfall` on the ledger entry
  * for visibility. New calls are then blocked until credits are added.
  */
+interface ExtraCallCredits {
+  translationCredits: number;
+  translationSeconds: number;
+  aiCredits: number;
+  reportCredits: number;
+}
+
+const NO_EXTRA_CREDITS: ExtraCallCredits = {
+  translationCredits: 0,
+  translationSeconds: 0,
+  aiCredits: 0,
+  reportCredits: 0,
+};
+
 @Injectable()
 export class UsageBillingService {
   private readonly logger = new Logger(UsageBillingService.name);
@@ -427,6 +441,7 @@ export class UsageBillingService {
     ]);
 
     const callIds = pageData.map((c) => c.callId);
+    const extras = await this.extraCreditsByCall(callIds);
     const segmentsByCall = new Map<
       string,
       {
@@ -464,20 +479,71 @@ export class UsageBillingService {
     return {
       data: pageData
         .map((row) => omit(row, 'costPaise'))
-        .map((call) => ({
-          ...call,
-          durationSeconds: segmentsByCall.get(call.callId) ?? {
-            callSeconds: 0,
-            audioSeconds: 0,
-            videoSeconds: 0,
-            screenShareSeconds: 0,
-          },
-        })),
+        .map((call) => {
+          const extra = extras.get(call.callId) ?? NO_EXTRA_CREDITS;
+          return {
+            ...call,
+            ...extra,
+            totalCredits:
+              call.creditsCharged +
+              extra.translationCredits +
+              extra.aiCredits +
+              extra.reportCredits,
+            durationSeconds: segmentsByCall.get(call.callId) ?? {
+              callSeconds: 0,
+              audioSeconds: 0,
+              videoSeconds: 0,
+              screenShareSeconds: 0,
+            },
+          };
+        }),
       total,
       page,
       pageSize,
       pageCount: Math.max(1, Math.ceil(total / pageSize)),
     };
+  }
+
+  /**
+   * Credits a call used outside its participant-minutes (CallUsage):
+   * Live Translate, AI agent and the post-call report, keyed by call id.
+   */
+  private async extraCreditsByCall(callIds: string[]) {
+    const out = new Map<string, ExtraCallCredits>();
+    if (!callIds.length) return out;
+    const entry = (callId: string) => {
+      let e = out.get(callId);
+      if (!e) out.set(callId, (e = { ...NO_EXTRA_CREDITS }));
+      return e;
+    };
+    const [translation, ai, reports] = await Promise.all([
+      this.prisma.translationSession.groupBy({
+        by: ['callId'],
+        where: { callId: { in: callIds } },
+        _sum: {
+          creditsCharged: true,
+          voiceSeconds: true,
+          captionsSeconds: true,
+        },
+      }),
+      this.prisma.aiCallSession.findMany({
+        where: { callId: { in: callIds } },
+        select: { callId: true, creditsCharged: true },
+      }),
+      this.prisma.translationReport.findMany({
+        where: { callId: { in: callIds } },
+        select: { callId: true, creditsCharged: true },
+      }),
+    ]);
+    for (const t of translation) {
+      const e = entry(t.callId);
+      e.translationCredits = t._sum.creditsCharged ?? 0;
+      e.translationSeconds =
+        (t._sum.voiceSeconds ?? 0) + (t._sum.captionsSeconds ?? 0);
+    }
+    for (const a of ai) entry(a.callId).aiCredits = a.creditsCharged ?? 0;
+    for (const r of reports) entry(r.callId).reportCredits = r.creditsCharged;
+    return out;
   }
 
   /** Usage per subscription period (newest first), including the current one. */

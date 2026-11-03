@@ -35,6 +35,19 @@ const PRODUCTS: (ChartSeries & {
 
 const credits = (n: number) => `${n} ${n === 1 ? 'credit' : 'credits'}`;
 
+/** The parts of a call's credits, shown under the total when there is more than call time. */
+function creditParts(r: CallUsageRow): string | null {
+  const parts = [
+    ['Call', r.creditsCharged],
+    ['Translate', r.translationCredits ?? 0],
+    ['AI', r.aiCredits ?? 0],
+    ['Report', r.reportCredits ?? 0],
+  ] as const;
+  const used = parts.filter(([, n]) => n > 0);
+  if (!used.some(([label]) => label !== 'Call')) return null;
+  return used.map(([label, n]) => `${label} ${fmtNumber(n)}`).join(' · ');
+}
+
 export default function UsagePage() {
   const router = useRouter();
   const [days, setDays] = useState(30);
@@ -126,7 +139,10 @@ export default function UsagePage() {
         }}
       </Block>
 
-      <Section title="Billed calls" description="Most recent first. Select a call to see its details.">
+      <Section
+        title="Billed calls"
+        description="Most recent first. Total credits include call time, Live Translate, AI agents and post-call reports. Select a call to see its details."
+      >
         <Block res={callUsage}>
           {(res) => (
             <>
@@ -156,12 +172,28 @@ export default function UsagePage() {
                     align: 'right',
                     render: (r) => <span data-testid="call-screen">{formatMinutes(r.screenShareMinutes)}</span>,
                   },
+                  {
+                    key: 'translate',
+                    label: 'Live Translate',
+                    align: 'right',
+                    render: (r) => (
+                      <span data-testid="call-translate">{formatMinutes((r.translationSeconds ?? 0) / 60)}</span>
+                    ),
+                  },
                   { key: 'people', label: 'Participants', align: 'right', render: (r) => r.participants },
                   {
                     key: 'credits',
-                    label: 'Credits',
+                    label: 'Total credits',
                     align: 'right',
-                    render: (r) => <span data-testid="call-credits">{fmtNumber(r.creditsCharged)}</span>,
+                    render: (r) => {
+                      const parts = creditParts(r);
+                      return (
+                        <>
+                          <span data-testid="call-credits">{fmtNumber(r.totalCredits ?? r.creditsCharged)}</span>
+                          {parts && <span className="block text-xs text-[#6B6478]">{parts}</span>}
+                        </>
+                      );
+                    },
                   },
                 ]}
               />

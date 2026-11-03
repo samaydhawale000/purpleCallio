@@ -28,7 +28,7 @@ export function getPurchaseAmountError(amount: string, paise: number | null, pri
 }
 
 function getQuickAmounts(pricing: PublishedCreditPricing) {
-  const options = [pricing.minimumPurchasePaise, 200_000, 500_000, 1_000_000].filter(
+  const options = [pricing.minimumPurchasePaise, 50_000, 100_000, 200_000, 500_000, 1_000_000].filter(
     (value) => value >= pricing.minimumPurchasePaise && (pricing.maximumPurchasePaise == null || value <= pricing.maximumPurchasePaise),
   );
   return [...new Set(options)].slice(0, 4);

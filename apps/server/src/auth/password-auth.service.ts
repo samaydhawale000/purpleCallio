@@ -75,7 +75,9 @@ export class PasswordAuthService {
       data: { email, name: payload.name ?? null, passwordHash: payload.passwordHash },
     });
     // Non-fatal: welcome credits must never block signup.
-    this.signupCredits.grant(user.id).catch(() => undefined);
+    this.signupCredits.grant(user.id).catch((err) =>
+      this.logger.warn(`event=signup_credits_failed user=${user.id} reason=${(err as Error)?.message ?? 'unknown'}`),
+    );
     return this.auth.issueSession(user);
   }
 

@@ -677,7 +677,14 @@ export interface CallUsageRow {
   videoMinutes: number;
   screenShareMinutes: number;
   participants: number;
+  /** Participant-minute credits (audio, video, screen share). */
   creditsCharged: number;
+  /** Everything the call used: participant-minutes + translation + AI + report. */
+  totalCredits?: number;
+  translationCredits?: number;
+  translationSeconds?: number;
+  aiCredits?: number;
+  reportCredits?: number;
   startedAt: string | null;
   endedAt: string | null;
   createdAt: string;
