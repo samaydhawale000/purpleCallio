@@ -29,7 +29,7 @@ describe('billing notification routing', () => {
 
   it('sends customers to the right billing page', () => {
     expect(notificationHref(n('PAYMENT_SUCCESS', { paymentId: 'p' }), 'CUSTOMER')).toBe('/dashboard/billing/payments');
-    expect(notificationHref(n('CREDITS_EXHAUSTED'), 'CUSTOMER')).toBe('/dashboard/billing/credits');
+    expect(notificationHref(n('CREDITS_EXHAUSTED'), 'CUSTOMER')).toBe('/dashboard/billing');
     expect(notificationHref(n('PLAN_EXPIRING'), 'CUSTOMER')).toBe('/dashboard/billing');
     expect(notificationHref(n('CUSTOM_PLAN_OFFER_RECEIVED', { offerId: 'o1' }), 'CUSTOMER')).toBe('/dashboard/billing/offers/o1');
     expect(notificationHref(n('CUSTOM_PLAN_REQUEST_CREATED', { ticketId: 't1' }), 'CUSTOMER')).toBe('/dashboard/support/t1');

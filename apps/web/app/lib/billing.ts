@@ -816,6 +816,12 @@ export function describeCreditTransaction(
       const ai = aiLedgerUsage(row);
       if (ai)
         return `AI voice call: ${formatAiMinutes(ai.minutes)} min, ${formatCredits(ai.credits)} credits`;
+      if (row.referenceType === "TRANSLATION_SESSION") {
+        const secs = num(m.voiceSeconds) + num(m.captionsSeconds);
+        const call = str(m.callId);
+        return `Live Translate${call ? ` · Call ${call.slice(0, 12)}` : ""} · ${formatMinutes(secs / 60)}`;
+      }
+      if (row.referenceType === "TRANSLATION_REPORT") return "Post-call report";
       const callId = str(m.callId) ?? row.referenceId;
       const used = usageBreakdown(m).filter((p) => p.minutes > 0);
       const media = used.length

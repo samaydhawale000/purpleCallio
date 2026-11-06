@@ -8,12 +8,11 @@ import { ErrorNote, Loading, PageHeader, Tabs, buttonCls, type TabItem } from '.
 
 /**
  * Shared chrome for every billing page: title, sub-navigation and the
- * loading / error states. Billing is money only — balance, transactions,
- * payments. Usage has its own page.
+ * loading / error states. Billing is money only — balance and payments.
+ * Usage has its own page.
  */
 const NAV: TabItem[] = [
   { label: 'Overview', href: '/dashboard/billing', exact: true },
-  { label: 'Transactions', href: '/dashboard/billing/credits' },
   { label: 'Payments & receipts', href: '/dashboard/billing/payments', also: ['/dashboard/billing/invoices'] },
 ];
 

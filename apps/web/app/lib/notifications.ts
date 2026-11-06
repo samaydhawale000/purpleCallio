@@ -65,7 +65,7 @@ export function notificationHref(n: AppNotification, area: NotificationArea): st
     case 'CREDITS_LOW':
     case 'CREDITS_EXHAUSTED':
     case 'TOPUP_SUCCESS':
-      return '/dashboard/billing/credits';
+      return '/dashboard/billing';
     case 'CUSTOM_PLAN_REQUEST_CREATED':
       return id('ticketId') ? `/dashboard/support/${id('ticketId')}` : '/dashboard/billing';
     case 'CUSTOM_PLAN_OFFER_RECEIVED':
